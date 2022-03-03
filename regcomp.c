@@ -5645,15 +5645,16 @@ S_study_chunk(pTHX_
                    repeats into the {4,8} we are. */
                if ((mincount > 1) || (maxcount > 1 && maxcount != REG_INFTY))
                     f &= ~SCF_WHILEM_VISITED_POS;
+               else
+               if (mincount == 0)
+                   f &= ~SCF_DO_SUBSTR;
 
                 /* This will finish on WHILEM, setting scan, or on NULL: */
                 /* recurse study_chunk() on loop bodies */
                 minnext = study_chunk(pRExC_state, &scan, minlenp, &deltanext,
                                   last, data, stopparen, recursed_depth, NULL,
-                                  (mincount == 0
-                                   ? (f & ~SCF_DO_SUBSTR)
-                                   : f)
-                                  , depth+1, mutate_ok);
+                                  f, depth+1, mutate_ok);
+
 
                 if (flags & SCF_DO_STCLASS)
                     data->start_class = oclass;
@@ -5714,6 +5715,17 @@ S_study_chunk(pTHX_
                 } else {
                     delta += (minnext + deltanext) * maxcount
                              - minnext * mincount;
+                }
+
+                if (data->flags & SCF_SEEN_ACCEPT) {
+                    /* YJO */
+                    if (flags & SCF_DO_SUBSTR) {
+                        scan_commit(pRExC_state, data, minlenp, is_inf);
+                        flags &= ~SCF_DO_SUBSTR;
+                    }
+                    if (stopmin > min)
+                        stopmin = min;
+                    DEBUG_STUDYDATA("after-whilem", data, depth, is_inf);
                 }
                 /* Try powerful optimization CURLYX => CURLYN. */
                 if (  OP(oscan) == CURLYX && data

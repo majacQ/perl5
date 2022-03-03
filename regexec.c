@@ -6363,6 +6363,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
     I32 orig_savestack_ix = PL_savestack_ix;
     U8 * script_run_begin = NULL;
     char *match_end= NULL; /* where a match MUST end to be considered successful */
+    bool is_accepted = FALSE;
 
 /* Solaris Studio 12.3 messes up fetching PL_charclass['\n'] */
 #if (defined(__SUNPRO_C) && (__SUNPRO_C == 0x5120) && defined(__x86_64) && defined(USE_64_BIT_ALL))
@@ -8393,6 +8394,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 
 
         case ACCEPT:  /*  (*ACCEPT)  */
+            is_accepted= true;
             if (scan->flags)
                 sv_yes_mark = MUTABLE_SV(rexi->data->data[ ARG( scan ) ]);
             if (ARG2L(scan)){
@@ -8912,6 +8914,7 @@ NULL
             /* if paren positive, emulate an OPEN/CLOSE around A */
             if (ST.me->flags) {
                 U32 paren = ST.me->flags;
+                lastopen = paren;
                 if (paren > maxopenparen)
                     maxopenparen = paren;
                 scan += NEXT_OFF(scan); /* Skip former OPEN. */
@@ -8950,6 +8953,7 @@ NULL
                 if (ST.alen == 0)
                     ST.count = ST.minmod ? ARG1(ST.me) : ARG2(ST.me);
             }
+
             DEBUG_EXECUTE_r(
                 Perl_re_exec_indentf( aTHX_  "CURLYM now matched %" IVdf " times, len=%" IVdf "...\n",
                           depth, (IV) ST.count, (IV)ST.alen)
@@ -8958,7 +8962,8 @@ NULL
             if (EVAL_CLOSE_PAREN_IS_TRUE(cur_eval,(U32)ST.me->flags))
                 goto fake_end;
 
-            {
+
+            if (!is_accepted) {
                 I32 max = (ST.minmod ? ARG1(ST.me) : ARG2(ST.me));
                 if ( max == REG_INFTY || ST.count < max )
                     goto curlym_do_A; /* try to match another A */
@@ -8974,7 +8979,7 @@ NULL
                 sayNO;
 
           curlym_do_B: /* execute the B in /A{m,n}B/  */
-            if (ST.Binfo.count < 0) {
+            if (!is_accepted && ST.Binfo.count < 0) {
                 /* calculate possible match of 1st char following curly */
                 assert(ST.B);
                 if (HAS_TEXT(ST.B) || JUMPABLE(ST.B)) {
@@ -9025,6 +9030,8 @@ NULL
                 }
                 else
                     rex->offs[paren].end = -1;
+                if (is_accepted)
+                    sayYES;
 
                 if (EVAL_CLOSE_PAREN_IS_TRUE(cur_eval,(U32)ST.me->flags))
                 {
@@ -9782,7 +9789,6 @@ NULL
             }
             DEBUG_STATE_r({
                 if (no_final) {
-                    DEBUG_STATE_pp("pop (no final)");
                 } else {
                     DEBUG_STATE_pp("pop (yes)");
                 }
