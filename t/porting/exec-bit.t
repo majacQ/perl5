@@ -49,7 +49,9 @@ my %exe_list =
 
 # Get MANIFEST
 $ExtUtils::Manifest::Quiet = 1;
-my @manifest = sort keys %{ maniread("../MANIFEST") };
+my @manifest = (keys(%{ maniread("../MANIFEST") }),
+                keys(%{ maniread("../Porting/MANIFEST.dev") }));
+@manifest = sort @manifest;
 
 # Check that +x files in repo get +x from makerel
 for my $f ( map { "../$_" } @manifest ) {

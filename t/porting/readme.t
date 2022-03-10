@@ -13,11 +13,14 @@ use warnings;
 require './t/test.pl';
 
 my @porting_files;
-open my $man, "MANIFEST" or die "Can't open MANIFEST: $!";
-while(<$man>) {
-    /^Porting\// and s/[\t\n].*//s, push @porting_files, $_;
+for my $manifest_file ("MANIFEST", "Porting/MANIFEST.dev") {
+    open my $man, "<", $manifest_file
+        or die "Can't open '$manifest_file': $!";
+    while(<$man>) {
+        /^Porting\// and s/[\t\n].*//s, push @porting_files, $_;
+    }
+    close $man or die "Can't close '$manifest_file': $!";
 }
-close $man or die "Can't close MANIFEST: $!";
 # It seems that dying here is nicer than having several dozen failing tests
 # later.  But that assumes one will see the message from die.
 die "Can't get contents of Porting/ directory.\n" unless @porting_files > 1;
