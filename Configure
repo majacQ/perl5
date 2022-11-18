@@ -391,6 +391,7 @@ d_attribute_nonnull=''
 d_attribute_noreturn=''
 d_attribute_pure=''
 d_attribute_unused=''
+d_attribute_visibility=''
 d_attribute_warn_unused_result=''
 d_printf_format_null=''
 d_backtrace=''
@@ -761,6 +762,7 @@ d_semget=''
 d_semop=''
 d_sendmsg=''
 d_setegid=''
+d_setenv=''
 d_seteuid=''
 d_setgrent=''
 d_setgrent_r=''
@@ -1233,6 +1235,7 @@ u8size=''
 u8type=''
 uvsize=''
 uvtype=''
+i32dformat=''
 ivdformat=''
 nvEUformat=''
 nvFUformat=''
@@ -1240,6 +1243,10 @@ nvGUformat=''
 nveformat=''
 nvfformat=''
 nvgformat=''
+u32XUformat=''
+u32oformat=''
+u32uformat=''
+u32xformat=''
 uvXUformat=''
 uvoformat=''
 uvuformat=''
@@ -1503,7 +1510,7 @@ archname=''
 usereentrant='undef'
 : List of libraries we want.
 : If anyone needs extra -lxxx, put those in a hint file.
-libswanted="cl pthread socket bind inet nsl ndbm gdbm dbm db malloc dl ld"
+libswanted="cl pthread socket bind inet ndbm gdbm dbm db malloc dl ld"
 libswanted="$libswanted sun m crypt sec util c cposix posix ucb bsd BSD"
 : We probably want to search /usr/shlib before most other libraries.
 : This is only used by the lib/ExtUtils/MakeMaker.pm routine extliblist.
@@ -2213,6 +2220,7 @@ $startsh
 xxxm=\$dflt
 $myecho
 ans='!'
+counter=42
 case "\$fastread" in
 yes) case "\$dflt" in
 	'') ;;
@@ -2287,6 +2295,12 @@ while expr "X\$ans" : "X!" >/dev/null; do
 		$myecho
 		;;
 	esac
+	counter=\`echo \$counter | awk '{ print --\$0 }'\`
+	if [ \$counter = 0 ]; then
+		echo >&4
+		echo >&4 Too many attempts asking the same question.  Giving up.
+		exit 1
+	fi
 done
 case "\$ans" in
 '') ans="\$xxxm";;
@@ -3492,7 +3506,10 @@ EOM
 			osvers="$3"
 			;;
 		dragonfly) osname=dragonfly
-			osvers="$3"
+                        case "$3" in
+                            [0-9]*) osvers="$3" ;;
+                            *) osvers="$2" ;;
+                        esac
 			;;
 		dynixptx*) osname=dynixptx
 			osvers=`echo "$4"|sed 's/^v//'`
@@ -5263,6 +5280,16 @@ for thislib in $libswanted; do
 		xxx=`ls $thisdir/lib$thislib.[0-9].$so 2>/dev/null|sed -n '$p'`
 	        $test -f "$xxx" && eval $libscheck
 		$test -f "$xxx" && libstyle=shared
+	    fi
+	    if test ! -f "$xxx"; then
+		xxx=$thisdir/lib$thislib.$so$_a
+		$test -f "$xxx" && eval $libscheck
+		$test -f "$xxx" && libstyle="import"
+	    fi
+	    if test ! -f "$xxx"; then
+		xxx=$thisdir/$thislib.$so$_a
+		$test -f "$xxx" && eval $libscheck
+		$test -f "$xxx" && libstyle="import"
 	    fi
 	    if test ! -f "$xxx"; then
 		xxx=$thisdir/lib$thislib.$so
@@ -11326,6 +11353,34 @@ set d_attribute_always_inline
 eval $setvar
 $rm -f attrib*
 
+: Look for GCC-style attribute visibility
+case "$d_attribute_visibility" in
+'')
+echo " "
+echo "Checking whether your compiler can handle __attribute__((visibility)) ..." >&4
+$cat >attrib.c <<'EOCP'
+#include <stdio.h>
+__attribute__((visibility("hidden"))) int I_will_be_hidden(void);
+EOCP
+if $cc $ccflags -c attrib.c >attrib.out 2>&1 ; then
+        if $compiler_warning attrib.out >/dev/null 2>&1; then
+                echo "Your C compiler doesn't support __attribute__((visibility))."
+                val="$undef"
+        else
+                echo "Your C compiler supports __attribute__((visibility))."
+                val="$define"
+        fi
+else
+        echo "Your C compiler doesn't seem to understand __attribute__ at all."
+        val="$undef"
+fi
+;;
+*) val="$d_attribute_visibility" ;;
+esac
+set d_attribute_visibility
+eval $setvar
+$rm -f attrib*
+
 : see if getpgrp exists
 set getpgrp d_getpgrp
 eval $inlibc
@@ -16986,6 +17041,10 @@ $cat <<EOP >try.c
 #ifdef I_STDLIB
 #include <stdlib.h>
 #endif
+#$i_inttypes I_INTTYPES
+#ifdef I_INTTYPES
+#include <inttypes.h>
+#endif
 #include <sys/types.h>
 #include <signal.h>
 #ifdef SIGFPE
@@ -18036,6 +18095,10 @@ eval $inlibc
 
 : see if setegid exists
 set setegid d_setegid
+eval $inlibc
+
+: see if setenv exists
+set setenv d_setenv
 eval $inlibc
 
 : see if seteuid exists
@@ -20080,6 +20143,10 @@ EOM
 #ifdef I_STDLIB
 #include <stdlib.h>
 #endif
+#$i_inttypes I_INTTYPES
+#ifdef I_INTTYPES
+#include <inttypes.h>
+#endif
 #include <sys/types.h>
 typedef $uvtype UV;
 int main()
@@ -21588,7 +21655,7 @@ EOCP
 		case "$yyy" in
 		12345678901)
 			sPRId64=PRId64; sPRIi64=PRIi64; sPRIu64=PRIu64;
-			sPRIo64=PRIo64; sPRIx64=PRIx64; sPRIXU64=PRIXU64;
+			sPRIo64=PRIo64; sPRIx64=PRIx64; sPRIXU64=PRIX64;
 			echo "We will use the C9X style."
 			;;
 		esac
@@ -21741,6 +21808,45 @@ fi
 
 case "$ivdformat" in
 '') echo "$0: Fatal: failed to find format strings, cannot continue." >&4
+    exit 1
+    ;;
+esac
+
+case "$i32dformat" in
+'')	case "$i32type" in
+	int)
+		i32dformat='"d"'
+		u32uformat='"u"'
+		u32oformat='"o"'
+		u32xformat='"x"'
+		u32XUformat='"X"'
+		;;
+	long)
+		i32dformat='"ld"'
+		u32uformat='"lu"'
+		u32oformat='"lo"'
+		u32xformat='"lx"'
+		u32XUformat='"lX"'
+		;;
+	int_least32_t)			: will not happen currently
+		i32dformat=PRIdLEAST32
+		u32uformat=PRIuLEAST32
+		u32oformat=PRIoLEAST32
+		u32xformat=PRIxLEAST32
+		u32XUformat=PRIXLEAST32
+		;;
+	int32_t)
+		i32dformat=PRId32
+		u32uformat=PRIu32
+		u32oformat=PRIo32
+		u32xformat=PRIx32
+		u32XUformat=PRIX32
+		;;
+	esac ;;
+esac
+
+case "$i32dformat" in
+'') echo "$0: Fatal: failed to find format strings for 32-bit integers, cannot continue." >&4
     exit 1
     ;;
 esac
@@ -24583,6 +24689,7 @@ d_attribute_nonnull='$d_attribute_nonnull'
 d_attribute_noreturn='$d_attribute_noreturn'
 d_attribute_pure='$d_attribute_pure'
 d_attribute_unused='$d_attribute_unused'
+d_attribute_visibility='$d_attribute_visibility'
 d_attribute_warn_unused_result='$d_attribute_warn_unused_result'
 d_backtrace='$d_backtrace'
 d_bsd='$d_bsd'
@@ -24951,6 +25058,7 @@ d_semget='$d_semget'
 d_semop='$d_semop'
 d_sendmsg='$d_sendmsg'
 d_setegid='$d_setegid'
+d_setenv='$d_setenv'
 d_seteuid='$d_seteuid'
 d_setgrent='$d_setgrent'
 d_setgrent_r='$d_setgrent_r'
@@ -25206,6 +25314,7 @@ html3dir='$html3dir'
 html3direxp='$html3direxp'
 i16size='$i16size'
 i16type='$i16type'
+i32dformat='$i32dformat'
 i32size='$i32size'
 i32type='$i32type'
 i64size='$i64size'
@@ -25593,8 +25702,12 @@ troff='$troff'
 ttyname_r_proto='$ttyname_r_proto'
 u16size='$u16size'
 u16type='$u16type'
+u32XUformat='$u32XUformat'
+u32oformat='$u32oformat'
 u32size='$u32size'
 u32type='$u32type'
+u32uformat='$u32uformat'
+u32xformat='$u32xformat'
 u64size='$u64size'
 u64type='$u64type'
 u8size='$u8size'

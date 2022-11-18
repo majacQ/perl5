@@ -2138,8 +2138,8 @@ EOP
 
     {   # This was failing unless an explicit /d was added
         my $E0 = uni_to_native("\xE0");
+        utf8::upgrade($E0);
         my $p = qr/[_$E0]/i;
-        utf8::upgrade($p);
         like(uni_to_native("\xC0"), qr/$p/, "Verify \"\\xC0\" =~ /[\\xE0_]/i; pattern in utf8");
     }
 
@@ -2379,11 +2379,10 @@ EOF
         ok(1, $message);  # If it didn't crash, it worked.
     }
 
-    TODO: {   # Was looping
-        todo_skip('Triggers thread clone SEGV. See #86550')
-	  if $::running_as_thread && $::running_as_thread;
-        watchdog(10 * ($ENV{PERL_TEST_TIME_OUT_FACTOR} || 1));
+    {   # Was looping
+        watchdog(10);
         like("\x{00DF}", qr/[\x{1E9E}_]*/i, "\"\\x{00DF}\" =~ /[\\x{1E9E}_]*/i was looping");
+        watchdog(0);
     }
 
     {   # Bug #90536, caused failed assertion
@@ -2686,6 +2685,12 @@ first at 3
 Freeing REx: "(?<b>\g{c})(?<c>x)(?&b)"
 EOF_DEBUG_OUT
                       {}, "Related to Github Issue #19350, forward \\g{x} pattern segv under use re Debug => 'PARSE'");
+    }
+
+    {   # GH 20009
+        my $x = "awesome quotes";
+        utf8::upgrade($x);
+        $x =~ s/^[\x{0301}\x{030C}]+//;
     }
 
 

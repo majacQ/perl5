@@ -107,6 +107,7 @@ while (<CFG>) {
 }
 close(CFG);
 
+#==========================================================================
 # perl.h logic duplication begins
 
 if ($define{USE_ITHREADS}) {
@@ -140,28 +141,58 @@ if (! $define{NO_LOCALE}) {
 
 # https://en.wikipedia.org/wiki/Microsoft_Visual_C%2B%2B#Internal_version_numbering
 my $cctype = $ARGS{CCTYPE} =~ s/MSVC//r;
-if (! $define{HAS_SETLOCALE} && $define{HAS_POSIX_2008_LOCALE}) {
-    $define{USE_POSIX_2008_LOCALE} = 1;
-    $define{USE_THREAD_SAFE_LOCALE} = 1;
-}
-elsif (   ($define{USE_ITHREADS} || $define{USE_THREAD_SAFE_LOCALE})
-       && (    $define{HAS_POSIX_2008_LOCALE}
-           || ($ARGS{PLATFORM} eq 'win32' && (   $cctype !~ /\D/
-                                              && $cctype >= 80)))
-       && ! $define{NO_THREAD_SAFE_LOCALE})
-{
-    $define{USE_THREAD_SAFE_LOCALE} = 1 unless $define{USE_THREAD_SAFE_LOCALE};
-    $define{USE_POSIX_2008_LOCALE} = 1 if $define{HAS_POSIX_2008_LOCALE};
+if ($define{USE_ITHREADS} && ! $define{NO_LOCALE_THREADS}) {
+    $define{USE_LOCALE_THREADS} = 1;
 }
 
-if (   $ARGS{PLATFORM} eq 'win32'
-    && $define{USE_THREAD_SAFE_LOCALE}
-    && $cctype < 140)
+if (   $define{HAS_POSIX_2008_LOCALE}
+    && (  ! $define{HAS_SETLOCALE} || (     $define{USE_LOCALE_THREADS}
+                                       && ! $define{NO_POSIX_2008_LOCALE})))
 {
-    $define{TS_W32_BROKEN_LOCALECONV} = 1;
+    $define{USE_POSIX_2008_LOCALE} = 1;
+}
+
+if ($define{USE_LOCALE_THREADS} && ! $define{NO_THREAD_SAFE_LOCALE})
+{
+    if (    $define{USE_POSIX_2008_LOCALE}
+        || ($ARGS{PLATFORM} eq 'win32' && (   $cctype !~ /\D/
+                                           && $cctype >= 80)))
+    {
+        $define{USE_THREAD_SAFE_LOCALE} = 1;
+    }
+}
+
+if ($define{USE_POSIX_2008_LOCALE} && $define{HAS_QUERYLOCALE})
+{
+    $define{USE_QUERYLOCALE} = 1;
+
+    # Don't need glibc only code from perl.h
+}
+
+if ($define{USE_POSIX_2008_LOCALE} && ! $define{USE_QUERYLOCALE})
+{
+    $define{USE_PL_CURLOCALES} = 1;
+    $define{USE_PL_CUR_LC_ALL} = 1;
+}
+
+if ($ARGS{PLATFORM} eq 'win32' && $define{USE_THREAD_SAFE_LOCALE})
+{
+    $define{USE_PL_CUR_LC_ALL} = 1;
+
+    if ($cctype < 140) {
+        $define{TS_W32_BROKEN_LOCALECONV} = 1;
+    }
+}
+
+if ($define{MULTIPLICITY} && (   $define{USE_POSIX_2008_LOCALE}
+                                || (   $define{WIN32}
+                                    && $define{USE_THREAD_SAFE_LOCALE})))
+{
+    $define{USE_PERL_SWITCH_LOCALE_CONTEXT}
 }
 
 # perl.h logic duplication ends
+#==========================================================================
 
 print STDERR "Defines: (" . join(' ', sort keys %define) . ")\n"
      unless $ARGS{PLATFORM} eq 'test';
@@ -270,7 +301,9 @@ if ($ARGS{PLATFORM} ne 'vms') {
 
 if ($ARGS{PLATFORM} ne 'win32') {
     ++$skip{$_} foreach qw(
-		    Perl_my_setlocale
+		    Perl_get_win32_message_utf8ness
+		    Perl_Win_utf8_string_to_wstring
+		    Perl_Win_wstring_to_utf8_string
 			 );
 }
 
@@ -286,7 +319,6 @@ unless ($define{'DEBUGGING'}) {
 		    Perl_debstackptrs
 		    Perl_pad_sv
 		    Perl_pad_setsv
-                    Perl__setlocale_debug_string
 		    Perl_set_padlist
 		    Perl_hv_assert
 		    PL_watchaddr
@@ -353,10 +385,6 @@ else {
 			 );
 }
 
-if ($define{'PERL_USE_SAFE_PUTENV'}) {
-    ++$skip{PL_use_safe_putenv};
-}
-
 unless ($define{'USE_ITHREADS'}) {
     ++$skip{PL_thr_key};
     ++$skip{PL_user_prop_mutex};
@@ -367,6 +395,7 @@ unless ($define{'USE_ITHREADS'}) {
     ++$skip{$_} foreach qw(
                     PL_keyword_plugin_mutex
 		    PL_check_mutex
+                    PL_cur_locale_obj
 		    PL_op_mutex
 		    PL_regex_pad
 		    PL_regex_padav
@@ -374,13 +403,13 @@ unless ($define{'USE_ITHREADS'}) {
 		    PL_env_mutex
 		    PL_hints_mutex
 		    PL_locale_mutex
-		    PL_lc_numeric_mutex
-		    PL_lc_numeric_mutex_depth
+		    PL_locale_mutex_depth
 		    PL_my_ctx_mutex
 		    PL_perlio_mutex
 		    PL_stashpad
 		    PL_stashpadix
 		    PL_stashpadmax
+                    PL_veto_switch_non_tTHX_context
 		    Perl_alloccopstash
 		    Perl_allocfilegv
 		    Perl_clone_params_del
@@ -409,23 +438,32 @@ unless ($define{'USE_ITHREADS'}) {
 			 );
 }
 
-if (      $define{NO_LOCALE}
-    || (! $define{USE_ITHREADS} && ! $define{USE_THREAD_SAFE_LOCALE}))
+unless ($define{USE_POSIX_2008_LOCALE})
 {
     ++$skip{$_} foreach qw(
         PL_C_locale_obj
+        PL_scratch_locale_obj
+        PL_underlying_numeric_obj
+    );
+}
+unless ($define{USE_PL_CURLOCALES})
+{
+    ++$skip{$_} foreach qw(
         PL_curlocales
     );
 }
 
-unless ( $define{'HAS_NEWLOCALE'}
-    &&   $define{'HAS_FREELOCALE'}
-    &&   $define{'HAS_USELOCALE'}
-    && ! $define{'NO_POSIX_2008_LOCALE'})
+unless ($define{USE_PL_CUR_LC_ALL})
 {
     ++$skip{$_} foreach qw(
-        PL_C_locale_obj
-        PL_underlying_numeric_obj
+        PL_cur_LC_ALL
+    );
+}
+
+unless ($define{USE_PERL_SWITCH_LOCALE_CONTEXT})
+{
+    ++$skip{$_} foreach qw(
+        Perl_switch_locale_context
     );
 }
 
@@ -452,11 +490,6 @@ unless ($define{'MULTIPLICITY'}) {
 		    Perl_my_cxt_init
 		    Perl_my_cxt_index
 			 );
-}
-
-if ($define{USE_THREAD_SAFE_LOCALE}) {
-    ++$skip{PL_lc_numeric_mutex};
-    ++$skip{PL_lc_numeric_mutex_depth};
 }
 
 unless ($define{'USE_DTRACE'}) {
@@ -489,7 +522,14 @@ unless ($define{'PERL_TRACK_MEMPOOL'}) {
 }
 
 unless ($define{'PERL_MEM_LOG'}) {
-    ++$skip{PL_mem_log};
+    ++$skip{$_} foreach qw(
+                    PL_mem_log
+                    Perl_mem_log_alloc
+                    Perl_mem_log_realloc
+                    Perl_mem_log_free
+                    Perl_mem_log_new_sv
+                    Perl_mem_log_del_sv
+                );
 }
 
 unless ($define{'MULTIPLICITY'}) {
@@ -543,18 +583,21 @@ unless ($define{USE_LOCALE_COLLATE}) {
                     PL_strxfrm_NUL_replacement
                     PL_strxfrm_is_behaved
                     PL_strxfrm_max_cp
+		    PL_in_utf8_COLLATE_locale
 			 );
 }
 
 unless ($define{USE_LOCALE_NUMERIC}) {
     ++$skip{$_} foreach qw(
-		    PL_numeric_local
-		    PL_numeric_name
-		    PL_numeric_radix_sv
-		    PL_numeric_standard
-                    PL_numeric_underlying
-                    PL_numeric_underlying_is_standard
                     PL_underlying_numeric_obj
+			 );
+}
+
+unless ($define{USE_LOCALE_CTYPE}) {
+    ++$skip{$_} foreach qw(
+		    PL_ctype_name
+                    PL_in_utf8_CTYPE_locale
+                    PL_in_utf8_turkic_locale
 			 );
 }
 
@@ -700,7 +743,7 @@ unless ($Config{d_wcrtomb}) {
 {
     my %seen;
     my ($embed) = setup_embed($ARGS{TARG_DIR});
-    my $excludedre = $define{'NO_MATHOMS'} ? qr/[emiIb]/ : qr/[emiI]/;
+    my $excludedre = $define{'NO_MATHOMS'} ? qr/[emiIsb]/ : qr/[emiIs]/;
 
     foreach (@$embed) {
 	my ($flags, $retval, $func, @args) = @$_;
@@ -716,7 +759,7 @@ unless ($Config{d_wcrtomb}) {
 	    # mean "don't export"
 	    next if $seen{$func}++;
 	    # Should we also skip adding the Perl_ prefix if $flags =~ /o/ ?
-	    $func = "Perl_$func" if ($flags =~ /[pX]/ && $func !~ /^Perl_/);
+	    $func = "Perl_$func" if ($flags =~ /[psX]/ && $func !~ /^Perl_/);
 	    ++$export{$func} unless exists $skip{$func};
 	}
     }

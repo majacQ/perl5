@@ -249,6 +249,9 @@ for C<my Foo $bar>.
 =for apidoc Amx|SSize_t|PadnameREFCNT|PADNAME * pn
 The reference count of the pad name.
 
+=for apidoc Amx|PADNAME *|PadnameREFCNT_inc|PADNAME * pn
+Increases the reference count of the pad name.  Returns the pad name itself.
+
 =for apidoc Amx|void|PadnameREFCNT_dec|PADNAME * pn
 Lowers the reference count of the pad name.
 
@@ -315,39 +318,48 @@ Restore the old pad saved into the local variable C<opad> by C<PAD_SAVE_LOCAL()>
 #define PadnameSV(pn) \
         newSVpvn_flags(PadnamePV(pn), PadnameLEN(pn), SVs_TEMP|SVf_UTF8)
 #define PadnameFLAGS(pn)	(pn)->xpadn_flags
-#define PadnameIsOUR(pn)	(!!(pn)->xpadn_ourstash)
+#define PadnameIsOUR(pn)	cBOOL((pn)->xpadn_ourstash)
 #define PadnameOURSTASH(pn)	(pn)->xpadn_ourstash
 #define PadnameTYPE(pn)		(pn)->xpadn_type_u.xpadn_typestash
+#define PadnameHasTYPE(pn)      cBOOL(PadnameTYPE(pn))
 #define PadnamePROTOCV(pn)	(pn)->xpadn_type_u.xpadn_protocv
 #define PadnameREFCNT(pn)	(pn)->xpadn_refcnt
+#define PadnameREFCNT_inc(pn)   Perl_padname_refcnt_inc(pn)
 #define PadnameREFCNT_dec(pn)	Perl_padname_free(aTHX_ pn)
 #define PadnameOURSTASH_set(pn,s) (PadnameOURSTASH(pn) = (s))
 #define PadnameTYPE_set(pn,s)	  (PadnameTYPE(pn) = (s))
-#define PadnameOUTER(pn)	(PadnameFLAGS(pn) & PADNAMEt_OUTER)
-#define PadnameIsSTATE(pn)	(PadnameFLAGS(pn) & PADNAMEt_STATE)
-#define PadnameLVALUE(pn)	(PadnameFLAGS(pn) & PADNAMEt_LVALUE)
+#define PadnameOUTER(pn)	(PadnameFLAGS(pn) & PADNAMEf_OUTER)
+#define PadnameIsSTATE(pn)	(PadnameFLAGS(pn) & PADNAMEf_STATE)
+#define PadnameLVALUE(pn)	(PadnameFLAGS(pn) & PADNAMEf_LVALUE)
 
-#define PadnameLVALUE_on(pn)	(PadnameFLAGS(pn) |= PADNAMEt_LVALUE)
-#define PadnameIsSTATE_on(pn)	(PadnameFLAGS(pn) |= PADNAMEt_STATE)
+#define PadnameLVALUE_on(pn)	(PadnameFLAGS(pn) |= PADNAMEf_LVALUE)
+#define PadnameIsSTATE_on(pn)	(PadnameFLAGS(pn) |= PADNAMEf_STATE)
 
-#define PADNAMEt_OUTER	1	/* outer lexical var */
-#define PADNAMEt_STATE	2	/* state var */
-#define PADNAMEt_LVALUE	4	/* used as lvalue */
-#define PADNAMEt_TYPED	8	/* for B; unused by core */
-#define PADNAMEt_OUR	16	/* for B; unused by core */
+#define PADNAMEf_OUTER	0x01	/* outer lexical var */
+#define PADNAMEf_STATE	0x02	/* state var */
+#define PADNAMEf_LVALUE	0x04	/* used as lvalue */
+#define PADNAMEf_TYPED	0x08	/* for B; unused by core */
+#define PADNAMEf_OUR	0x10	/* for B; unused by core */
 
 /* backward compatibility */
-#define SvPAD_STATE		PadnameIsSTATE
-#define SvPAD_TYPED(pn)		(!!PadnameTYPE(pn))
-#define SvPAD_OUR(pn)		(!!PadnameOURSTASH(pn))
-#define SvPAD_STATE_on		PadnameIsSTATE_on
-#define SvPAD_TYPED_on(pn)	(PadnameFLAGS(pn) |= PADNAMEt_TYPED)
-#define SvPAD_OUR_on(pn)	(PadnameFLAGS(pn) |= PADNAMEt_OUR)
-#define SvOURSTASH		PadnameOURSTASH
-#define SvOURSTASH_set		PadnameOURSTASH_set
-#define SVpad_STATE		PADNAMEt_STATE
-#define SVpad_TYPED		PADNAMEt_TYPED
-#define SVpad_OUR		PADNAMEt_OUR
+#ifndef PERL_CORE
+#  define SvPAD_STATE           PadnameIsSTATE
+#  define SvPAD_TYPED           PadnameHasTYPE
+#  define SvPAD_OUR(pn)         cBOOL(PadnameOURSTASH(pn))
+#  define SvPAD_STATE_on        PadnameIsSTATE_on
+#  define SvPAD_TYPED_on(pn)    (PadnameFLAGS(pn) |= PADNAMEf_TYPED)
+#  define SvPAD_OUR_on(pn)      (PadnameFLAGS(pn) |= PADNAMEf_OUR)
+#  define SvOURSTASH            PadnameOURSTASH
+#  define SvOURSTASH_set        PadnameOURSTASH_set
+#  define SVpad_STATE           PADNAMEf_STATE
+#  define SVpad_TYPED           PADNAMEf_TYPED
+#  define SVpad_OUR             PADNAMEf_OUR
+#  define PADNAMEt_OUTER        PADNAMEf_OUTER
+#  define PADNAMEt_STATE        PADNAMEf_STATE
+#  define PADNAMEt_LVALUE       PADNAMEf_LVALUE
+#  define PADNAMEt_TYPED        PADNAMEf_TYPED
+#  define PADNAMEt_OUR          PADNAMEf_OUR
+#endif
 
 #ifdef DEBUGGING
 #  define PAD_SV(po)	   pad_sv(po)
@@ -445,13 +457,12 @@ ling pad (lvalue) to C<gen>.
 #define PAD_COMPNAME(po)	PAD_COMPNAME_SV(po)
 #define PAD_COMPNAME_SV(po)	(PadnamelistARRAY(PL_comppad_name)[(po)])
 #define PAD_COMPNAME_FLAGS(po)	PadnameFLAGS(PAD_COMPNAME(po))
-#define PAD_COMPNAME_FLAGS_isOUR(po) SvPAD_OUR(PAD_COMPNAME_SV(po))
+#define PAD_COMPNAME_FLAGS_isOUR(po) PadnameIsOUR(PAD_COMPNAME_SV(po))
 #define PAD_COMPNAME_PV(po)	PadnamePV(PAD_COMPNAME(po))
 
 #define PAD_COMPNAME_TYPE(po)	PadnameTYPE(PAD_COMPNAME(po))
 
-#define PAD_COMPNAME_OURSTASH(po) \
-    (SvOURSTASH(PAD_COMPNAME_SV(po)))
+#define PAD_COMPNAME_OURSTASH(po)  (PadnameOURSTASH(PAD_COMPNAME_SV(po)))
 
 #define PAD_COMPNAME_GEN(po) \
     ((STRLEN)PadnamelistARRAY(PL_comppad_name)[po]->xpadn_gen)

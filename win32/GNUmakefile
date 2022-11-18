@@ -6,7 +6,7 @@
 #	MinGW64 with gcc-4.4.3 or later
 #
 # This is set up to build a perl.exe that runs off a shared library
-# (perl535.dll).  Also makes individual DLLs for the XS extensions.
+# (perl537.dll).  Also makes individual DLLs for the XS extensions.
 #
 # The easiest way to customize the build process is to use parameters like this:
 #
@@ -63,7 +63,7 @@ INST_TOP := $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	:= \5.35.10
+#INST_VER	:= \5.37.6
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -219,7 +219,7 @@ DEFAULT_INC_EXCLUDES_DOT := define
 # set this to additionally provide a statically linked perl-static.exe.
 # Note that dynamic loading will not work with this perl, so you must
 # include required modules statically using the STATIC_EXT or ALL_STATIC
-# variables below. A static library perl535s.lib will also be created.
+# variables below. A static library perl537s.lib will also be created.
 # Ordinary perl.exe is not affected by this option.
 #
 #BUILD_STATIC	:= define
@@ -539,6 +539,9 @@ CPANDIR		= ..\cpan
 PODDIR		= ..\pod
 HTMLDIR		= .\html
 
+# Strip trailing backslash from INST_TOP
+override INST_TOP := $(INST_TOP:\=)
+
 INST_SCRIPT	= $(INST_TOP)$(INST_VER)\bin
 INST_BIN	= $(INST_SCRIPT)$(INST_ARCH)
 INST_LIB	= $(INST_TOP)$(INST_VER)\lib
@@ -605,11 +608,16 @@ LIBFILES	+= -lquadmath
 endif
 
 ifeq ($(CFG),Debug)
-OPTIMIZE	= -g -O2
+# According to https://gcc.gnu.org/onlinedocs/gcc-8.3.0/gcc/Optimize-Options.html
+# -Og should provide some optimizations while still giving convenient debugging
+OPTIMIZE	= -g -Og
 LINK_DBG	= -g
 DEFINES		+= -DDEBUGGING
 else
-OPTIMIZE	= -O2
+# In https://github.com/Perl/perl5/issues/20081 it is found that the previous
+# optimization level -O2 causes generated code that fails in mysterious ways
+# when run on Win11 (*even* if it was built and successfully tested on Win10!).
+OPTIMIZE	= -Os
 LINK_DBG	= -s
 endif
 
@@ -899,9 +907,9 @@ ifeq ($(CCTYPE),GCC)
 
 CFGSH_TMPL	= config.gc
 CFGH_TMPL	= config_H.gc
-PERLIMPLIB	= $(COREDIR)\libperl535$(a)
-PERLIMPLIBBASE	= libperl535$(a)
-PERLSTATICLIB	= ..\libperl535s$(a)
+PERLIMPLIB	= $(COREDIR)\libperl537$(a)
+PERLIMPLIBBASE	= libperl537$(a)
+PERLSTATICLIB	= ..\libperl537s$(a)
 INT64		= long long
 
 else
@@ -914,12 +922,12 @@ endif
 
 # makedef.pl must be updated if this changes, and this should normally
 # only change when there is an incompatible revision of the public API.
-PERLIMPLIB	?= $(COREDIR)\perl535$(a)
-PERLIMPLIBBASE	?= perl535$(a)
-PERLEXPLIB	?= $(COREDIR)\perl535.exp
-PERLSTATICLIB	?= ..\perl535s$(a)
-PERLDLL		= ..\perl535.dll
-PERLDLLBASE	= perl535.dll
+PERLIMPLIB	?= $(COREDIR)\perl537$(a)
+PERLIMPLIBBASE	?= perl537$(a)
+PERLEXPLIB	?= $(COREDIR)\perl537.exp
+PERLSTATICLIB	?= ..\perl537s$(a)
+PERLDLL		= ..\perl537.dll
+PERLDLLBASE	= perl537.dll
 
 # don't let "gmake -n all" try to run "miniperl.exe make_ext.pl"
 PLMAKE		= gmake
@@ -961,6 +969,7 @@ MICROCORE_SRC	=		\
 		..\mg.c		\
 		..\numeric.c	\
 		..\pad.c	\
+		..\peep.c	\
 		..\perly.c	\
 		..\pp_sort.c	\
 		..\reentr.c	\
@@ -1110,7 +1119,8 @@ CFG_VARS	=					\
 		"LINK_FLAGS=$(subst ",\",$(LINK_FLAGS))"\
 		"optimize=$(subst ",\",$(OPTIMIZE))"	\
 		"ARCHPREFIX=$(ARCHPREFIX)"		\
-		"WIN64=$(WIN64)"
+		"WIN64=$(WIN64)"                        \
+		"SKIP_CCHOME_CHECK=$(SKIP_CCHOME_CHECK)"
 
 #
 # Top targets
@@ -1171,7 +1181,8 @@ endif
 ..\perl$(o) : ..\git_version.h
 
 ..\config.sh : $(CFGSH_TMPL) config_sh.PL FindExt.pm $(HAVEMINIPERL)
-	$(MINIPERL) -I..\lib config_sh.PL $(CFG_VARS) $(CFGSH_TMPL) > ..\config.sh
+	$(MINIPERL) -I..\lib config_sh.PL $(CFG_VARS) $(CFGSH_TMPL) > ..\config.sh.tmp
+	rename ..\config.sh.tmp config.sh
 
 # This target is for when changes to the main config.sh happen.
 # Edit config.gc, then make perl using GCC in a minimal configuration (i.e.
@@ -1184,7 +1195,7 @@ regen_config_h:
 	-$(MINIPERL) -I..\lib config_h.PL "ARCHPREFIX=$(ARCHPREFIX)"
 	rename config.h $(CFGH_TMPL)
 
-$(CONFIGPM): ..\config.sh config_h.PL
+$(CONFIGPM): ..\config.sh config_h.PL ..\git_version.h
 	$(MINIPERL) -I..\lib ..\configpm --chdir=..
 	-$(MINIPERL) -I..\lib config_h.PL "ARCHPREFIX=$(ARCHPREFIX)"
 
@@ -1610,7 +1621,6 @@ utils: $(HAVEMINIPERL) ..\utils\Makefile
 	copy ..\README.jp       ..\pod\perljp.pod
 	copy ..\README.ko       ..\pod\perlko.pod
 	copy ..\README.linux    ..\pod\perllinux.pod
-	copy ..\README.macos    ..\pod\perlmacos.pod
 	copy ..\README.macosx   ..\pod\perlmacosx.pod
 	copy ..\README.openbsd  ..\pod\perlopenbsd.pod
 	copy ..\README.os2      ..\pod\perlos2.pod
@@ -1625,7 +1635,7 @@ utils: $(HAVEMINIPERL) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl53510delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5376delta.pod
 	$(MINIPERL) -I..\lib $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
 	$(MINIPERL) -I..\lib ..\pod\perlmodlib.PL -q ..
@@ -1724,15 +1734,15 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl53510delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl5376delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlcn.pod perlcygwin.pod \
 	    perlfreebsd.pod perlhaiku.pod perlhpux.pod perlhurd.pod \
 	    perlintern.pod perlirix.pod perljp.pod perlko.pod perllinux.pod \
-	    perlmacos.pod perlmacosx.pod perlmodlib.pod perlopenbsd.pod \
-	    perlos2.pod perlos390.pod perlos400.pod perlplan9.pod \
-	    perlqnx.pod perlriscos.pod perlsolaris.pod perlsynology.pod \
-	    perltoc.pod perltru64.pod perltw.pod perluniprops.pod \
-	    perlvos.pod perlwin32.pod
+	    perlmacosx.pod perlmodlib.pod perlopenbsd.pod perlos2.pod \
+	    perlos390.pod perlos400.pod perlplan9.pod perlqnx.pod \
+	    perlriscos.pod perlsolaris.pod perlsynology.pod perltoc.pod \
+	    perltru64.pod perltw.pod perluniprops.pod perlvos.pod \
+	    perlwin32.pod
 	-cd ..\utils && del /f h2ph splain perlbug pl2pm h2xs \
 	    perldoc perlivp libnetcfg enc2xs encguess piconv cpan *.bat \
 	    xsubpp pod2html instmodsh json_pp prove ptar ptardiff ptargrep shasum corelist zipdetails
@@ -1809,11 +1819,11 @@ endif
 
 test : test-prep
 	set PERL_STATIC_EXT=$(STATIC_EXT) && \
-	    cd ..\t && perl.exe harness $(TEST_SWITCHES) $(TEST_FILES)
+	    cd ..\t && perl.exe harness $(TEST_ARGS) $(TEST_SWITCHES) $(TEST_FILES)
 
 test_porting : test-prep
 	set PERL_STATIC_EXT=$(STATIC_EXT) && \
-	    cd ..\t && perl.exe harness $(TEST_SWITCHES) porting\*.t ..\lib\diagnostics.t
+	    cd ..\t && perl.exe harness $(TEST_ARGS) $(TEST_SWITCHES) porting\*.t ..\lib\diagnostics.t
 
 test-reonly : reonly utils
 	$(XCOPY) $(PERLEXE) ..\t\$(NULL)
@@ -1827,14 +1837,14 @@ regen :
 test-notty : test-prep
 	set PERL_STATIC_EXT=$(STATIC_EXT) && \
 	    set PERL_SKIP_TTY_TEST=1 && \
-	    cd ..\t && perl.exe harness $(TEST_SWITCHES) $(TEST_FILES)
+	    cd ..\t && perl.exe harness $(TEST_ARGS) $(TEST_SWITCHES) $(TEST_FILES)
 
 _test :
 	$(XCOPY) $(PERLEXE) ..\t\$(NULL)
 	$(XCOPY) $(PERLDLL) ..\t\$(NULL)
 	$(XCOPY) $(GLOBEXE) ..\t\$(NULL)
 	set PERL_STATIC_EXT=$(STATIC_EXT) && \
-	    cd ..\t && perl.exe harness $(TEST_SWITCHES) $(TEST_FILES)
+	    cd ..\t && perl.exe harness $(TEST_ARGS) $(TEST_SWITCHES) $(TEST_FILES)
 
 _clean :
 	-@erase miniperlmain$(o)

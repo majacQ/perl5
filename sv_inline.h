@@ -527,6 +527,447 @@ Perl_newSV_type_mortal(pTHX_ const svtype type)
     return sv;
 }
 
+/* The following functions started out in sv.h and then moved to inline.h. They
+ * moved again into this file during the 5.37.x development cycle. */
+
+/*
+=for apidoc_section $SV
+=for apidoc SvPVXtrue
+
+Returns a boolean as to whether or not C<sv> contains a PV that is considered
+TRUE.  FALSE is returned if C<sv> doesn't contain a PV, or if the PV it does
+contain is zero length, or consists of just the single character '0'.  Every
+other PV value is considered TRUE.
+
+As of Perl v5.37.1, C<sv> is evaluated exactly once; in earlier releases, it
+could be evaluated more than once.
+
+=cut
+*/
+
+PERL_STATIC_INLINE bool
+Perl_SvPVXtrue(pTHX_ SV *sv)
+{
+    PERL_ARGS_ASSERT_SVPVXTRUE;
+
+    if (! (XPV *) SvANY(sv)) {
+        return false;
+    }
+
+    if ( ((XPV *) SvANY(sv))->xpv_cur > 1) { /* length > 1 */
+        return true;
+    }
+
+    if (( (XPV *) SvANY(sv))->xpv_cur == 0) {
+        return false;
+    }
+
+    return *sv->sv_u.svu_pv != '0';
+}
+
+/*
+=for apidoc SvGETMAGIC
+Invokes C<L</mg_get>> on an SV if it has 'get' magic.  For example, this
+will call C<FETCH> on a tied variable.  As of 5.37.1, this function is
+guaranteed to evaluate its argument exactly once.
+
+=cut
+*/
+
+PERL_STATIC_INLINE void
+Perl_SvGETMAGIC(pTHX_ SV *sv)
+{
+    PERL_ARGS_ASSERT_SVGETMAGIC;
+
+    if (UNLIKELY(SvGMAGICAL(sv))) {
+        mg_get(sv);
+    }
+}
+
+PERL_STATIC_INLINE bool
+Perl_SvTRUE(pTHX_ SV *sv)
+{
+    PERL_ARGS_ASSERT_SVTRUE;
+
+    if (UNLIKELY(sv == NULL))
+        return FALSE;
+    SvGETMAGIC(sv);
+    return SvTRUE_nomg_NN(sv);
+}
+
+PERL_STATIC_INLINE bool
+Perl_SvTRUE_nomg(pTHX_ SV *sv)
+{
+    PERL_ARGS_ASSERT_SVTRUE_NOMG;
+
+    if (UNLIKELY(sv == NULL))
+        return FALSE;
+    return SvTRUE_nomg_NN(sv);
+}
+
+PERL_STATIC_INLINE bool
+Perl_SvTRUE_NN(pTHX_ SV *sv)
+{
+    PERL_ARGS_ASSERT_SVTRUE_NN;
+
+    SvGETMAGIC(sv);
+    return SvTRUE_nomg_NN(sv);
+}
+
+PERL_STATIC_INLINE bool
+Perl_SvTRUE_common(pTHX_ SV * sv, const bool sv_2bool_is_fallback)
+{
+    PERL_ARGS_ASSERT_SVTRUE_COMMON;
+
+    if (UNLIKELY(SvIMMORTAL_INTERP(sv)))
+        return SvIMMORTAL_TRUE(sv);
+
+    if (! SvOK(sv))
+        return FALSE;
+
+    if (SvPOK(sv))
+        return SvPVXtrue(sv);
+
+    if (SvIOK(sv))
+        return SvIVX(sv) != 0; /* casts to bool */
+
+    if (SvROK(sv) && !(SvOBJECT(SvRV(sv)) && HvAMAGIC(SvSTASH(SvRV(sv)))))
+        return TRUE;
+
+    if (sv_2bool_is_fallback)
+        return sv_2bool_nomg(sv);
+
+    return isGV_with_GP(sv);
+}
+
+PERL_STATIC_INLINE SV *
+Perl_SvREFCNT_inc(SV *sv)
+{
+    if (LIKELY(sv != NULL))
+        SvREFCNT(sv)++;
+    return sv;
+}
+PERL_STATIC_INLINE SV *
+Perl_SvREFCNT_inc_NN(SV *sv)
+{
+    PERL_ARGS_ASSERT_SVREFCNT_INC_NN;
+
+    SvREFCNT(sv)++;
+    return sv;
+}
+PERL_STATIC_INLINE void
+Perl_SvREFCNT_inc_void(SV *sv)
+{
+    if (LIKELY(sv != NULL))
+        SvREFCNT(sv)++;
+}
+PERL_STATIC_INLINE void
+Perl_SvREFCNT_dec(pTHX_ SV *sv)
+{
+    if (LIKELY(sv != NULL)) {
+        U32 rc = SvREFCNT(sv);
+        if (LIKELY(rc > 1))
+            SvREFCNT(sv) = rc - 1;
+        else
+            Perl_sv_free2(aTHX_ sv, rc);
+    }
+}
+
+PERL_STATIC_INLINE void
+Perl_SvREFCNT_dec_NN(pTHX_ SV *sv)
+{
+    U32 rc = SvREFCNT(sv);
+
+    PERL_ARGS_ASSERT_SVREFCNT_DEC_NN;
+
+    if (LIKELY(rc > 1))
+        SvREFCNT(sv) = rc - 1;
+    else
+        Perl_sv_free2(aTHX_ sv, rc);
+}
+
+/*
+=for apidoc SvAMAGIC_on
+
+Indicate that C<sv> has overloading (active magic) enabled.
+
+=cut
+*/
+
+PERL_STATIC_INLINE void
+Perl_SvAMAGIC_on(SV *sv)
+{
+    PERL_ARGS_ASSERT_SVAMAGIC_ON;
+    assert(SvROK(sv));
+
+    if (SvOBJECT(SvRV(sv))) HvAMAGIC_on(SvSTASH(SvRV(sv)));
+}
+
+/*
+=for apidoc SvAMAGIC_off
+
+Indicate that C<sv> has overloading (active magic) disabled.
+
+=cut
+*/
+
+PERL_STATIC_INLINE void
+Perl_SvAMAGIC_off(SV *sv)
+{
+    PERL_ARGS_ASSERT_SVAMAGIC_OFF;
+
+    if (SvROK(sv) && SvOBJECT(SvRV(sv)))
+        HvAMAGIC_off(SvSTASH(SvRV(sv)));
+}
+
+PERL_STATIC_INLINE U32
+Perl_SvPADSTALE_on(SV *sv)
+{
+    assert(!(SvFLAGS(sv) & SVs_PADTMP));
+    return SvFLAGS(sv) |= SVs_PADSTALE;
+}
+PERL_STATIC_INLINE U32
+Perl_SvPADSTALE_off(SV *sv)
+{
+    assert(!(SvFLAGS(sv) & SVs_PADTMP));
+    return SvFLAGS(sv) &= ~SVs_PADSTALE;
+}
+
+/*
+=for apidoc_section $SV
+=for apidoc      SvIV
+=for apidoc_item SvIV_nomg
+=for apidoc_item SvIVx
+
+These each coerce the given SV to IV and return it.  The returned value in many
+circumstances will get stored in C<sv>'s IV slot, but not in all cases.  (Use
+C<L</sv_setiv>> to make sure it does).
+
+As of 5.37.1, all are guaranteed to evaluate C<sv> only once.
+
+C<SvIVx> is now identical to C<SvIV>, but prior to 5.37.1, it was the only form
+guaranteed to evaluate C<sv> only once.
+
+C<SvIV_nomg> is the same as C<SvIV>, but does not perform 'get' magic.
+
+=for apidoc      SvNV
+=for apidoc_item SvNV_nomg
+=for apidoc_item SvNVx
+
+These each coerce the given SV to NV and return it.  The returned value in many
+circumstances will get stored in C<sv>'s NV slot, but not in all cases.  (Use
+C<L</sv_setnv>> to make sure it does).
+
+As of 5.37.1, all are guaranteed to evaluate C<sv> only once.
+
+C<SvNVx> is now identical to C<SvNV>, but prior to 5.37.1, it was the only form
+guaranteed to evaluate C<sv> only once.
+
+C<SvNV_nomg> is the same as C<SvNV>, but does not perform 'get' magic.
+
+=for apidoc      SvUV
+=for apidoc_item SvUV_nomg
+=for apidoc_item SvUVx
+
+These each coerce the given SV to UV and return it.  The returned value in many
+circumstances will get stored in C<sv>'s UV slot, but not in all cases.  (Use
+C<L</sv_setuv>> to make sure it does).
+
+As of 5.37.1, all are guaranteed to evaluate C<sv> only once.
+
+C<SvUVx> is now identical to C<SvUV>, but prior to 5.37.1, it was the only form
+guaranteed to evaluate C<sv> only once.
+
+=cut
+*/
+
+PERL_STATIC_INLINE IV
+Perl_SvIV(pTHX_ SV *sv) {
+    PERL_ARGS_ASSERT_SVIV;
+
+    if (SvIOK_nog(sv))
+        return SvIVX(sv);
+    return sv_2iv(sv);
+}
+
+PERL_STATIC_INLINE UV
+Perl_SvUV(pTHX_ SV *sv) {
+    PERL_ARGS_ASSERT_SVUV;
+
+    if (SvUOK_nog(sv))
+        return SvUVX(sv);
+    return sv_2uv(sv);
+}
+
+PERL_STATIC_INLINE NV
+Perl_SvNV(pTHX_ SV *sv) {
+    PERL_ARGS_ASSERT_SVNV;
+
+    if (SvNOK_nog(sv))
+        return SvNVX(sv);
+    return sv_2nv(sv);
+}
+
+PERL_STATIC_INLINE IV
+Perl_SvIV_nomg(pTHX_ SV *sv) {
+    PERL_ARGS_ASSERT_SVIV_NOMG;
+
+    if (SvIOK(sv))
+        return SvIVX(sv);
+    return sv_2iv_flags(sv, 0);
+}
+
+PERL_STATIC_INLINE UV
+Perl_SvUV_nomg(pTHX_ SV *sv) {
+    PERL_ARGS_ASSERT_SVUV_NOMG;
+
+    if (SvIOK_nog(sv))
+        return SvUVX(sv);
+    return sv_2uv_flags(sv, 0);
+}
+
+PERL_STATIC_INLINE NV
+Perl_SvNV_nomg(pTHX_ SV *sv) {
+    PERL_ARGS_ASSERT_SVNV_NOMG;
+
+    if (SvNOK_nog(sv))
+        return SvNVX(sv);
+    return sv_2nv_flags(sv, 0);
+}
+
+#if defined(PERL_CORE) || defined (PERL_EXT)
+PERL_STATIC_INLINE STRLEN
+S_sv_or_pv_pos_u2b(pTHX_ SV *sv, const char *pv, STRLEN pos, STRLEN *lenp)
+{
+    PERL_ARGS_ASSERT_SV_OR_PV_POS_U2B;
+    if (SvGAMAGIC(sv)) {
+        U8 *hopped = utf8_hop((U8 *)pv, pos);
+        if (lenp) *lenp = (STRLEN)(utf8_hop(hopped, *lenp) - hopped);
+        return (STRLEN)(hopped - (U8 *)pv);
+    }
+    return sv_pos_u2b_flags(sv,pos,lenp,SV_CONST_RETURN);
+}
+#endif
+
+PERL_STATIC_INLINE char *
+Perl_sv_pvutf8n_force_wrapper(pTHX_ SV * const sv, STRLEN * const lp, const U32 dummy)
+{
+    /* This is just so can be passed to Perl_SvPV_helper() as a function
+     * pointer with the same signature as all the other such pointers, and
+     * having hence an unused parameter */
+    PERL_ARGS_ASSERT_SV_PVUTF8N_FORCE_WRAPPER;
+    PERL_UNUSED_ARG(dummy);
+
+    return sv_pvutf8n_force(sv, lp);
+}
+
+PERL_STATIC_INLINE char *
+Perl_sv_pvbyten_force_wrapper(pTHX_ SV * const sv, STRLEN * const lp, const U32 dummy)
+{
+    /* This is just so can be passed to Perl_SvPV_helper() as a function
+     * pointer with the same signature as all the other such pointers, and
+     * having hence an unused parameter */
+    PERL_ARGS_ASSERT_SV_PVBYTEN_FORCE_WRAPPER;
+    PERL_UNUSED_ARG(dummy);
+
+    return sv_pvbyten_force(sv, lp);
+}
+
+PERL_STATIC_INLINE char *
+Perl_SvPV_helper(pTHX_
+                 SV * const sv,
+                 STRLEN * const lp,
+                 const U32 flags,
+                 const PL_SvPVtype type,
+                 char * (*non_trivial)(pTHX_ SV *, STRLEN * const, const U32),
+                 const bool or_null,
+                 const U32 return_flags
+                )
+{
+    /* 'type' should be known at compile time, so this is reduced to a single
+     * conditional at runtime */
+    if (   (type == SvPVbyte_type_      && SvPOK_byte_nog(sv))
+        || (type == SvPVforce_type_     && SvPOK_pure_nogthink(sv))
+        || (type == SvPVutf8_type_      && SvPOK_utf8_nog(sv))
+        || (type == SvPVnormal_type_    && SvPOK_nog(sv))
+        || (type == SvPVutf8_pure_type_ && SvPOK_utf8_pure_nogthink(sv))
+        || (type == SvPVbyte_pure_type_ && SvPOK_byte_pure_nogthink(sv))
+   ) {
+        if (lp) {
+            *lp = SvCUR(sv);
+        }
+
+        /* Similarly 'return_flags is known at compile time, so this becomes
+         * branchless */
+        if (return_flags & SV_MUTABLE_RETURN) {
+            return SvPVX_mutable(sv);
+        }
+        else if(return_flags & SV_CONST_RETURN) {
+            return (char *) SvPVX_const(sv);
+        }
+        else {
+            return SvPVX(sv);
+        }
+    }
+
+    if (or_null) {  /* This is also known at compile time */
+        if (flags & SV_GMAGIC) {    /* As is this */
+            SvGETMAGIC(sv);
+        }
+
+        if (! SvOK(sv)) {
+            if (lp) {   /* As is this */
+                *lp = 0;
+            }
+
+            return NULL;
+        }
+    }
+
+    /* Can't trivially handle this, call the function */
+    return non_trivial(aTHX_ sv, lp, (flags|return_flags));
+}
+
+/*
+=for apidoc newRV_noinc
+
+Creates an RV wrapper for an SV.  The reference count for the original
+SV is B<not> incremented.
+
+=cut
+*/
+
+PERL_STATIC_INLINE SV *
+Perl_newRV_noinc(pTHX_ SV *const tmpRef)
+{
+    SV *sv = newSV_type(SVt_IV);
+
+    PERL_ARGS_ASSERT_NEWRV_NOINC;
+
+    SvTEMP_off(tmpRef);
+
+    /* inlined, simplified sv_setrv_noinc(sv, tmpRef); */
+    SvRV_set(sv, tmpRef);
+    SvROK_on(sv);
+
+    return sv;
+}
+
+PERL_STATIC_INLINE char *
+Perl_sv_setpv_freshbuf(pTHX_ SV *const sv)
+{
+    PERL_ARGS_ASSERT_SV_SETPV_FRESHBUF;
+    assert(SvTYPE(sv) >= SVt_PV);
+    assert(SvTYPE(sv) <= SVt_PVMG);
+    assert(!SvTHINKFIRST(sv));
+    assert(SvPVX(sv));
+    SvCUR_set(sv, 0);
+    *(SvEND(sv))= '\0';
+    (void)SvPOK_only_UTF8(sv);
+    SvTAINT(sv);
+    return SvPVX(sv);
+}
+
 /*
  * ex: set ts=8 sts=4 sw=4 et:
  */

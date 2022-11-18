@@ -9,7 +9,6 @@
 #define Perl_Warn_Bit_(x)           (1 << ((x) % 8))
 #define PerlWarnIsSet_(a, x)        ((a)[Perl_Warn_Off_(x)] & Perl_Warn_Bit_(x))
 
-
 #define G_WARN_OFF		0 	/* $^W == 0 */
 #define G_WARN_ON		1	/* -w flag and $^W != 0 */
 #define G_WARN_ALL_ON		2	/* -W flag */
@@ -18,8 +17,8 @@
 #define G_WARN_ALL_MASK		(G_WARN_ALL_ON|G_WARN_ALL_OFF)
 
 #define pWARN_STD		NULL
-#define pWARN_ALL		(STRLEN *) &PL_WARN_ALL    /* use warnings 'all' */
-#define pWARN_NONE		(STRLEN *) &PL_WARN_NONE   /* no  warnings 'all' */
+#define pWARN_ALL               &PL_WARN_ALL    /* use warnings 'all' */
+#define pWARN_NONE              &PL_WARN_NONE   /* no  warnings 'all' */
 
 #define specialWARN(x)		((x) == pWARN_STD || (x) == pWARN_ALL ||	\
                                  (x) == pWARN_NONE)
@@ -90,73 +89,69 @@
 /* Warnings Categories added in Perl 5.017 */
 
 #define WARN_EXPERIMENTAL		 51
-#define WARN_EXPERIMENTAL__LEXICAL_SUBS	 52
-#define WARN_EXPERIMENTAL__REGEX_SETS	 53
-#define WARN_EXPERIMENTAL__SMARTMATCH	 54
+#define WARN_EXPERIMENTAL__REGEX_SETS	 52
+#define WARN_EXPERIMENTAL__SMARTMATCH	 53
 
 /* Warnings Categories added in Perl 5.019 */
 
-#define WARN_EXPERIMENTAL__POSTDEREF	 55
-#define WARN_EXPERIMENTAL__SIGNATURES	 56
-#define WARN_SYSCALLS			 57
+#define WARN_SYSCALLS			 54
 
 /* Warnings Categories added in Perl 5.021 */
 
-#define WARN_EXPERIMENTAL__BITWISE	 58
-#define WARN_EXPERIMENTAL__CONST_ATTR	 59
-#define WARN_EXPERIMENTAL__RE_STRICT	 60
-#define WARN_EXPERIMENTAL__REFALIASING	 61
-#define WARN_LOCALE			 62
-#define WARN_MISSING			 63
-#define WARN_REDUNDANT			 64
+#define WARN_EXPERIMENTAL__CONST_ATTR	 55
+#define WARN_EXPERIMENTAL__RE_STRICT	 56
+#define WARN_EXPERIMENTAL__REFALIASING	 57
+#define WARN_LOCALE			 58
+#define WARN_MISSING			 59
+#define WARN_REDUNDANT			 60
 
 /* Warnings Categories added in Perl 5.025 */
 
-#define WARN_EXPERIMENTAL__DECLARED_REFS 65
+#define WARN_EXPERIMENTAL__DECLARED_REFS 61
 
 /* Warnings Categories added in Perl 5.027 */
 
-#define WARN_EXPERIMENTAL__ALPHA_ASSERTIONS 66
-#define WARN_EXPERIMENTAL__SCRIPT_RUN	 67
-#define WARN_SHADOW			 68
+#define WARN_SHADOW			 62
 
 /* Warnings Categories added in Perl 5.029 */
 
-#define WARN_EXPERIMENTAL__PRIVATE_USE	 69
-#define WARN_EXPERIMENTAL__UNIPROP_WILDCARDS 70
-#define WARN_EXPERIMENTAL__VLB		 71
-
-/* Warnings Categories added in Perl 5.031 */
-
-#define WARN_EXPERIMENTAL__ISA		 72
+#define WARN_EXPERIMENTAL__PRIVATE_USE	 63
+#define WARN_EXPERIMENTAL__UNIPROP_WILDCARDS 64
+#define WARN_EXPERIMENTAL__VLB		 65
 
 /* Warnings Categories added in Perl 5.033 */
 
-#define WARN_EXPERIMENTAL__TRY		 73
+#define WARN_EXPERIMENTAL__TRY		 66
 
 /* Warnings Categories added in Perl 5.035 */
 
-#define WARN_EXPERIMENTAL__ARGS_ARRAY_WITH_SIGNATURES 74
-#define WARN_EXPERIMENTAL__BUILTIN	 75
-#define WARN_EXPERIMENTAL__DEFER	 76
-#define WARN_EXPERIMENTAL__FOR_LIST	 77
-#define WARN_SCALAR			 78
-#define WARNsize			 20
-#define WARN_ALLstring			 "\125\125\125\125\125\125\125\125\125\125\125\125\125\125\125\125\125\125\125\125"
-#define WARN_NONEstring			 "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+#define WARN_EXPERIMENTAL__ARGS_ARRAY_WITH_SIGNATURES 67
+#define WARN_EXPERIMENTAL__BUILTIN	 68
+#define WARN_EXPERIMENTAL__DEFER	 69
+#define WARN_EXPERIMENTAL__EXTRA_PAIRED_DELIMITERS 70
+#define WARN_EXPERIMENTAL__FOR_LIST	 71
+#define WARN_SCALAR			 72
+#define WARNsize			 19
+#define WARN_ALLstring			 "\125\125\125\125\125\125\125\125\125\125\125\125\125\125\125\125\125\125\125"
+#define WARN_NONEstring			 "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
 
 #define isLEXWARN_on \
         cBOOL(PL_curcop && PL_curcop->cop_warnings != pWARN_STD)
 #define isLEXWARN_off \
         cBOOL(!PL_curcop || PL_curcop->cop_warnings == pWARN_STD)
 #define isWARN_ONCE	(PL_dowarn & (G_WARN_ON|G_WARN_ONCE))
-#define isWARN_on(c,x)	(PerlWarnIsSet_((U8 *)(c + 1), 2*(x)))
-#define isWARNf_on(c,x)	(PerlWarnIsSet_((U8 *)(c + 1), 2*(x)+1))
+#define hasWARNBIT(c,x) (RCPV_LEN(c) > (2*(x)/8))
+#define isWARN_on(c,x)  (hasWARNBIT(c,x) \
+                        ? PerlWarnIsSet_((U8 *)(c), 2*(x)) \
+                        : 0)
+#define isWARNf_on(c,x) (hasWARNBIT(c,x) \
+                        ? PerlWarnIsSet_((U8 *)(c), 2*(x)+1) \
+                        : 0)
 
 #define DUP_WARNINGS(p) Perl_dup_warnings(aTHX_ p)
 
 #define free_and_set_cop_warnings(cmp,w) STMT_START { \
-  if (!specialWARN((cmp)->cop_warnings)) PerlMemShared_free((cmp)->cop_warnings); \
+  if (!specialWARN((cmp)->cop_warnings)) rcpv_free((cmp)->cop_warnings); \
   (cmp)->cop_warnings = w; \
 } STMT_END
 
@@ -302,13 +297,9 @@ category parameters passed.
 =for apidoc Amnh||WARN_NONCHAR
 =for apidoc Amnh||WARN_SURROGATE
 =for apidoc Amnh||WARN_EXPERIMENTAL
-=for apidoc Amnh||WARN_EXPERIMENTAL__LEXICAL_SUBS
 =for apidoc Amnh||WARN_EXPERIMENTAL__REGEX_SETS
 =for apidoc Amnh||WARN_EXPERIMENTAL__SMARTMATCH
-=for apidoc Amnh||WARN_EXPERIMENTAL__POSTDEREF
-=for apidoc Amnh||WARN_EXPERIMENTAL__SIGNATURES
 =for apidoc Amnh||WARN_SYSCALLS
-=for apidoc Amnh||WARN_EXPERIMENTAL__BITWISE
 =for apidoc Amnh||WARN_EXPERIMENTAL__CONST_ATTR
 =for apidoc Amnh||WARN_EXPERIMENTAL__RE_STRICT
 =for apidoc Amnh||WARN_EXPERIMENTAL__REFALIASING
@@ -316,17 +307,15 @@ category parameters passed.
 =for apidoc Amnh||WARN_MISSING
 =for apidoc Amnh||WARN_REDUNDANT
 =for apidoc Amnh||WARN_EXPERIMENTAL__DECLARED_REFS
-=for apidoc Amnh||WARN_EXPERIMENTAL__ALPHA_ASSERTIONS
-=for apidoc Amnh||WARN_EXPERIMENTAL__SCRIPT_RUN
 =for apidoc Amnh||WARN_SHADOW
 =for apidoc Amnh||WARN_EXPERIMENTAL__PRIVATE_USE
 =for apidoc Amnh||WARN_EXPERIMENTAL__UNIPROP_WILDCARDS
 =for apidoc Amnh||WARN_EXPERIMENTAL__VLB
-=for apidoc Amnh||WARN_EXPERIMENTAL__ISA
 =for apidoc Amnh||WARN_EXPERIMENTAL__TRY
 =for apidoc Amnh||WARN_EXPERIMENTAL__ARGS_ARRAY_WITH_SIGNATURES
 =for apidoc Amnh||WARN_EXPERIMENTAL__BUILTIN
 =for apidoc Amnh||WARN_EXPERIMENTAL__DEFER
+=for apidoc Amnh||WARN_EXPERIMENTAL__EXTRA_PAIRED_DELIMITERS
 =for apidoc Amnh||WARN_EXPERIMENTAL__FOR_LIST
 =for apidoc Amnh||WARN_SCALAR
 

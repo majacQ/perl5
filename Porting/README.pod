@@ -33,20 +33,9 @@ Use C<git bisect> to pinpoint changes.
 A utility to find, and optionally bump, references to the perl version
 number in various files within the perl source.
 
-=head2 F<check83.pl>
-
-Performs pathname portability checks, including whether there are naming
-conflicts when names are truncated to the DOSish, case-ignoring 8.3 format.
-
 =head2 F<checkansi.pl>
 
 Check source code for ANSI-C violations.
-
-=head2 F<checkAUTHORS.pl>
-
-Used by F<t/porting/authors.t> to ensure the F<AUTHORS> list is up to
-date. See also L<< /"F<updateAUTHORS.pl>" >> for a way to automatically
-fix issues found by this tool.
 
 =head2 F<checkcfguse.pl>
 
@@ -150,6 +139,11 @@ The charter of the Perl Documentation Team
 =head2 F<epigraphs.pod>
 
 List of Perl release epigraphs.
+
+=head2 F<exclude_contrib.txt>
+
+List of base 64 encoded SHA256 digests of C<< "name <email>" >> data
+which should be ignored by F<updateAUTHORS.pl>.
 
 =head2 F<exec-bit.txt>
 
@@ -365,6 +359,11 @@ and case are ignored, as explained in L<perldiag>.
 
 Script to help out with syncing cpan distros.
 
+=head2 F<test-dist-modules.pl>
+
+Test modules in F<dist/> against the perl in C<PATH>.  Used in the
+github workflow to test against older perls.
+
 =head2 F<timecheck2.c>
 
 A little program to test the limits of your system's time functions. See
@@ -386,9 +385,14 @@ any previous attempts.
 =head2 F<updateAUTHORS.pl>
 
 This script will automatically update AUTHORS and create .mailmap entries
-based on the git commit log history. If F<checkAUTHORS.pl> complains
+based on the git commit log history. If F<t/porting/authors.t> complains
 during testing you should run this. It will automatically fix most if not
 all AUTHORS related test fails.
+
+=head2 F<updateAUTHORS.pm>
+
+The class used by F<updateAUTHORS.pl> to do its business. Package name
+C<Porting::updateAUTHORS>.
 
 =head2 F<valgrindpp.pl>
 
@@ -403,4 +407,3 @@ leaks.
 Guide for Vote Administrators for running Steering Council elections.
 
 =cut
-

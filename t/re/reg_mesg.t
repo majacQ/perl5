@@ -730,12 +730,6 @@ my @warning_utf8_only_under_strict = mark_as_utf8(
 
 push @warning_only_under_strict, @warning_utf8_only_under_strict;
 
-my @experimental_regex_sets = (
-    '/(?[ \t ])/' => 'The regex_sets feature is experimental {#} m/(?[{#} \t ])/',
-    'use utf8; /utf8 ネ (?[ [\tネ] ])/' => do { use utf8; 'The regex_sets feature is experimental {#} m/utf8 ネ (?[{#} [\tネ] ])/' },
-    '/noutf8 ネ (?[ [\tネ] ])/' => 'The regex_sets feature is experimental {#} m/noutf8 ネ (?[{#} [\tネ] ])/',
-);
-
 my @experimental_vlb = (
     '/(?<=(p|qq|rrr))/' => 'Variable length positive lookbehind with capturing' .
                            ' is experimental {#} m/(?<=(p|qq|rrr)){#}/',
@@ -753,12 +747,17 @@ my @experimental_vlb = (
     '/(?| (?=(foo)) | (?<!(foo)|p) )/x'
             => 'Variable length negative lookbehind with capturing' .
                ' is experimental {#} m/(?| (?=(foo)) | (?<!(foo)|p) ){#}/',
+    '/(?<!(foo|bop(*ACCEPT)|bar)baz)/'
+            => 'Variable length negative lookbehind with capturing' .
+               ' is experimental {#} m/(?<!(foo|bop(*ACCEPT)|bar)baz){#}/',
+    '/(?<=(foo|bop(*ACCEPT)|bar)baz)/'
+            => 'Variable length positive lookbehind with capturing' .
+               ' is experimental {#} m/(?<=(foo|bop(*ACCEPT)|bar)baz){#}/',
 );
 
 my @wildcard = (
     'm!(?[\p{name=/KATAKANA/}])$!' =>
     [
-     'The regex_sets feature is experimental {#} m/(?[{#}\p{name=/KATAKANA/}])$/',
      'The Unicode property wildcards feature is experimental',
      'Using just the single character results returned by \p{} in (?[...]) {#} m/(?[\p{name=/KATAKANA/}{#}])$/'
     ], # [GH #17732] Null pointer deref
@@ -797,7 +796,6 @@ for my $strict ("", "use re 'strict';") {
             fail("$0: Internal error: '$death[$i]' should have an error message");
         }
         else {
-            no warnings 'experimental::regex_sets';
             no warnings 'experimental::re_strict';
             no warnings 'experimental::uniprop_wildcards';
 
@@ -853,29 +851,22 @@ for my $strict ("",  "no warnings 'experimental::re_strict'; use re 'strict';") 
 
     foreach my $ref (
         \@warning_tests,
-        \@experimental_regex_sets,
         \@wildcard,
         \@deprecated,
         \@experimental_vlb,
     ){
         my $warning_type;
-        my $turn_off_warnings = "";
         my $default_on;
         if ($ref == \@warning_tests) {
             $warning_type = 'regexp, digit';
-            $turn_off_warnings = "no warnings 'experimental::regex_sets';";
             $default_on = $strict;
         }
         elsif ($ref == \@deprecated) {
             $warning_type = 'regexp, deprecated';
             $default_on = 1;
         }
-        elsif ($ref == \@experimental_regex_sets) {
-            $warning_type = 'experimental::regex_sets';
-            $default_on = 1;
-        }
         elsif ($ref == \@wildcard) {
-            $warning_type = 'experimental::regex_sets, experimental::uniprop_wildcards';
+            $warning_type = 'experimental::uniprop_wildcards';
             $default_on = 1;
         }
         elsif ($ref == \@experimental_vlb) {
@@ -907,7 +898,7 @@ for my $strict ("",  "no warnings 'experimental::re_strict'; use re 'strict';") 
             if (is($@, "", "$strict $regex did not die")) {
                 my @got = capture_warnings(sub {
                                         $_ = "x";
-                                        eval "$strict $turn_off_warnings $regex" });
+                                        eval "$strict $regex" });
                 my $count = @expect;
                 if (! is(scalar @got, scalar @expect,
                             "... and gave expected number ($count) of warnings"))
@@ -943,13 +934,9 @@ for my $strict ("",  "no warnings 'experimental::re_strict'; use re 'strict';") 
                         # correct.  This test relies on the fact that we
                         # are outside the scope of any ‘use warnings’.
                         local $^W;
-                        my $turn_off_sets =
-                                    ($ref == \@experimental_regex_sets)
-                                    ? ""
-                                    : "no warnings 'experimental::regex_sets';";
                         my @warns = capture_warnings(sub {
                                             $_ = "x";
-                                            eval "$strict $turn_off_sets $regex"
+                                            eval "$strict $regex"
                                             });
                         # Warning should be on as well if is testing
                         # '(?[...])' which turns on strict

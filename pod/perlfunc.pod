@@ -426,11 +426,45 @@ L<C<time>|/time>, L<C<times>|/times>
 
 =for Pod::Functions =!Non-functions
 
-C<and>, C<AUTOLOAD>, C<BEGIN>, C<CHECK>, C<cmp>, C<CORE>, C<__DATA__>,
-C<default>, C<DESTROY>, C<else>, C<elseif>, C<elsif>, C<END>, C<__END__>,
-C<eq>, C<for>, C<foreach>, C<ge>, C<given>, C<gt>, C<if>, C<INIT>, C<le>,
-C<lt>, C<ne>, C<not>, C<or>, C<UNITCHECK>, C<unless>, C<until>, C<when>,
-C<while>, C<x>, C<xor>
+C<and>,
+C<AUTOLOAD>,
+C<BEGIN>,
+C<catch>,
+C<CHECK>,
+C<cmp>,
+C<CORE>,
+C<__DATA__>,
+C<default>,
+C<defer>,
+C<DESTROY>,
+C<else>,
+C<elseif>,
+C<elsif>,
+C<END>,
+C<__END__>,
+C<eq>,
+C<finally>,
+C<for>,
+C<foreach>,
+C<ge>,
+C<given>,
+C<gt>,
+C<if>,
+C<INIT>,
+C<isa>,
+C<le>,
+C<lt>,
+C<ne>,
+C<not>,
+C<or>,
+C<try>,
+C<UNITCHECK>,
+C<unless>,
+C<until>,
+C<when>,
+C<while>,
+C<x>,
+C<xor>
 
 =back
 
@@ -669,7 +703,7 @@ Portability issues: L<perlport/-X>.
 To avoid confusing would-be users of your code with mysterious
 syntax errors, put something like this at the top of your script:
 
-    use 5.010;  # so filetest ops can stack
+    use v5.10;  # so filetest ops can stack
 
 =item abs VALUE
 X<abs> X<absolute>
@@ -1491,7 +1525,7 @@ filehandle, even though it looks like one).  DBNAME is the name of the
 database (without the F<.dir> or F<.pag> extension if any).  If the
 database does not exist, it is created with protection specified by MASK
 (as modified by the L<C<umask>|/umask EXPR>).  To prevent creation of
-the database if it doesn't exist, you may specify a MODE of 0, and the
+the database if it doesn't exist, you may specify a MASK of 0, and the
 function will return a false value if it can't find an existing
 database.  If your system supports only the older DBM functions, you may
 make only one L<C<dbmopen>|/dbmopen HASH,DBNAME,MASK> call in your
@@ -2048,8 +2082,8 @@ versions of Perl with mysterious syntax errors, put this sort of thing at
 the top of your file to signal that your code will work I<only> on Perls of
 a recent vintage:
 
-    use 5.012;	# so keys/values/each work on arrays
-    use 5.018;	# so each assigns to $_ in a lone while test
+    use v5.12;	# so keys/values/each work on arrays
+    use v5.18;	# so each assigns to $_ in a lone while test
 
 See also L<C<keys>|/keys HASH>, L<C<values>|/values HASH>, and
 L<C<sort>|/sort SUBNAME LIST>.
@@ -2202,6 +2236,16 @@ Since the return value of EXPR is executed as a block within the lexical
 context of the current Perl program, any outer lexical variables are
 visible to it, and any package variable settings or subroutine and
 format definitions remain afterwards.
+
+Note that when C<BEGIN {}> blocks are embedded inside of an eval block
+the contents of the block will be executed immediately and before the rest
+of the eval code is executed. You can disable this entirely by
+
+   local ${^MAX_NESTED_EVAL_BEGIN_BLOCKS} = 0;
+   eval $string;
+
+which will cause any embedded C<BEGIN> blocks in C<$string> to throw an
+exception.
 
 =over 4
 
@@ -3787,7 +3831,7 @@ versions of Perl with mysterious syntax errors, put this sort of thing at
 the top of your file to signal that your code will work I<only> on Perls of
 a recent vintage:
 
-    use 5.012;	# so keys/values/each work on arrays
+    use v5.12;	# so keys/values/each work on arrays
 
 See also L<C<each>|/each HASH>, L<C<values>|/values HASH>, and
 L<C<sort>|/sort SUBNAME LIST>.
@@ -3851,7 +3895,7 @@ See L<perlfork> for more details.
 
 If there is no I<LIST> of processes, no signal is sent, and the return
 value is 0.  This form is sometimes used, however, because it causes
-tainting checks to be run.  But see
+tainting checks to be run, if your perl support taint checks.  But see
 L<perlsec/Laundering and Detecting Tainted Data>.
 
 Portability issues: L<perlport/kill>.
@@ -4292,6 +4336,8 @@ a restrictive MODE and give the user no way to be more permissive.
 The exceptions to this rule are when the file or directory should be
 kept private (mail files, for instance).  The documentation for
 L<C<umask>|/umask EXPR> discusses the choice of MODE in more detail.
+If bits in MODE other than the permission bits are set, the result may
+be implementation defined, per POSIX 1003.1-2008.
 
 Note that according to the POSIX 1003.1-1996 the FILENAME may have any
 number of trailing slashes.  Some operating and filesystems do not get
@@ -4622,6 +4668,7 @@ filehandle. These affect how the input and output are processed (see
 L<open> and
 L<PerlIO> for more details).  For example:
 
+    # loads PerlIO::encoding automatically
     open(my $fh, "<:encoding(UTF-8)", $filename)
         || die "Can't open UTF-8 encoded $filename: $!";
 
@@ -4657,8 +4704,8 @@ L<C<seek>|/seek FILEHANDLE,POSITION,WHENCE> to do the reading.
 =item Opening a filehandle into an in-memory scalar
 
 You can open filehandles directly to Perl scalars instead of a file or
-other resource external to the program. To do so, provide an unblessed
-reference to that scalar as the third argument to C<open>, like so:
+other resource external to the program. To do so, provide a reference to
+that scalar as the third argument to C<open>, like so:
 
  open(my $memory, ">", \$var)
      or die "Can't open memory file: $!";
@@ -4673,14 +4720,6 @@ To (re)open C<STDOUT> or C<STDERR> as an in-memory file, close it first:
 The scalars for in-memory files are treated as octet strings: unless
 the file is being opened with truncation the scalar may not contain
 any code points over 0xFF.
-
-Be aware that attempting to open a reference to a readonly scalar will
-cause a warning and the open to fail.
-
-Prior to Perl version 5.36.0, passing in a reference to an undef scalar
-could cause strange warnings. As of Perl version 5.36.0, provided the
-reference is unblessed, the scalar will be "autovivified" to be an empty
-string, even for read mode open operations.
 
 Opening in-memory files I<can> fail for a variety of reasons.  As with
 any other C<open>, check the return value for success.
@@ -5092,7 +5131,7 @@ L<C<our>|/our VARLIST> declaration.  This applies immediately--even
 within the same statement.
 
     package Foo;
-    use strict;
+    use v5.36;  # which implies "use strict;"
 
     $Foo::foo = 23;
 
@@ -5109,7 +5148,7 @@ This works even if the package variable has not been used before, as
 package variables spring into existence when first used.
 
     package Foo;
-    use strict;
+    use v5.36;
 
     our $foo = 23;   # just like $Foo::foo = 23
 
@@ -5120,7 +5159,7 @@ long as there is no variable with that name is already in scope, you can then
 reference the package variable again even within the same statement.
 
     package Foo;
-    use strict;
+    use v5.36;
 
     my  $foo = $foo; # error, undeclared $foo on right-hand side
     our $foo = $foo; # no errors
@@ -6379,7 +6418,7 @@ versions of Perl with mysterious failures, put this sort of thing at the
 top of your file to signal that your code will work I<only> on Perls of a
 recent vintage:
 
-    use 5.012; # so readdir assigns to $_ in a lone while test
+    use v5.12; # so readdir assigns to $_ in a lone while test
 
 =item readline EXPR
 
@@ -6421,7 +6460,7 @@ if the result is not defined.
         ...
     }
 
-Note that you have can't handle L<C<readline>|/readline EXPR> errors
+Note that you can't handle L<C<readline>|/readline EXPR> errors
 that way with the C<ARGV> filehandle.  In that case, you have to open
 each element of L<C<@ARGV>|perlvar/@ARGV> yourself since
 L<C<eof>|/eof FILEHANDLE> handles C<ARGV> differently.
@@ -6707,11 +6746,17 @@ would have semantics similar to the following:
 Note that the file will not be included twice under the same specified
 name.
 
-The file must return true as the last statement to indicate
+Historically the file must return true as the last statement to indicate
 successful execution of any initialization code, so it's customary to
 end such a file with C<1;> unless you're sure it'll return true
 otherwise.  But it's better just to put the C<1;>, in case you add more
-statements.
+statements. As of 5.37.6 this requirement may be avoided by enabling
+the 'module_true' feature, which is enabled by default in modern
+version bundles. Thus code with C<use v5.37;> no longer needs to concern
+itself with this issue. See L<feature> for more details. Note that this
+affects the compilation unit within which the feature is used, and using
+it before requiring a module will not change the behavior of existing
+modules that do not themselves also use it.
 
 If EXPR is a bareword, L<C<require>|/require VERSION> assumes a F<.pm>
 extension and replaces C<::> with C</> in the filename for you,
@@ -7115,10 +7160,10 @@ X<select> X<filehandle, default>
 
 Returns the currently selected filehandle.  If FILEHANDLE is supplied,
 sets the new current default filehandle for output.  This has two
-effects: first, a L<C<write>|/write FILEHANDLE> or a L<C<print>|/print
-FILEHANDLE LIST> without a filehandle
-default to this FILEHANDLE.  Second, references to variables related to
-output will refer to this output channel.
+effects: first, a L<C<write>|/write FILEHANDLE>,  L<C<print>|/print
+FILEHANDLE LIST>, or L<C<say>|/say FILEHANDLE LIST> without a
+filehandle default to this FILEHANDLE.  Second, references to variables
+related to output will refer to this output channel.
 
 For example, to set the top-of-form format for more than one
 output channel, you might do the following:
@@ -7140,6 +7185,34 @@ methods, preferring to write the last example as:
 
 (Prior to Perl version 5.14, you have to C<use IO::Handle;> explicitly
 first.)
+
+Whilst you can use C<select> to temporarily "capture" the output of
+C<print> like this:
+
+    {
+        my $old_handle = select $new_handle;
+
+        # This goes to $new_handle:
+        print "ok 1\n";
+        ...
+
+        select $old_handle;
+    }
+
+you might find it easier to localize the typeglob instead:
+
+    {
+        local *STDOUT = $new_handle;
+
+        print "ok 1\n";
+        ...
+    }
+
+The two are not exactly equivalent, but the latter might be clearer and will
+restore STDOUT if the wrapped code dies.  The difference is that in the
+former, the original STDOUT can still be accessed by explicitly using it in a
+C<print> statement (as C<print STDOUT ...>), whereas in the latter the meaning
+of the STDOUT handle itself has temporarily been changed.
 
 Portability issues: L<perlport/select>.
 
@@ -7471,7 +7544,10 @@ argument is given.  Returns the integer number of seconds actually slept.
 
 EXPR should be a positive integer. If called with a negative integer,
 L<C<sleep>|/sleep EXPR> does not sleep but instead emits a warning, sets
-$! (C<errno>), and returns zero.
+C<$!> (C<errno>), and returns zero.
+
+If called with a non-integer, the fractional part is ignored.
+
 
 C<sleep 0> is permitted, but a function call to the underlying platform
 implementation still occurs, with any side effects that may have.
@@ -8316,7 +8392,7 @@ conversion flag.  Should you instead prefer an exception, do this:
 If you would like to know about a version dependency before you
 start running the program, put something like this at its top:
 
-    use 5.014;  # for hh/j/t/z/ printf modifiers
+    use v5.14;  # for hh/j/t/z/ printf modifiers
 
 You can find out whether your Perl supports quads via L<Config>:
 
@@ -8423,11 +8499,11 @@ The point of the function is to "seed" the L<C<rand>|/rand EXPR>
 function so that L<C<rand>|/rand EXPR> can produce a different sequence
 each time you run your program.  When called with a parameter,
 L<C<srand>|/srand EXPR> uses that for the seed; otherwise it
-(semi-)randomly chooses a seed.  In either case, starting with Perl 5.14,
+(semi-)randomly chooses a seed (see below).  In either case, starting with Perl 5.14,
 it returns the seed.  To signal that your code will work I<only> on Perls
 of a recent vintage:
 
-    use 5.014;	# so srand returns the seed
+    use v5.14;	# so srand returns the seed
 
 If L<C<srand>|/srand EXPR> is not called explicitly, it is called
 implicitly without a parameter at the first use of the
@@ -8454,6 +8530,20 @@ A typical use of the returned seed is for a test program which has too many
 combinations to test comprehensively in the time available to it each run.  It
 can test a random subset each time, and should there be a failure, log the seed
 used for that run so that it can later be used to reproduce the same results.
+
+If the C<PERL_RAND_SEED> environment variable is set to a non-negative
+integer during process startup then calls to C<srand()> with no
+arguments will initialize the perl random number generator with a
+consistent seed each time it is called, whether called explicitly with
+no arguments or implicitly via use of C<rand()>. The exact seeding that
+a given C<PERL_RAND_SEED> will produce is deliberately unspecified, but
+using different values for C<PERL_RAND_SEED> should produce different
+results. This is intended for debugging and performance analysis and is
+only guaranteed to produce consistent results between invocations of the
+same perl executable running the same code when all other factors are
+equal. The environment variable is read only once during process
+startup, and changing it during the program flow will not affect the
+currently running process. See L<perlrun> for more details.
 
 B<L<C<rand>|/rand EXPR> is not cryptographically secure.  You should not rely
 on it in security-sensitive situations.>  As of this writing, a
@@ -9626,8 +9716,6 @@ X<use> X<module> X<import>
 
 =item use Module
 
-=item use VERSION
-
 =for Pod::Functions load in a module at compile time and import its namespace
 
 Imports some semantics into the current package from the named module,
@@ -9638,45 +9726,6 @@ package.  It is exactly equivalent to
 
 except that Module I<must> be a bareword.
 The importation can be made conditional by using the L<if> module.
-
-In the C<use VERSION> form, VERSION may be either a v-string such as
-v5.24.1, which will be compared to L<C<$^V>|perlvar/$^V> (aka
-$PERL_VERSION), or a numeric argument of the form 5.024001, which will
-be compared to L<C<$]>|perlvar/$]>.  An exception is raised if VERSION
-is greater than the version of the current Perl interpreter; Perl will
-not attempt to parse the rest of the file.  Compare with
-L<C<require>|/require VERSION>, which can do a similar check at run
-time.  Symmetrically, C<no VERSION> allows you to specify that you
-want a version of Perl older than the specified one.
-
-Specifying VERSION as a numeric argument of the form 5.024001 should
-generally be avoided as older less readable syntax compared to
-v5.24.1. Before perl 5.8.0 released in 2002 the more verbose numeric
-form was the only supported syntax, which is why you might see it in
-
-    use v5.24.1;    # compile time version check
-    use 5.24.1;     # ditto
-    use 5.024_001;  # ditto; older syntax compatible with perl 5.6
-
-This is often useful if you need to check the current Perl version before
-L<C<use>|/use Module VERSION LIST>ing library modules that won't work
-with older versions of Perl.
-(We try not to do this more than we have to.)
-
-C<use VERSION> lexically enables all features available in the requested
-version as defined by the L<feature> pragma, disabling any features
-not in the requested version's feature bundle.  See L<feature>.
-If the specified Perl version is greater than or equal to
-5.12.0, strictures are enabled lexically as
-with L<C<use strict>|strict>.  
-Similarly, L<warnings> are enabled if C<VERSION> is 5.35.0 or higher.
-Any explicit use of C<use strict> or C<no strict> overrides C<use VERSION>,
-even if it comes before it.
-Later use of C<use VERSION> will override all behavior of a previous
-C<use VERSION>, possibly removing the C<strict>, C<warnings>, and C<feature>
-added by C<use VERSION>.  C<use VERSION> does not
-load the F<feature.pm>, F<strict.pm>, or F<warnings.pm>
-files.
 
 The C<BEGIN> forces the L<C<require>|/require VERSION> and
 L<C<import>|/import LIST> to happen at compile time.  The
@@ -9769,16 +9818,75 @@ or no unimport method being found.
     no strict 'refs';
     no warnings;
 
-Care should be taken when using the C<no VERSION> form of L<C<no>|/no
-MODULE VERSION LIST>.  It is
-I<only> meant to be used to assert that the running Perl is of a earlier
-version than its argument and I<not> to undo the feature-enabling side effects
-of C<use VERSION>.
-
 See L<perlmodlib> for a list of standard modules and pragmas.  See
 L<perlrun|perlrun/-m[-]module> for the C<-M> and C<-m> command-line
 options to Perl that give L<C<use>|/use Module VERSION LIST>
 functionality from the command-line.
+
+=item use VERSION
+
+=for Pod::Functions enable Perl language features and declare required version
+
+Lexically enables all features available in the requested version as
+defined by the L<feature> pragma, disabling any features not in the
+requested version's feature bundle.  See L<feature>.
+
+VERSION may be either a v-string such as v5.24.1, which will be compared
+to L<C<$^V>|perlvar/$^V> (aka $PERL_VERSION), or a numeric argument of the
+form 5.024001, which will be compared to L<C<$]>|perlvar/$]>.  An
+exception is raised if VERSION is greater than the version of the current
+Perl interpreter; Perl will not attempt to parse the rest of the file.
+Compare with L<C<require>|/require VERSION>, which can do a similar check
+at run time.
+
+If the specified Perl version is 5.12 or higher, strictures are enabled
+lexically as with L<C<use strict>|strict>.  Similarly, if the specified
+Perl version is 5.35.0 or higher, L<warnings> are enabled.  Later use of
+C<use VERSION> will override all behavior of a previous C<use VERSION>,
+possibly removing the C<strict>, C<warnings>, and C<feature> added by it.
+C<use VERSION> does not load the F<feature.pm>, F<strict.pm>, or
+F<warnings.pm> files.
+
+In the current implementation, any explicit use of C<use strict> or
+C<no strict> overrides C<use VERSION>, even if it comes before it.
+However, this may be subject to change in a future release of Perl, so new
+code should not rely on this fact.  It is recommended that a
+C<use VERSION> declaration be the first significant statement within a
+file (possibly after a C<package> statement or any amount of whitespace or
+comment), so that its effects happen first, and other pragmata are applied
+after it.
+
+Specifying VERSION as a numeric argument of the form 5.024001 should
+generally be avoided as older less readable syntax compared to
+v5.24.1. Before perl 5.8.0 released in 2002 the more verbose numeric
+form was the only supported syntax, which is why you might see it in
+older code.
+
+    use v5.24.1;    # compile time version check
+    use 5.24.1;     # ditto
+    use 5.024_001;  # ditto; older syntax compatible with perl 5.6
+
+This is often useful if you need to check the current Perl version before
+L<C<use>|/use Module VERSION LIST>ing library modules that won't work
+with older versions of Perl.
+(We try not to do this more than we have to.)
+
+Symmetrically, C<no VERSION> allows you to specify that you want a version
+of Perl older than the specified one.  Historically this was added during
+early designs of the Raku language (formerly "Perl 6"), so that a Perl 5
+program could begin
+
+    no 6;
+
+to declare that it is not a Perl 6 program.  As the two languages have
+different implementations, file naming conventions, and other
+infrastructure, this feature is now little used in practice and should be
+avoided in newly-written code.
+
+Care should be taken when using the C<no VERSION> form, as it is I<only>
+meant to be used to assert that the running Perl is of a earlier version
+than its argument and I<not> to undo the feature-enabling side effects
+of C<use VERSION>.
 
 =item utime LIST
 X<utime>
@@ -9884,7 +9992,7 @@ versions of Perl with mysterious syntax errors, put this sort of thing at
 the top of your file to signal that your code will work I<only> on Perls of
 a recent vintage:
 
-    use 5.012;	# so keys/values/each work on arrays
+    use v5.12;	# so keys/values/each work on arrays
 
 See also L<C<keys>|/keys HASH>, L<C<each>|/each HASH>, and
 L<C<sort>|/sort SUBNAME LIST>.
@@ -10374,6 +10482,8 @@ This method keyword is documented in L<perlobj/"Destructors">.
 
 =item gt
 
+=item isa
+
 =item le
 
 =item lt
@@ -10445,6 +10555,28 @@ Statements">.
 
 These flow-control keywords related to the experimental switch feature are
 documented in L<perlsyn/"Switch Statements">.
+
+=back
+
+=over
+
+=item try
+
+=item catch
+
+=item finally
+
+These flow-control keywords related to the experimental C<try> feature are
+documented in L<perlsyn/"Try Catch Exception Handling">.
+
+=back
+
+=over
+
+=item defer
+
+This flow-control keyword related to the experimental C<defer> feature is
+documented in L<perlsyn/"defer blocks">.
 
 =back
 

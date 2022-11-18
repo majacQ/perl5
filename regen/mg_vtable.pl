@@ -202,8 +202,10 @@ my %mg =
                 desc => 'Extra data for restricted hashes' },
      arylen_p => { char => '@', value_magic => 1,
                    desc => 'To move arylen out of XPVAV' },
-     ext => { char => '~', desc => 'Available for use by extensions',
+     ext => { char => '~', desc => 'Variable magic available for use by extensions',
               readonly_acceptable => 1 },
+     extvalue => { char => '^', desc => 'Value magic available for use by extensions',
+              readonly_acceptable => 1, value_magic => 1 },
      checkcall => { char => ']', value_magic => 1, vtable => 'checkcall',
                     desc => 'Inlining/mutation of call to this CV'},
      debugvar => { char => '*', desc => '$DB::single, signal, trace vars',
@@ -436,6 +438,7 @@ EOH
         for my $magic (sort @names) {
             if ($first) {
                 $first = 0;
+                print "=for apidoc_section \$magic\n";
                 print "=for apidoc AmnhU||PERL_MAGIC_$magic\n";
             }
             else {

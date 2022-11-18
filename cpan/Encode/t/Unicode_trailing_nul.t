@@ -1,3 +1,9 @@
+BEGIN {
+    if ( $] < 5.009 ) {
+        print "1..0 # Skip: Perl <= 5.9 or later required\n";
+        exit 0;
+    }
+}
 use strict;
 use Test::More;
 
@@ -12,7 +18,7 @@ my $foo = Encode::decode("UTF-16LE", "/\0v\0a\0r\0/\0f\0f\0f\0f\0f\0f\0/\0u\0s\0
 
 my ($fh, $path) = File::Temp::tempfile( CLEANUP => 1 );
 
-diag "temp file: $path";
+note "temp file: $path";
 
 # Perl gives the internal PV to exec .. which is buggy/wrong but
 # useful here:

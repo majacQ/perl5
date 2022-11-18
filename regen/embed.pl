@@ -48,7 +48,7 @@ sub full_name ($$) { # Returns the function name with potentially the
                      # prefixes 'S_' or 'Perl_'
     my ($func, $flags) = @_;
 
-    return "Perl_$func" if $flags =~ /p/;
+    return "Perl_$func" if $flags =~ /[ps]/;
     return "S_$func" if $flags =~ /[SIi]/;
     return $func;
 }
@@ -79,7 +79,7 @@ my ($embed, $core, $ext, $api) = setup_embed();
         }
 
         my ($flags,$retval,$plain_func,@args) = @$_;
-        if ($flags =~ / ( [^AabCDdEefFGhIiMmNnOoPpRrSsTUuWXx] ) /x) {
+        if ($flags =~ / ( [^AabCDdEefFGhIiMmNnOoPpRrSsTUuWXx;] ) /x) {
             die_at_end "flag $1 is not legal (for function $plain_func)";
         }
         my @nonnull;
@@ -107,11 +107,12 @@ my ($embed, $core, $ext, $api) = setup_embed();
                                                             && $flags !~ /m/;
 
         my $static_inline = 0;
-        if ($flags =~ /([SIi])/) {
+        if ($flags =~ /([SsIi])/) {
             my $type;
             if ($never_returns) {
                 $type = {
                     'S' => 'PERL_STATIC_NO_RET',
+                    's' => 'PERL_STATIC_NO_RET',
                     'i' => 'PERL_STATIC_INLINE_NO_RET',
                     'I' => 'PERL_STATIC_FORCE_INLINE_NO_RET'
                 }->{$1};
@@ -119,6 +120,7 @@ my ($embed, $core, $ext, $api) = setup_embed();
             else {
                 $type = {
                     'S' => 'STATIC',
+                    's' => 'STATIC',
                     'i' => 'PERL_STATIC_INLINE',
                     'I' => 'PERL_STATIC_FORCE_INLINE'
                 }->{$1};
@@ -136,10 +138,22 @@ my ($embed, $core, $ext, $api) = setup_embed();
             }
         }
 
+        $func = full_name($plain_func, $flags);
+
         die_at_end "For '$plain_func', M flag requires p flag"
                                             if $flags =~ /M/ && $flags !~ /p/;
-        die_at_end "For '$plain_func', C flag requires one of [pIimb] flags"
-                                            if $flags =~ /C/ && $flags !~ /[Iibmp]/;
+	my $C_required_flags = '[pIimbs]';
+        die_at_end
+	    "For '$plain_func', C flag requires one of $C_required_flags] flags"
+						if $flags =~ /C/
+						&& ($flags !~ /$C_required_flags/
+
+						   # Notwithstanding the
+						   # above, if the name won't
+						   # clash with a user name,
+						   # it's ok.
+						&& $plain_func !~ /^[Pp]erl/);
+
         die_at_end "For '$plain_func', X flag requires one of [Iip] flags"
                                             if $flags =~ /X/ && $flags !~ /[Iip]/;
         die_at_end "For '$plain_func', X and m flags are mutually exclusive"
@@ -153,7 +167,6 @@ my ($embed, $core, $ext, $api) = setup_embed();
         die_at_end "For '$plain_func', I and i flags are mutually exclusive"
                                             if $flags =~ /I/ && $flags =~ /i/;
 
-        $func = full_name($plain_func, $flags);
         $ret = "";
         $ret .= "$retval\t$func(";
         if ( $has_context ) {
@@ -165,9 +178,21 @@ my ($embed, $core, $ext, $api) = setup_embed();
             my $n;
             for my $arg ( @args ) {
                 ++$n;
-                if (   $args_assert_line
-		    && $arg =~ /\*/
-		    && $arg !~ /\b(NN|NULLOK)\b/ )
+		if ($arg =~ / ^ " (.+) " $ /x) {    # Handle literal string
+		    my $name = $1;
+
+		    # Make the string a legal C identifier; 'p' is arbitrary,
+		    # and is because C reserves leading underscores
+		    $name =~ s/^\W/p/a;
+		    $name =~ s/\W/_/ag;
+
+		    $arg = "const char * const $name";
+		    die_at_end 'm flag required for "literal" argument'
+							    unless $flags =~ /m/;
+		}
+		elsif (   $args_assert_line
+		       && $arg =~ /\*/
+		       && $arg !~ /\b(NN|NULLOK)\b/ )
 		{
                     warn "$func: $arg needs NN or NULLOK\n";
                     ++$unflagged_pointers;
@@ -216,18 +241,22 @@ my ($embed, $core, $ext, $api) = setup_embed();
         if ( $flags =~ /I/ ) {
             push @attrs, "__attribute__always_inline__";
         }
+        # roughly the inverse of the rules used in makedef.pl
+        if ( $flags !~ /[ACeIimSX]/ ) {
+            push @attrs, '__attribute__visibility__("hidden")'
+        }
         if( $flags =~ /f/ ) {
             my $prefix	= $has_context ? 'pTHX_' : '';
-            my ($args, $pat);
+            my ($argc, $pat);
             if ($args[-1] eq '...') {
-                $args	= scalar @args;
-                $pat	= $args - 1;
-                $args	= $prefix . $args;
+                $argc	= scalar @args;
+                $pat	= $argc - 1;
+                $argc	= $prefix . $argc;
             }
             else {
                 # don't check args, and guess which arg is the pattern
                 # (one of 'fmt', 'pat', 'f'),
-                $args = 0;
+                $argc = 0;
                 my @fmts = grep $args[$_] =~ /\b(f|pat|fmt)$/, 0..$#args;
                 if (@fmts != 1) {
                     die "embed.pl: '$plain_func': can't determine pattern arg\n";
@@ -242,7 +271,7 @@ my ($embed, $core, $ext, $api) = setup_embed();
             }
             else {
                 push @attrs, sprintf "%s(__printf__,%s%d,%s)", $macro,
-                                    $prefix, $pat, $args;
+                                    $prefix, $pat, $argc;
             }
         }
         elsif ((grep { $_ eq '...' } @args) && $flags !~ /F/) {
@@ -347,36 +376,50 @@ sub embed_h {
         my $ret = "";
         my ($flags,$retval,$func,@args) = @$_;
         unless ($flags =~ /[omM]/) {
-            my $args = scalar @args;
+            my $argc = scalar @args;
             if ($flags =~ /T/) {
                 my $full_name = full_name($func, $flags);
                 next if $full_name eq $func;	# Don't output a no-op.
                 $ret = hide($func, $full_name);
             }
-            elsif ($args and $args[$args-1] =~ /\.\.\./) {
-                if ($flags =~ /p/) {
-                    # we're out of luck for varargs functions under CPP
-                    # So we can only do these macros for non-MULTIPLICITY perls:
-                    $ret = "#ifndef MULTIPLICITY\n"
-                        . hide($func, full_name($func, $flags)) . "#endif\n";
-                }
-            }
             else {
-                my $alist = join(",", @az[0..$args-1]);
-                $ret = "#define $func($alist)";
+                my $use_va_list = $argc && $args[-1] =~ /\.\.\./;
+
+                if($use_va_list) {
+                    # CPP has trouble with empty __VA_ARGS__ and comma joining,
+                    # so we'll have to eat an extra params here.
+                    if($argc < 2) {
+                        die "Cannot use ... as the only parameter to a macro ($func)\n";
+                    }
+                    $argc -= 2;
+                }
+
+                my $paramlist   = join(",", @az[0..$argc-1],
+                    $use_va_list ? ("...") : ());
+                my $replacelist = join(",", @az[0..$argc-1],
+                    $use_va_list ? ("__VA_ARGS__") : ());
+
+                $ret = "#define $func($paramlist)";
                 my $t = int(length($ret) / 8);
                 $ret .=  "\t" x ($t < 4 ? 4 - $t : 1);
                 $ret .= full_name($func, $flags) . "(aTHX";
-                $ret .= "_ " if $alist;
-                $ret .= $alist;
+                $ret .= "_ " if $replacelist;
+                $ret .= $replacelist;
                 if ($flags =~ /W/) {
-                    if ($alist) {
+                    if ($replacelist) {
                         $ret .= " _aDEPTH";
                     } else {
                         die "Can't use W without other args (currently)";
                     }
                 }
                 $ret .= ")\n";
+
+                if($use_va_list) {
+                    # Make them available to !MULTIPLICITY or PERL_CORE
+                    $ret = "#if !defined(MULTIPLICITY) || defined(PERL_CORE)\n" .
+                           $ret .
+                           "#endif\n";
+                }
             }
             $ret = "#ifndef NO_MATHOMS\n$ret#endif\n" if $flags =~ /b/;
         }

@@ -284,8 +284,8 @@ MSVC_DIAG_RESTORE
    importing __PL_nan_u across DLL boundaries in size in the importing DLL
    will be more than the 8 bytes it will take up being in each XS DLL if
    that DLL actually uses __PL_nan_u */
-extern const __declspec(selectany) union { unsigned __int64 __q; double __d; }
-__PL_nan_u = { 0x7FF8000000000000UI64 };
+union PerlNan { unsigned __int64 __q; double __d; };
+extern const __declspec(selectany) union PerlNan __PL_nan_u = { 0x7FF8000000000000UI64 };
 #define NV_NAN ((NV)__PL_nan_u.__d)
 
 /* The CRT was rewritten in VS2015. */
@@ -694,11 +694,20 @@ DllExport void *win32_signal_context(void);
 
 /* ucrt at least seems to allocate a whole bit per type,
    just mask off one bit from the mask for our symlink
-   file type.
+   and socket file types.
 */
-#define _S_IFLNK ((unsigned)(_S_IFMT ^ (_S_IFMT & -_S_IFMT)))
+#define _S_IFLNK ((unsigned)(_S_IFDIR | _S_IFCHR))
+#define _S_IFSOCK ((unsigned)(_S_IFDIR | _S_IFIFO))
+/* mingw64 defines _S_IFBLK to 0x3000 which is _S_IFDIR | _S_IFIFO */
+#ifndef _S_IFBLK
+#  define _S_IFBLK ((unsigned)(_S_IFCHR | _S_IFIFO))
+#endif
 #undef S_ISLNK
 #define S_ISLNK(mode) (((mode) & _S_IFMT) == _S_IFLNK)
+#undef S_ISSOCK
+#define S_ISSOCK(mode) (((mode) & _S_IFMT) == _S_IFSOCK)
+#undef S_ISBLK
+#define S_ISBLK(mode) (((mode) & _S_IFMT) == _S_IFBLK)
 
 /*
 

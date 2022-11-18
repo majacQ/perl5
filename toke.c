@@ -410,106 +410,106 @@ static struct debug_tokens {
     const char *name;
 } const debug_tokens[] =
 {
-    { ADDOP,		TOKENTYPE_OPNUM,	"ADDOP" },
-    { ANDAND,		TOKENTYPE_NONE,		"ANDAND" },
-    { ANDOP,		TOKENTYPE_NONE,		"ANDOP" },
-    { ANONSUB,		TOKENTYPE_IVAL,		"ANONSUB" },
-    { ANON_SIGSUB,	TOKENTYPE_IVAL,		"ANON_SIGSUB" },
-    { ARROW,		TOKENTYPE_NONE,		"ARROW" },
-    { ASSIGNOP,		TOKENTYPE_OPNUM,	"ASSIGNOP" },
-    { BITANDOP,		TOKENTYPE_OPNUM,	"BITANDOP" },
-    { BITOROP,		TOKENTYPE_OPNUM,	"BITOROP" },
-    { CATCH,		TOKENTYPE_IVAL,		"CATCH" },
-    { CHEQOP,		TOKENTYPE_OPNUM,	"CHEQOP" },
-    { CHRELOP,		TOKENTYPE_OPNUM,	"CHRELOP" },
-    { COLONATTR,	TOKENTYPE_NONE,		"COLONATTR" },
-    { CONTINUE,		TOKENTYPE_NONE,		"CONTINUE" },
-    { DEFAULT,		TOKENTYPE_NONE,		"DEFAULT" },
-    { DO,		TOKENTYPE_NONE,		"DO" },
-    { DOLSHARP,		TOKENTYPE_NONE,		"DOLSHARP" },
-    { DORDOR,		TOKENTYPE_NONE,		"DORDOR" },
-    { DOTDOT,		TOKENTYPE_IVAL,		"DOTDOT" },
-    { ELSE,		TOKENTYPE_NONE,		"ELSE" },
-    { ELSIF,		TOKENTYPE_IVAL,		"ELSIF" },
-    { FOR,		TOKENTYPE_IVAL,		"FOR" },
-    { FORMAT,		TOKENTYPE_NONE,		"FORMAT" },
-    { FORMLBRACK,	TOKENTYPE_NONE,		"FORMLBRACK" },
-    { FORMRBRACK,	TOKENTYPE_NONE,		"FORMRBRACK" },
-    { FUNC,		TOKENTYPE_OPNUM,	"FUNC" },
-    { FUNC0,		TOKENTYPE_OPNUM,	"FUNC0" },
-    { FUNC0OP,		TOKENTYPE_OPVAL,	"FUNC0OP" },
-    { FUNC0SUB,		TOKENTYPE_OPVAL,	"FUNC0SUB" },
-    { FUNC1,		TOKENTYPE_OPNUM,	"FUNC1" },
-    { FUNCMETH,		TOKENTYPE_OPVAL,	"FUNCMETH" },
-    { GIVEN,		TOKENTYPE_IVAL,		"GIVEN" },
-    { HASHBRACK,	TOKENTYPE_NONE,		"HASHBRACK" },
-    { IF,		TOKENTYPE_IVAL,		"IF" },
-    { LABEL,		TOKENTYPE_OPVAL,	"LABEL" },
-    { LOCAL,		TOKENTYPE_IVAL,		"LOCAL" },
-    { LOOPEX,		TOKENTYPE_OPNUM,	"LOOPEX" },
-    { LSTOP,		TOKENTYPE_OPNUM,	"LSTOP" },
-    { LSTOPSUB,		TOKENTYPE_OPVAL,	"LSTOPSUB" },
-    { MATCHOP,		TOKENTYPE_OPNUM,	"MATCHOP" },
-    { METHOD,		TOKENTYPE_OPVAL,	"METHOD" },
-    { MULOP,		TOKENTYPE_OPNUM,	"MULOP" },
-    { MY,		TOKENTYPE_IVAL,		"MY" },
-    { NCEQOP,		TOKENTYPE_OPNUM,	"NCEQOP" },
-    { NCRELOP,		TOKENTYPE_OPNUM,	"NCRELOP" },
-    { NOAMP,		TOKENTYPE_NONE,		"NOAMP" },
-    { NOTOP,		TOKENTYPE_NONE,		"NOTOP" },
-    { OROP,		TOKENTYPE_IVAL,		"OROP" },
-    { OROR,		TOKENTYPE_NONE,		"OROR" },
-    { PACKAGE,		TOKENTYPE_NONE,		"PACKAGE" },
-    DEBUG_TOKEN (IVAL, PERLY_AMPERSAND),
-    DEBUG_TOKEN (IVAL, PERLY_BRACE_CLOSE),
-    DEBUG_TOKEN (IVAL, PERLY_BRACE_OPEN),
-    DEBUG_TOKEN (IVAL, PERLY_BRACKET_CLOSE),
-    DEBUG_TOKEN (IVAL, PERLY_BRACKET_OPEN),
-    DEBUG_TOKEN (IVAL, PERLY_COLON),
-    DEBUG_TOKEN (IVAL, PERLY_COMMA),
-    DEBUG_TOKEN (IVAL, PERLY_DOT),
-    DEBUG_TOKEN (IVAL, PERLY_EQUAL_SIGN),
-    DEBUG_TOKEN (IVAL, PERLY_EXCLAMATION_MARK),
-    DEBUG_TOKEN (IVAL, PERLY_MINUS),
-    DEBUG_TOKEN (IVAL, PERLY_PAREN_OPEN),
-    DEBUG_TOKEN (IVAL, PERLY_PERCENT_SIGN),
-    DEBUG_TOKEN (IVAL, PERLY_PLUS),
-    DEBUG_TOKEN (IVAL, PERLY_QUESTION_MARK),
-    DEBUG_TOKEN (IVAL, PERLY_SEMICOLON),
-    DEBUG_TOKEN (IVAL, PERLY_SLASH),
-    DEBUG_TOKEN (IVAL, PERLY_SNAIL),
-    DEBUG_TOKEN (IVAL, PERLY_STAR),
-    DEBUG_TOKEN (IVAL, PERLY_TILDE),
-    { PLUGEXPR,		TOKENTYPE_OPVAL,	"PLUGEXPR" },
-    { PLUGSTMT,		TOKENTYPE_OPVAL,	"PLUGSTMT" },
-    { PMFUNC,		TOKENTYPE_OPVAL,	"PMFUNC" },
-    { POSTJOIN,		TOKENTYPE_NONE,		"POSTJOIN" },
-    { POSTDEC,		TOKENTYPE_NONE,		"POSTDEC" },
-    { POSTINC,		TOKENTYPE_NONE,		"POSTINC" },
-    { POWOP,		TOKENTYPE_OPNUM,	"POWOP" },
-    { PREDEC,		TOKENTYPE_NONE,		"PREDEC" },
-    { PREINC,		TOKENTYPE_NONE,		"PREINC" },
-    { PRIVATEREF,	TOKENTYPE_OPVAL,	"PRIVATEREF" },
-    { QWLIST,		TOKENTYPE_OPVAL,	"QWLIST" },
-    { REFGEN,		TOKENTYPE_NONE,		"REFGEN" },
-    { REQUIRE,		TOKENTYPE_NONE,		"REQUIRE" },
-    { SHIFTOP,		TOKENTYPE_OPNUM,	"SHIFTOP" },
-    { SIGSUB,		TOKENTYPE_NONE,		"SIGSUB" },
-    { SUB,		TOKENTYPE_NONE,		"SUB" },
-    { SUBLEXEND,	TOKENTYPE_NONE,		"SUBLEXEND" },
-    { SUBLEXSTART,	TOKENTYPE_NONE,		"SUBLEXSTART" },
-    { THING,		TOKENTYPE_OPVAL,	"THING" },
-    { TRY,		TOKENTYPE_IVAL,		"TRY" },
-    { UMINUS,		TOKENTYPE_NONE,		"UMINUS" },
-    { UNIOP,		TOKENTYPE_OPNUM,	"UNIOP" },
-    { UNIOPSUB,		TOKENTYPE_OPVAL,	"UNIOPSUB" },
-    { UNLESS,		TOKENTYPE_IVAL,		"UNLESS" },
-    { UNTIL,		TOKENTYPE_IVAL,		"UNTIL" },
-    { USE,		TOKENTYPE_IVAL,		"USE" },
-    { WHEN,		TOKENTYPE_IVAL,		"WHEN" },
-    { WHILE,		TOKENTYPE_IVAL,		"WHILE" },
-    { BAREWORD,		TOKENTYPE_OPVAL,	"BAREWORD" },
-    { YADAYADA,		TOKENTYPE_IVAL,		"YADAYADA" },
+    DEBUG_TOKEN (OPNUM, ADDOP),
+    DEBUG_TOKEN (NONE,  ANDAND),
+    DEBUG_TOKEN (NONE,  ANDOP),
+    DEBUG_TOKEN (NONE,  ARROW),
+    DEBUG_TOKEN (OPNUM, ASSIGNOP),
+    DEBUG_TOKEN (OPNUM, BITANDOP),
+    DEBUG_TOKEN (OPNUM, BITOROP),
+    DEBUG_TOKEN (OPNUM, CHEQOP),
+    DEBUG_TOKEN (OPNUM, CHRELOP),
+    DEBUG_TOKEN (NONE,  COLONATTR),
+    DEBUG_TOKEN (NONE,  DOLSHARP),
+    DEBUG_TOKEN (NONE,  DORDOR),
+    DEBUG_TOKEN (IVAL,  DOTDOT),
+    DEBUG_TOKEN (NONE,  FORMLBRACK),
+    DEBUG_TOKEN (NONE,  FORMRBRACK),
+    DEBUG_TOKEN (OPNUM, FUNC),
+    DEBUG_TOKEN (OPNUM, FUNC0),
+    DEBUG_TOKEN (OPVAL, FUNC0OP),
+    DEBUG_TOKEN (OPVAL, FUNC0SUB),
+    DEBUG_TOKEN (OPNUM, FUNC1),
+    DEBUG_TOKEN (NONE,  HASHBRACK),
+    DEBUG_TOKEN (IVAL,  KW_CATCH),
+    DEBUG_TOKEN (IVAL,  KW_CONTINUE),
+    DEBUG_TOKEN (IVAL,  KW_DEFAULT),
+    DEBUG_TOKEN (IVAL,  KW_DO),
+    DEBUG_TOKEN (IVAL,  KW_ELSE),
+    DEBUG_TOKEN (IVAL,  KW_ELSIF),
+    DEBUG_TOKEN (IVAL,  KW_GIVEN),
+    DEBUG_TOKEN (IVAL,  KW_FOR),
+    DEBUG_TOKEN (IVAL,  KW_FORMAT),
+    DEBUG_TOKEN (IVAL,  KW_IF),
+    DEBUG_TOKEN (IVAL,  KW_LOCAL),
+    DEBUG_TOKEN (IVAL,  KW_MY),
+    DEBUG_TOKEN (IVAL,  KW_PACKAGE),
+    DEBUG_TOKEN (IVAL,  KW_REQUIRE),
+    DEBUG_TOKEN (IVAL,  KW_SUB_anon),
+    DEBUG_TOKEN (IVAL,  KW_SUB_anon_sig),
+    DEBUG_TOKEN (IVAL,  KW_SUB_named),
+    DEBUG_TOKEN (IVAL,  KW_SUB_named_sig),
+    DEBUG_TOKEN (IVAL,  KW_TRY),
+    DEBUG_TOKEN (IVAL,  KW_USE_or_NO),
+    DEBUG_TOKEN (IVAL,  KW_UNLESS),
+    DEBUG_TOKEN (IVAL,  KW_UNTIL),
+    DEBUG_TOKEN (IVAL,  KW_WHEN),
+    DEBUG_TOKEN (IVAL,  KW_WHILE),
+    DEBUG_TOKEN (OPVAL, LABEL),
+    DEBUG_TOKEN (OPNUM, LOOPEX),
+    DEBUG_TOKEN (OPNUM, LSTOP),
+    DEBUG_TOKEN (OPVAL, LSTOPSUB),
+    DEBUG_TOKEN (OPNUM, MATCHOP),
+    DEBUG_TOKEN (OPVAL, METHCALL),
+    DEBUG_TOKEN (OPVAL, METHCALL0),
+    DEBUG_TOKEN (OPNUM, MULOP),
+    DEBUG_TOKEN (OPNUM, NCEQOP),
+    DEBUG_TOKEN (OPNUM, NCRELOP),
+    DEBUG_TOKEN (NONE,  NOAMP),
+    DEBUG_TOKEN (NONE,  NOTOP),
+    DEBUG_TOKEN (IVAL,  OROP),
+    DEBUG_TOKEN (NONE,  OROR),
+    DEBUG_TOKEN (IVAL,  PERLY_AMPERSAND),
+    DEBUG_TOKEN (IVAL,  PERLY_BRACE_CLOSE),
+    DEBUG_TOKEN (IVAL,  PERLY_BRACE_OPEN),
+    DEBUG_TOKEN (IVAL,  PERLY_BRACKET_CLOSE),
+    DEBUG_TOKEN (IVAL,  PERLY_BRACKET_OPEN),
+    DEBUG_TOKEN (IVAL,  PERLY_COLON),
+    DEBUG_TOKEN (IVAL,  PERLY_COMMA),
+    DEBUG_TOKEN (IVAL,  PERLY_DOT),
+    DEBUG_TOKEN (IVAL,  PERLY_EQUAL_SIGN),
+    DEBUG_TOKEN (IVAL,  PERLY_EXCLAMATION_MARK),
+    DEBUG_TOKEN (IVAL,  PERLY_MINUS),
+    DEBUG_TOKEN (IVAL,  PERLY_PAREN_OPEN),
+    DEBUG_TOKEN (IVAL,  PERLY_PERCENT_SIGN),
+    DEBUG_TOKEN (IVAL,  PERLY_PLUS),
+    DEBUG_TOKEN (IVAL,  PERLY_QUESTION_MARK),
+    DEBUG_TOKEN (IVAL,  PERLY_SEMICOLON),
+    DEBUG_TOKEN (IVAL,  PERLY_SLASH),
+    DEBUG_TOKEN (IVAL,  PERLY_SNAIL),
+    DEBUG_TOKEN (IVAL,  PERLY_STAR),
+    DEBUG_TOKEN (IVAL,  PERLY_TILDE),
+    DEBUG_TOKEN (OPVAL, PLUGEXPR),
+    DEBUG_TOKEN (OPVAL, PLUGSTMT),
+    DEBUG_TOKEN (OPVAL, PMFUNC),
+    DEBUG_TOKEN (NONE,  POSTJOIN),
+    DEBUG_TOKEN (NONE,  POSTDEC),
+    DEBUG_TOKEN (NONE,  POSTINC),
+    DEBUG_TOKEN (OPNUM, POWOP),
+    DEBUG_TOKEN (NONE,  PREDEC),
+    DEBUG_TOKEN (NONE,  PREINC),
+    DEBUG_TOKEN (OPVAL, PRIVATEREF),
+    DEBUG_TOKEN (OPVAL, QWLIST),
+    DEBUG_TOKEN (NONE,  REFGEN),
+    DEBUG_TOKEN (OPNUM, SHIFTOP),
+    DEBUG_TOKEN (NONE,  SUBLEXEND),
+    DEBUG_TOKEN (NONE,  SUBLEXSTART),
+    DEBUG_TOKEN (OPVAL, THING),
+    DEBUG_TOKEN (NONE,  UMINUS),
+    DEBUG_TOKEN (OPNUM, UNIOP),
+    DEBUG_TOKEN (OPVAL, UNIOPSUB),
+    DEBUG_TOKEN (OPVAL, BAREWORD),
+    DEBUG_TOKEN (IVAL,  YADAYADA),
     { 0,		TOKENTYPE_NONE,		NULL }
 };
 
@@ -642,6 +642,10 @@ S_no_op(pTHX_ const char *const what, char *s)
 {
     char * const oldbp = PL_bufptr;
     const bool is_first = (PL_oldbufptr == PL_linestart);
+    SV *message = sv_2mortal( newSVpvf(
+                   PERL_DIAG_WARN_SYNTAX("%s found where operator expected"),
+                   what
+                  ) );
 
     PERL_ARGS_ASSERT_NO_OP;
 
@@ -649,34 +653,54 @@ S_no_op(pTHX_ const char *const what, char *s)
         s = oldbp;
     else
         PL_bufptr = s;
-    yywarn(Perl_form(aTHX_ "%s found where operator expected", what), UTF ? SVf_UTF8 : 0);
+
     if (ckWARN_d(WARN_SYNTAX)) {
-        if (is_first)
-            Perl_warner(aTHX_ packWARN(WARN_SYNTAX),
-                    "\t(Missing semicolon on previous line?)\n");
-        else if (PL_oldoldbufptr && isIDFIRST_lazy_if_safe(PL_oldoldbufptr,
-                                                           PL_bufend,
-                                                           UTF))
-        {
+        bool has_more = FALSE;
+        if (is_first) {
+            has_more = TRUE;
+            sv_catpvs(message,
+                    " (Missing semicolon on previous line?)");
+        }
+        else if (PL_oldoldbufptr) {
+            /* yyerror (via yywarn) would do this itself, so we should too */
             const char *t;
             for (t = PL_oldoldbufptr;
-                 (isWORDCHAR_lazy_if_safe(t, PL_bufend, UTF) || *t == ':');
+                 t < PL_bufptr && isSPACE(*t);
                  t += UTF ? UTF8SKIP(t) : 1)
             {
                 NOOP;
             }
-            if (t < PL_bufptr && isSPACE(*t))
-                Perl_warner(aTHX_ packWARN(WARN_SYNTAX),
-                        "\t(Do you need to predeclare %" UTF8f "?)\n",
-                      UTF8fARG(UTF, t - PL_oldoldbufptr, PL_oldoldbufptr));
+            /* see if we can identify the cause of the warning */
+            if (isIDFIRST_lazy_if_safe(t,PL_bufend,UTF))
+            {
+                const char *t_start= t;
+                for ( ;
+                     (isWORDCHAR_lazy_if_safe(t, PL_bufend, UTF) || *t == ':');
+                     t += UTF ? UTF8SKIP(t) : 1)
+                {
+                    NOOP;
+                }
+                if (t < PL_bufptr && isSPACE(*t)) {
+                    has_more = TRUE;
+                    sv_catpvf( message,
+                            " (Do you need to predeclare \"%" UTF8f "\"?)",
+                          UTF8fARG(UTF, t - t_start, t_start));
+                }
+            }
         }
-        else {
+        if (!has_more) {
+            const char *t= oldbp;
             assert(s >= oldbp);
-            Perl_warner(aTHX_ packWARN(WARN_SYNTAX),
-                    "\t(Missing operator before %" UTF8f "?)\n",
-                     UTF8fARG(UTF, s - oldbp, oldbp));
+            while (t < s && isSPACE(*t)) {
+                t += UTF ? UTF8SKIP(t) : 1;
+            }
+
+            sv_catpvf(message,
+                    " (Missing operator before \"%" UTF8f "\"?)",
+                     UTF8fARG(UTF, s - t, t));
         }
     }
+    yywarn(SvPV_nolen(message), UTF ? SVf_UTF8 : 0);
     PL_bufptr = oldbp;
 }
 
@@ -695,7 +719,6 @@ S_missingterm(pTHX_ char *s, STRLEN len)
     char tmpbuf[UTF8_MAXBYTES + 1];
     char q;
     bool uni = FALSE;
-    SV *sv;
     if (s) {
         char * const nl = (char *) my_memrchr(s, '\n', len);
         if (nl) {
@@ -712,7 +735,7 @@ S_missingterm(pTHX_ char *s, STRLEN len)
         len = 2;
     }
     else {
-        if (LIKELY(PL_multi_close < 256)) {
+        if (! UTF && LIKELY(PL_multi_close < 256)) {
             *tmpbuf = (char)PL_multi_close;
             tmpbuf[1] = '\0';
             len = 1;
@@ -726,11 +749,8 @@ S_missingterm(pTHX_ char *s, STRLEN len)
         s = tmpbuf;
     }
     q = memchr(s, '"', len) ? '\'' : '"';
-    sv = newSVpvn_flags(s, len, SVs_TEMP);
-    if (uni)
-        SvUTF8_on(sv);
-    Perl_croak(aTHX_ "Can't find string terminator %c%" SVf "%c"
-                     " anywhere before EOF", q, SVfARG(sv), q);
+    Perl_croak(aTHX_ "Can't find string terminator %c%" UTF8f "%c"
+                     " anywhere before EOF", q, UTF8fARG(uni, len, s), q);
 }
 
 #include "feature.h"
@@ -856,7 +876,7 @@ Perl_lex_start(pTHX_ SV *line, PerlIO *rsfp, U32 flags)
     Newxz(parser->lex_shared, 1, LEXSHARED);
 
     if (line) {
-        STRLEN len;
+        Size_t len;
         const U8* first_bad_char_loc;
 
         s = SvPV_const(line, len);
@@ -2198,7 +2218,7 @@ S_newSV_maybe_utf8(pTHX_ const char *const start, STRLEN len)
  * Arguments:
  *   char *start : buffer position (must be within PL_linestr)
  *   int token   : PL_next* will be this type of bare word
- *                 (e.g., METHOD,BAREWORD)
+ *                 (e.g., METHCALL0,BAREWORD)
  *   int check_keyword : if true, Perl checks to make sure the word isn't
  *       a keyword (do this if the word is a label, e.g. goto FOO)
  *   int allow_pack : if true, : characters will also be allowed (require,
@@ -2229,7 +2249,7 @@ S_force_word(pTHX_ char *start, int token, int check_keyword, int allow_pack)
           if (keyword(s2, len2, 0))
             return start;
         }
-        if (token == METHOD) {
+        if (token == METHCALL0) {
             s = skipspace(s);
             if (*s == '(')
                 PL_expect = XTERM;
@@ -2574,7 +2594,7 @@ S_sublex_push(pTHX)
 
     /* The here-doc parser needs to be able to peek into outer lexing
        scopes to find the body of the here-doc.  So we put PL_linestr and
-       PL_bufptr into lex_shared, to ‘share’ those values.
+       PL_bufptr into lex_shared, to 'share' those values.
      */
     PL_parser->lex_shared->ls_linestr = PL_linestr;
     PL_parser->lex_shared->ls_bufptr  = PL_bufptr;
@@ -4568,7 +4588,7 @@ S_intuit_more(pTHX_ char *s, char *e)
  * Does all the checking to disambiguate
  *   foo bar
  * between foo(bar) and bar->foo.  Returns 0 if not a method, otherwise
- * FUNCMETH (bar->foo(args)) or METHOD (bar->foo args).
+ * METHCALL (bar->foo(args)) or METHCALL0 (bar->foo args).
  *
  * First argument is the stuff after the first token, e.g. "bar".
  *
@@ -4624,7 +4644,7 @@ S_intuit_method(pTHX_ char *start, SV *ioname, CV *cv)
             s = skipspace(s);
         PL_bufptr = SvPVX(PL_linestr) + start_off;
         PL_expect = XREF;
-        return *s == '(' ? FUNCMETH : METHOD;
+        return *s == '(' ? METHCALL : METHCALL0;
     }
 
     s = scan_word(s, tmpbuf, sizeof tmpbuf, TRUE, &len);
@@ -4657,7 +4677,7 @@ S_intuit_method(pTHX_ char *start, SV *ioname, CV *cv)
             PL_expect = XTERM;
             force_next(BAREWORD);
             PL_bufptr = s;
-            return *s == '(' ? FUNCMETH : METHOD;
+            return *s == '(' ? METHCALL : METHCALL0;
         }
     }
     return 0;
@@ -4746,8 +4766,15 @@ Perl_filter_add(pTHX_ filter_t funcp, SV *datasv)
     return(datasv);
 }
 
+/*
+=for apidoc_section $filters
+=for apidoc filter_del
 
-/* Delete most recently added instance of this filter function.	*/
+Delete most recently added instance of the filter function argument
+
+=cut
+*/
+
 void
 Perl_filter_del(pTHX_ filter_t funcp)
 {
@@ -5374,7 +5401,7 @@ yyl_sub(pTHX_ char *s, const int key)
             NEXTVAL_NEXTTOKE.opval->op_private |= OPpCONST_BARE;
             force_next(BAREWORD);
         }
-        PREBLOCK(FORMAT);
+        PREBLOCK(KW_FORMAT);
     }
 
     /* Look for a prototype */
@@ -5419,15 +5446,15 @@ yyl_sub(pTHX_ char *s, const int key)
         else
             sv_setpvs(PL_subname, "__ANON__::__ANON__");
         if (is_sigsub)
-            TOKEN(ANON_SIGSUB);
+            TOKEN(KW_SUB_anon_sig);
         else
-            TOKEN(ANONSUB);
+            TOKEN(KW_SUB_anon);
     }
     force_ident_maybe_lex('&');
     if (is_sigsub)
-        TOKEN(SIGSUB);
+        TOKEN(KW_SUB_named_sig);
     else
-        TOKEN(SUB);
+        TOKEN(KW_SUB_named);
 }
 
 static int
@@ -5544,7 +5571,7 @@ yyl_secondclass_keyword(pTHX_ char *s, STRLEN len, int key, I32 *orig_keyword,
         {
             if (GvIMPORTED_CV(gv))
                 ogv = gv;
-            else if (! CvMETHOD(cv))
+            else if (! CvNOWARN_AMBIGUOUS(cv))
                 hgv = gv;
         }
         if (!ogv
@@ -5739,7 +5766,7 @@ yyl_hyphen(pTHX_ char *s)
                 TOKEN(ARROW);
             }
             if (isIDFIRST_lazy_if_safe(s, PL_bufend, UTF)) {
-                s = force_word(s,METHOD,FALSE,TRUE);
+                s = force_word(s,METHCALL0,FALSE,TRUE);
                 TOKEN(ARROW);
             }
             else if (*s == '$')
@@ -5911,7 +5938,6 @@ yyl_colon(pTHX_ char *s)
         s = skipspace(s);
         attrs = NULL;
         while (isIDFIRST_lazy_if_safe(s, PL_bufend, UTF)) {
-            bool sig = PL_parser->sig_seen;
             I32 tmp;
             SV *sv;
             STRLEN len;
@@ -5951,45 +5977,8 @@ yyl_colon(pTHX_ char *s)
                 PL_lex_stuff = NULL;
             }
             else {
-                /* NOTE: any CV attrs applied here need to be part of
-                   the CVf_BUILTIN_ATTRS define in cv.h! */
-                if (!PL_in_my && memEQs(SvPVX(sv), len, "lvalue")) {
-                    sv_free(sv);
-                    if (!sig)
-                        CvLVALUE_on(PL_compcv);
-                }
-                else if (!PL_in_my && memEQs(SvPVX(sv), len, "method")) {
-                    sv_free(sv);
-                    if (!sig)
-                        CvMETHOD_on(PL_compcv);
-                }
-                else if (!PL_in_my && memEQs(SvPVX(sv), len, "const")) {
-                    sv_free(sv);
-                    if (!sig) {
-                        Perl_ck_warner_d(aTHX_
-                            packWARN(WARN_EXPERIMENTAL__CONST_ATTR),
-                           ":const is experimental"
-                        );
-                        CvANONCONST_on(PL_compcv);
-                        if (!CvANON(PL_compcv))
-                            yyerror(":const is not permitted on named "
-                                    "subroutines");
-                    }
-                }
-                /* After we've set the flags, it could be argued that
-                   we don't need to do the attributes.pm-based setting
-                   process, and shouldn't bother appending recognized
-                   flags.  To experiment with that, uncomment the
-                   following "else".  (Note that's already been
-                   uncommented.  That keeps the above-applied built-in
-                   attributes from being intercepted (and possibly
-                   rejected) by a package's attribute routines, but is
-                   justified by the performance win for the common case
-                   of applying only built-in attributes.) */
-                else
-                    attrs = op_append_elem(OP_LIST, attrs,
-                                        newSVOP(OP_CONST, 0,
-                                                sv));
+                attrs = op_append_elem(OP_LIST, attrs,
+                                    newSVOP(OP_CONST, 0, sv));
             }
             s = skipspace(d);
             if (*s == ':' && s[1] != ':')
@@ -6918,7 +6907,7 @@ yyl_require(pTHX_ char *s, I32 orig_keyword)
     PL_last_uni = PL_oldbufptr;
     PL_last_lop_op = OP_REQUIRE;
     s = skipspace(s);
-    return REPORT( (int)REQUIRE );
+    return REPORT( (int)KW_REQUIRE );
 }
 
 static int
@@ -6996,7 +6985,7 @@ yyl_foreach(pTHX_ char *s)
         /* The buffer may have been reallocated, update s */
         s = SvPVX(PL_linestr) + s_off;
     }
-    OPERATOR(FOR);
+    OPERATOR(KW_FOR);
 }
 
 static int
@@ -7004,7 +6993,7 @@ yyl_do(pTHX_ char *s, I32 orig_keyword)
 {
     s = skipspace(s);
     if (*s == '{')
-        PRETERMBLOCK(DO);
+        PRETERMBLOCK(KW_DO);
     if (*s != '\'') {
         char *d;
         STRLEN len;
@@ -7026,7 +7015,7 @@ yyl_do(pTHX_ char *s, I32 orig_keyword)
         pl_yylval.ival = 1;
     else
         pl_yylval.ival = 0;
-    OPERATOR(DO);
+    OPERATOR(KW_DO);
 }
 
 static int
@@ -7066,7 +7055,7 @@ yyl_my(pTHX_ char *s, I32 my)
              packWARN(WARN_EXPERIMENTAL__DECLARED_REFS),
             "Declaring references is experimental");
     }
-    OPERATOR(MY);
+    OPERATOR(KW_MY);
 }
 
 static int yyl_try(pTHX_ char*);
@@ -7619,12 +7608,6 @@ yyl_just_a_word(pTHX_ char *s, STRLEN len, I32 orig_keyword, struct code c)
         }
         s = SvPVX(PL_linestr) + s_off;
 
-        if (((PL_opargs[PL_last_lop_op] >> OASHIFT) & 7) == OA_FILEREF
-            && !immediate_paren && !c.cv
-            && !FEATURE_BAREWORD_FILEHANDLES_IS_ENABLED) {
-            no_bareword_filehandle(PL_tokenbuf);
-        }
-
         /* If not a declared subroutine, it's an indirect object. */
         /* (But it's an indir obj regardless for sort.) */
         /* Also, if "_" follows a filetest operator, it's a bareword */
@@ -7696,7 +7679,7 @@ yyl_just_a_word(pTHX_ char *s, STRLEN len, I32 orig_keyword, struct code c)
             PL_lex_fakeeof = LEX_FAKEEOF_LOWLOGIC;
         PL_expect = XBLOCKTERM;
         PL_bufptr = s;
-        return REPORT(METHOD);
+        return REPORT(METHCALL0);
     }
 
     /* If followed by a bareword, see if it looks like indir obj. */
@@ -7717,7 +7700,7 @@ yyl_just_a_word(pTHX_ char *s, STRLEN len, I32 orig_keyword, struct code c)
             else SvUTF8_off(c.sv);
         }
         op_free(c.rv2cv_op);
-        if (key == METHOD && !PL_lex_allbrackets
+        if (key == METHCALL0 && !PL_lex_allbrackets
             && PL_lex_fakeeof > LEX_FAKEEOF_LOWLOGIC)
         {
             PL_lex_fakeeof = LEX_FAKEEOF_LOWLOGIC;
@@ -7758,7 +7741,7 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
     case KEY___LINE__:
         FUN0OP(
             newSVOP(OP_CONST, 0,
-                Perl_newSVpvf(aTHX_ "%" IVdf, (IV)CopLINE(PL_curcop)))
+                Perl_newSVpvf(aTHX_ "%" LINE_Tf, CopLINE(PL_curcop)))
         );
 
     case KEY___PACKAGE__:
@@ -7775,9 +7758,12 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
         return yyl_fake_eof(aTHX_ LEX_FAKE_EOF, FALSE, s);
 
     case KEY___SUB__:
+        /* If !CvCLONE(PL_compcv) then rpeep will probably turn this into an
+         * OP_CONST. We need to make it big enough to allow room for that if
+         * so */
         FUN0OP(CvCLONE(PL_compcv)
                     ? newOP(OP_RUNCV, 0)
-                    : newPVOP(OP_RUNCV,0,NULL));
+                    : newSVOP(OP_RUNCV, 0, &PL_sv_undef));
 
     case KEY_AUTOLOAD:
     case KEY_DESTROY:
@@ -7822,7 +7808,7 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
     case KEY_catch:
         Perl_ck_warner_d(aTHX_
             packWARN(WARN_EXPERIMENTAL__TRY), "try/catch is experimental");
-        PREBLOCK(CATCH);
+        PREBLOCK(KW_CATCH);
 
     case KEY_chop:
         UNI(OP_CHOP);
@@ -7835,7 +7821,7 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
          */
         s = skipspace(s);
         if (*s == '{')
-            PREBLOCK(CONTINUE);
+            PREBLOCK(KW_CONTINUE);
         else
             FUN0(OP_CONTINUE);
 
@@ -7881,12 +7867,12 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
         UNI(OP_CHROOT);
 
     case KEY_default:
-        PREBLOCK(DEFAULT);
+        PREBLOCK(KW_DEFAULT);
 
     case KEY_defer:
         Perl_ck_warner_d(aTHX_
             packWARN(WARN_EXPERIMENTAL__DEFER), "defer is experimental");
-        PREBLOCK(DEFER);
+        PREBLOCK(KW_DEFER);
 
     case KEY_do:
         return yyl_do(aTHX_ s, orig_keyword);
@@ -7918,11 +7904,11 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
         LOOPX(OP_DUMP);
 
     case KEY_else:
-        PREBLOCK(ELSE);
+        PREBLOCK(KW_ELSE);
 
     case KEY_elsif:
         pl_yylval.ival = CopLINE(PL_curcop);
-        OPERATOR(ELSIF);
+        OPERATOR(KW_ELSIF);
 
     case KEY_eq:
         if (!PL_lex_allbrackets && PL_lex_fakeeof >= LEX_FAKEEOF_COMPARE)
@@ -7983,7 +7969,7 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
     case KEY_finally:
         Perl_ck_warner_d(aTHX_
             packWARN(WARN_EXPERIMENTAL__TRY), "try/catch/finally is experimental");
-        PREBLOCK(FINALLY);
+        PREBLOCK(KW_FINALLY);
 
     case KEY_for:
     case KEY_foreach:
@@ -8108,7 +8094,7 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
         pl_yylval.ival = CopLINE(PL_curcop);
         Perl_ck_warner_d(aTHX_ packWARN(WARN_EXPERIMENTAL__SMARTMATCH),
                          "given is experimental");
-        OPERATOR(GIVEN);
+        OPERATOR(KW_GIVEN);
 
     case KEY_glob:
         LOP( orig_keyword==KEY_glob ? -OP_GLOB : OP_GLOB, XTERM );
@@ -8120,7 +8106,7 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
         if (!PL_lex_allbrackets && PL_lex_fakeeof >= LEX_FAKEEOF_NONEXPR)
             return REPORT(0);
         pl_yylval.ival = CopLINE(PL_curcop);
-        OPERATOR(IF);
+        OPERATOR(KW_IF);
 
     case KEY_index:
         LOP(OP_INDEX,XTERM);
@@ -8153,7 +8139,7 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
         UNI(OP_LCFIRST);
 
     case KEY_local:
-        OPERATOR(LOCAL);
+        OPERATOR(KW_LOCAL);
 
     case KEY_length:
         UNI(OP_LENGTH);
@@ -8223,7 +8209,7 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
 
     case KEY_no:
         s = tokenize_use(0, s);
-        TOKEN(USE);
+        TOKEN(KW_USE_or_NO);
 
     case KEY_not:
         if (*s == '(' || (s = skipspace(s), *s == '('))
@@ -8296,7 +8282,7 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
         s = force_word(s,BAREWORD,FALSE,TRUE);
         s = skipspace(s);
         s = force_strict_version(s);
-        PREBLOCK(PACKAGE);
+        PREBLOCK(KW_PACKAGE);
 
     case KEY_pipe:
         LOP(OP_PIPE_OP,XTERM);
@@ -8567,7 +8553,7 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
         pl_yylval.ival = CopLINE(PL_curcop);
         Perl_ck_warner_d(aTHX_
             packWARN(WARN_EXPERIMENTAL__TRY), "try/catch is experimental");
-        PREBLOCK(TRY);
+        PREBLOCK(KW_TRY);
 
     case KEY_uc:
         UNI(OP_UC);
@@ -8582,13 +8568,13 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
         if (!PL_lex_allbrackets && PL_lex_fakeeof >= LEX_FAKEEOF_NONEXPR)
             return REPORT(0);
         pl_yylval.ival = CopLINE(PL_curcop);
-        OPERATOR(UNTIL);
+        OPERATOR(KW_UNTIL);
 
     case KEY_unless:
         if (!PL_lex_allbrackets && PL_lex_fakeeof >= LEX_FAKEEOF_NONEXPR)
             return REPORT(0);
         pl_yylval.ival = CopLINE(PL_curcop);
-        OPERATOR(UNLESS);
+        OPERATOR(KW_UNLESS);
 
     case KEY_unlink:
         LOP(OP_UNLINK,XTERM);
@@ -8610,7 +8596,7 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
 
     case KEY_use:
         s = tokenize_use(1, s);
-        TOKEN(USE);
+        TOKEN(KW_USE_or_NO);
 
     case KEY_values:
         UNI(OP_VALUES);
@@ -8625,13 +8611,13 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
         Perl_ck_warner_d(aTHX_
             packWARN(WARN_EXPERIMENTAL__SMARTMATCH),
             "when is experimental");
-        OPERATOR(WHEN);
+        OPERATOR(KW_WHEN);
 
     case KEY_while:
         if (!PL_lex_allbrackets && PL_lex_fakeeof >= LEX_FAKEEOF_NONEXPR)
             return REPORT(0);
         pl_yylval.ival = CopLINE(PL_curcop);
-        OPERATOR(WHILE);
+        OPERATOR(KW_WHILE);
 
     case KEY_warn:
         PL_hints |= HINT_BLOCK_SCOPE;
@@ -9385,8 +9371,8 @@ Perl_yylex(pTHX)
     }
     DEBUG_T( {
         SV* tmp = newSVpvs("");
-        PerlIO_printf(Perl_debug_log, "### %" IVdf ":LEX_%s/X%s %s\n",
-            (IV)CopLINE(PL_curcop),
+        PerlIO_printf(Perl_debug_log, "### %" LINE_Tf ":LEX_%s/X%s %s\n",
+            CopLINE(PL_curcop),
             lex_state_names[PL_lex_state],
             exp_name[PL_expect],
             pv_display(tmp, s, strlen(s), 0, 60));
@@ -9463,7 +9449,7 @@ Perl_yylex(pTHX)
             if (*PL_bufptr != '{')
                 PL_bufptr++;
             PL_expect = XTERMBLOCK;
-            force_next(DO);
+            force_next(KW_DO);
         }
 
         if (PL_lex_starts++) {
@@ -9499,7 +9485,7 @@ Perl_yylex(pTHX)
             PL_lex_repl = NULL;
         }
         /* Paranoia.  re_eval_start is adjusted when S_scan_heredoc sets
-           re_eval_str.  If the here-doc body’s length equals the previous
+           re_eval_str.  If the here-doc body's length equals the previous
            value of re_eval_start, re_eval_start will now be null.  So
            check re_eval_str as well. */
         if (PL_parser->lex_shared->re_eval_start
@@ -10079,25 +10065,14 @@ Perl_scan_word(pTHX_ char *s, char *dest, STRLEN destlen, int allow_package, STR
     return s;
 }
 
-/* Is the byte 'd' a legal single character identifier name?  'u' is true
- * iff Unicode semantics are to be used.  The legal ones are any of:
- *  a) all ASCII characters except:
- *          1) control and space-type ones, like NUL, SOH, \t, and SPACE;
- *          2) '{'
- *     The final case currently doesn't get this far in the program, so we
- *     don't test for it.  If that were to change, it would be ok to allow it.
- *  b) When not under Unicode rules, any upper Latin1 character
- *  c) Otherwise, when unicode rules are used, all XIDS characters.
- *
- *      Because all ASCII characters have the same representation whether
- *      encoded in UTF-8 or not, we can use the foo_A macros below and '\0' and
- *      '{' without knowing if is UTF-8 or not. */
-#define VALID_LEN_ONE_IDENT(s, e, is_utf8)                                  \
-    (isGRAPH_A(*(s)) || ((is_utf8)                                          \
-                         ? isIDFIRST_utf8_safe(s, e)                        \
-                         : (isGRAPH_L1(*s)                                  \
-                            && LIKELY((U8) *(s) != LATIN1_TO_NATIVE(0xAD)))))
 
+/* scan s and extract an identifier ($var) from it if possible
+ * into dest.
+ * XXX: This function has subtle implications on parsing, and
+ * changing how it behaves can cause a variable to change from
+ * being a run time rv2sv call or a compile time binding to a
+ * specific variable name.
+ */
 STATIC char *
 S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
 {
@@ -10107,7 +10082,7 @@ S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
     char *d = dest;
     char * const e = d + destlen - 3;    /* two-character token, ending NUL */
     bool is_utf8 = cBOOL(UTF);
-    I32 orig_copline = 0, tmp_copline = 0;
+    line_t orig_copline = 0, tmp_copline = 0;
 
     PERL_ARGS_ASSERT_SCAN_IDENT;
 
@@ -10161,11 +10136,41 @@ S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
             s = skipspace(s);
         }
     }
+
+
+    /* Extract the first character of the variable name from 's' and
+     * copy it, null terminated into 'd'. Note that this does not
+     * involve checking for just IDFIRST characters, as it allows the
+     * '^' for ${^FOO} type variable names, and it allows all the
+     * characters that are legal in a single character variable name.
+     *
+     * The legal ones are any of:
+     *  a) all ASCII characters except:
+     *          1) control and space-type ones, like NUL, SOH, \t, and SPACE;
+     *          2) '{'
+     *     The final case currently doesn't get this far in the program, so we
+     *     don't test for it.  If that were to change, it would be ok to allow it.
+     *  b) When not under Unicode rules, any upper Latin1 character
+     *  c) Otherwise, when unicode rules are used, all XIDS characters.
+     *
+     *      Because all ASCII characters have the same representation whether
+     *      encoded in UTF-8 or not, we can use the foo_A macros below and '\0' and
+     *      '{' without knowing if is UTF-8 or not. */
+
     if ((s <= PL_bufend - ((is_utf8)
                           ? UTF8SKIP(s)
                           : 1))
-        && VALID_LEN_ONE_IDENT(s, PL_bufend, is_utf8))
-    {
+        && (
+            isGRAPH_A(*s)
+            ||
+            ( is_utf8
+              ? isIDFIRST_utf8_safe(s, PL_bufend)
+              : (isGRAPH_L1(*s)
+                 && LIKELY((U8) *s != LATIN1_TO_NATIVE(0xAD))
+                )
+            )
+        )
+    ){
         if (is_utf8) {
             const STRLEN skip = UTF8SKIP(s);
             STRLEN i;
@@ -10175,24 +10180,27 @@ S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
         }
         else {
             *d = *s++;
-            /* special case to handle ${10}, ${11} the same way we handle ${1} etc */
-            if (isDIGIT(*d)) {
-                bool is_zero= *d == '0' ? TRUE : FALSE;
-                char *digit_start= d;
-                while (s < PL_bufend && isDIGIT(*s)) {
-                    d++;
-                    if (d >= e)
-                        Perl_croak(aTHX_ "%s", ident_too_long);
-                    *d= *s++;
-                }
-                if (is_zero && d - digit_start > 1)
-                    Perl_croak(aTHX_ ident_var_zero_multi_digit);
-            }
             d[1] = '\0';
         }
     }
+
+    /* special case to handle ${10}, ${11} the same way we handle ${1} etc */
+    if (isDIGIT(*d)) {
+        bool is_zero= *d == '0' ? TRUE : FALSE;
+        char *digit_start= d;
+        while (s < PL_bufend && isDIGIT(*s)) {
+            d++;
+            if (d >= e)
+                Perl_croak(aTHX_ "%s", ident_too_long);
+            *d= *s++;
+        }
+        if (is_zero && d - digit_start >= 1) /* d points at the last digit */
+            Perl_croak(aTHX_ ident_var_zero_multi_digit);
+        d[1] = '\0';
+    }
+
     /* Convert $^F, ${^F} and the ^F of ${^FOO} to control characters */
-    if (*d == '^' && *s && isCONTROLVAR(*s)) {
+    else if (*d == '^' && *s && isCONTROLVAR(*s)) {
         *d = toCTRL(*s);
         s++;
     }
@@ -10201,6 +10209,7 @@ S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
        about when not to warn.  */
     else if (ck_uni && bracket == -1)
         check_uni();
+
     if (bracket != -1) {
         bool skip;
         char *s2;
@@ -10754,7 +10763,6 @@ S_scan_heredoc(pTHX_ char *s)
 #endif
 
     tmpstr = newSV_type(SVt_PVIV);
-    SvGROW(tmpstr, 80);
     if (term == '\'') {
         op_type = OP_CONST;
         SvIV_set(tmpstr, -1);
@@ -10865,7 +10873,7 @@ S_scan_heredoc(pTHX_ char *s)
             goto interminable;
         }
 
-        sv_setpvn(tmpstr,d+1,s-d);
+        sv_setpvn_fresh(tmpstr,d+1,s-d);
         s += len - 1;
         /* the preceding stmt passes a newline */
         PL_parser->herelines++;
@@ -10912,7 +10920,8 @@ S_scan_heredoc(pTHX_ char *s)
         char *oldbufptr_save;
         char *oldoldbufptr_save;
       streaming:
-        SvPVCLEAR(tmpstr);   /* avoid "uninitialized" warning */
+        sv_grow_fresh(tmpstr, 80);
+        SvPVCLEAR_FRESH(tmpstr);   /* avoid "uninitialized" warning */
         term = PL_tokenbuf[1];
         len--;
         linestr_save = PL_linestr; /* must restore this afterwards */
@@ -10934,7 +10943,7 @@ S_scan_heredoc(pTHX_ char *s)
                    does not matter what PL_linestr points to, since we are
                    about to croak; but in a quote-like op, linestr_save
                    will have been prospectively freed already, via
-                   SAVEFREESV(PL_linestr) in sublex_push, so it’s easier to
+                   SAVEFREESV(PL_linestr) in sublex_push, so it's easier to
                    restore PL_linestr. */
                 SvREFCNT_dec_NN(PL_linestr);
                 PL_linestr = linestr_save;
@@ -11204,7 +11213,7 @@ S_scan_inputsymbol(pTHX_ char *start)
                 if (PAD_COMPNAME_FLAGS_isOUR(tmp)) {
                     HV * const stash = PAD_COMPNAME_OURSTASH(tmp);
                     HEK * const stashname = HvNAME_HEK(stash);
-                    SV * const sym = sv_2mortal(newSVhek(stashname));
+                    SV * const sym = newSVhek_mortal(stashname);
                     sv_catpvs(sym, "::");
                     sv_catpv(sym, d+1);
                     d = SvPVX(sym);
@@ -11321,20 +11330,15 @@ Perl_scan_str(pTHX_ char *start, int keep_bracketed_quoted, int keep_delims, int
     )
 {
     SV *sv;			/* scalar value: string */
-    const char *tmps;		/* temp string, used for delimiter matching */
     char *s = start;		/* current position in the buffer */
-    char term;			/* terminating character */
     char *to;			/* current position in the sv's data */
     int brackets = 1;		/* bracket nesting level */
     bool d_is_utf8 = FALSE;	/* is there any utf8 content? */
-    IV termcode;		/* terminating char. code */
-    U8 termstr[UTF8_MAXBYTES+1]; /* terminating string */
-    STRLEN termlen;		/* length of terminating string */
+    UV open_delim_code;         /* code point */
+    char open_delim_str[UTF8_MAXBYTES+1];
+    STRLEN delim_byte_len;      /* each delimiter currently is the same number
+                                   of bytes */
     line_t herelines;
-
-    /* The delimiters that have a mirror-image closing one */
-    const char * opening_delims = "([{<";
-    const char * closing_delims = ")]}>";
 
     /* The only non-UTF character that isn't a stand alone grapheme is
      * white-space, hence can't be a delimiter. */
@@ -11344,43 +11348,122 @@ Perl_scan_str(pTHX_ char *start, int keep_bracketed_quoted, int keep_delims, int
     PERL_ARGS_ASSERT_SCAN_STR;
 
     /* skip space before the delimiter */
-    if (isSPACE(*s)) {
-        s = skipspace(s);
+    if (isSPACE(*s)) {  /* skipspace can change the buffer 's' is in, so
+                           'start' also has to change */
+        s = start = skipspace(s);
     }
 
     /* mark where we are, in case we need to report errors */
     CLINE;
 
-    /* after skipping whitespace, the next character is the terminator */
-    term = *s;
-    if (!UTF || UTF8_IS_INVARIANT(term)) {
-        termcode = termstr[0] = term;
-        termlen = 1;
+    /* after skipping whitespace, the next character is the delimiter */
+    if (! UTF || UTF8_IS_INVARIANT(*s)) {
+        open_delim_code   = (U8) *s;
+        open_delim_str[0] =      *s;
+        delim_byte_len = 1;
     }
     else {
-        termcode = utf8_to_uvchr_buf((U8*)s, (U8*)PL_bufend, &termlen);
-        if (UTF && UNLIKELY(! is_grapheme((U8 *) start,
-                                           (U8 *) s,
-                                           (U8 *) PL_bufend,
-                                                  termcode)))
+        open_delim_code = utf8_to_uvchr_buf((U8*)s, (U8*)PL_bufend,
+                                            &delim_byte_len);
+        if (UNLIKELY(! is_grapheme((U8 *) start,
+                                   (U8 *) s,
+                                   (U8 *) PL_bufend,
+                                   open_delim_code)))
         {
             yyerror(non_grapheme_msg);
         }
 
-        Copy(s, termstr, termlen, U8);
+        Copy(s, open_delim_str, delim_byte_len, char);
     }
+    open_delim_str[delim_byte_len] = '\0';  /* Only for safety */
+
 
     /* mark where we are */
     PL_multi_start = CopLINE(PL_curcop);
-    PL_multi_open = termcode;
+    PL_multi_open = open_delim_code;
     herelines = PL_parser->herelines;
 
-    /* If the delimiter has a mirror-image closing one, get it */
-    if (term && (tmps = strchr(opening_delims, term))) {
-        termcode = termstr[0] = term = closing_delims[tmps - opening_delims];
+    const char * legal_paired_opening_delims;
+    const char * legal_paired_closing_delims;
+    const char * deprecated_opening_delims;
+    if (FEATURE_MORE_DELIMS_IS_ENABLED) {
+        if (UTF) {
+            legal_paired_opening_delims = EXTRA_OPENING_UTF8_BRACKETS;
+            legal_paired_closing_delims = EXTRA_CLOSING_UTF8_BRACKETS;
+
+            /* We are deprecating using a closing delimiter as the opening, in
+             * case we want in the future to accept them reversed.  The string
+             * may include ones that are legal, but the code below won't look
+             * at this string unless it didn't find a legal opening one */
+            deprecated_opening_delims = DEPRECATED_OPENING_UTF8_BRACKETS;
+        }
+        else {
+            legal_paired_opening_delims = EXTRA_OPENING_NON_UTF8_BRACKETS;
+            legal_paired_closing_delims = EXTRA_CLOSING_NON_UTF8_BRACKETS;
+            deprecated_opening_delims = DEPRECATED_OPENING_NON_UTF8_BRACKETS;
+        }
+    }
+    else {
+        legal_paired_opening_delims = "([{<";
+        legal_paired_closing_delims = ")]}>";
+        deprecated_opening_delims = (UTF)
+                                    ? DEPRECATED_OPENING_UTF8_BRACKETS
+                                    : DEPRECATED_OPENING_NON_UTF8_BRACKETS;
     }
 
-    PL_multi_close = termcode;
+    const char * legal_paired_opening_delims_end = legal_paired_opening_delims
+                                          + strlen(legal_paired_opening_delims);
+    const char * deprecated_delims_end = deprecated_opening_delims
+                                + strlen(deprecated_opening_delims);
+
+    const char * close_delim_str = open_delim_str;
+    UV close_delim_code = open_delim_code;
+
+    /* If the delimiter has a mirror-image closing one, get it */
+    const char *tmps = ninstr(legal_paired_opening_delims,
+                              legal_paired_opening_delims_end,
+                              open_delim_str, open_delim_str + delim_byte_len);
+    if (tmps) {
+        /* Here, there is a paired delimiter, and tmps points to its position
+           in the string of the accepted opening paired delimiters.  The
+           corresponding position in the string of closing ones is the
+           beginning of the paired mate.  Both contain the same number of
+           bytes. */
+        close_delim_str = legal_paired_closing_delims
+                        + (tmps - legal_paired_opening_delims);
+
+        /* The list of paired delimiters contains all the ASCII ones that have
+         * always been legal, and no other ASCIIs.  Don't raise a message if
+         * using one of these */
+        if (! isASCII(open_delim_code)) {
+            Perl_ck_warner_d(aTHX_
+                             packWARN(WARN_EXPERIMENTAL__EXTRA_PAIRED_DELIMITERS),
+                             "Use of '%" UTF8f "' is experimental as a string delimiter",
+                             UTF8fARG(UTF, delim_byte_len, open_delim_str));
+        }
+
+        close_delim_code = (UTF)
+                           ? valid_utf8_to_uvchr((U8 *) close_delim_str, NULL)
+                           : * (U8 *) close_delim_str;
+    }
+    else {  /* Here, the delimiter isn't paired, hence the close is the same as
+               the open; and has aready been set up.  But make sure it isn't
+               deprecated to use this particular delimiter, as we plan
+               eventually to make it paired. */
+        if (ninstr(deprecated_opening_delims, deprecated_delims_end,
+                   open_delim_str, open_delim_str + delim_byte_len))
+        {
+            Perl_ck_warner_d(aTHX_ packWARN(WARN_DEPRECATED),
+                             "Use of '%" UTF8f "' is deprecated as a string delimiter",
+                             UTF8fARG(UTF, delim_byte_len, open_delim_str));
+        }
+
+        /* Note that a NUL may be used as a delimiter, and this happens when
+         * delimitting an empty string, and no special handling for it is
+         * needed, as ninstr() calls are used */
+    }
+
+    PL_multi_close = close_delim_code;
 
     if (PL_multi_open == PL_multi_close) {
         keep_bracketed_quoted = FALSE;
@@ -11389,98 +11472,97 @@ Perl_scan_str(pTHX_ char *start, int keep_bracketed_quoted, int keep_delims, int
     /* create a new SV to hold the contents.  79 is the SV's initial length.
        What a random number. */
     sv = newSV_type(SVt_PVIV);
-    SvGROW(sv, 80);
-    SvIV_set(sv, termcode);
+    SvGROW(sv, 79);
+    SvIV_set(sv, close_delim_code);
     (void)SvPOK_only(sv);		/* validate pointer */
 
     /* move past delimiter and try to read a complete string */
     if (keep_delims)
-        sv_catpvn(sv, s, termlen);
-    s += termlen;
+        sv_catpvn(sv, s, delim_byte_len);
+    s += delim_byte_len;
     for (;;) {
         /* extend sv if need be */
         SvGROW(sv, SvCUR(sv) + (PL_bufend - s) + 1);
         /* set 'to' to the next character in the sv's string */
         to = SvPVX(sv)+SvCUR(sv);
 
-        /* if open delimiter is the close delimiter read unbridle */
-        if (PL_multi_open == PL_multi_close) {
-            for (; s < PL_bufend; s++,to++) {
-                /* embedded newlines increment the current line number */
-                if (*s == '\n' && !PL_rsfp && !PL_parser->filtered)
-                    COPLINE_INC_WITH_HERELINES;
-                /* handle quoted delimiters */
-                if (*s == '\\' && s+1 < PL_bufend && term != '\\') {
-                    if (!keep_bracketed_quoted
-                        && (s[1] == term
-                            || (re_reparse && s[1] == '\\'))
-                    )
-                        s++;
-                    else /* any other quotes are simply copied straight through */
-                        *to++ = *s++;
-                }
-                /* terminate when run out of buffer (the for() condition), or
-                   have found the terminator */
-                else if (*s == term) {  /* First byte of terminator matches */
-                    if (termlen == 1)   /* If is the only byte, are done */
-                        break;
+        /* read until we run out of string, or we find the closing delimiter */
+        while (s < PL_bufend) {
+            /* embedded newlines increment the line count */
+            if (*s == '\n' && !PL_rsfp && !PL_parser->filtered)
+                COPLINE_INC_WITH_HERELINES;
 
-                    /* If the remainder of the terminator matches, also are
-                     * done, after checking that is a separate grapheme */
-                    if (   s + termlen <= PL_bufend
-                        && memEQ(s + 1, (char*)termstr + 1, termlen - 1))
-                    {
-                        if (   UTF
-                            && UNLIKELY(! is_grapheme((U8 *) start,
-                                                       (U8 *) s,
-                                                       (U8 *) PL_bufend,
-                                                              termcode)))
-                        {
-                            yyerror(non_grapheme_msg);
-                        }
-                        break;
-                    }
-                }
-                else if (!d_is_utf8 && !UTF8_IS_INVARIANT((U8)*s) && UTF) {
-                    d_is_utf8 = TRUE;
-                }
+            /* backslashes can escape the closing delimiter */
+            if (   *s == '\\' && s < PL_bufend - delim_byte_len
 
-                *to = *s;
+                   /* ... but not if the delimiter itself is a backslash */
+                && close_delim_code != '\\')
+            {
+                /* Here, we have an escaping backslash.  If we're supposed to
+                 * discard those that escape the closing delimiter, just
+                 * discard this one */
+                if (   !  keep_bracketed_quoted
+                    &&   (    memEQ(s + 1,  open_delim_str, delim_byte_len)
+                          ||  (   PL_multi_open == PL_multi_close
+                               && re_reparse && s[1] == '\\')
+                          ||  memEQ(s + 1, close_delim_str, delim_byte_len)))
+                {
+                    s++;
+                }
+                else /* any other escapes are simply copied straight through */
+                    *to++ = *s++;
             }
-        }
-
-        /* if the terminator isn't the same as the start character (e.g.,
-           matched brackets), we have to allow more in the quoting, and
-           be prepared for nested brackets.
-        */
-        else {
-            /* read until we run out of string, or we find the terminator */
-            for (; s < PL_bufend; s++,to++) {
-                /* embedded newlines increment the line count */
-                if (*s == '\n' && !PL_rsfp && !PL_parser->filtered)
-                    COPLINE_INC_WITH_HERELINES;
-                /* backslashes can escape the open or closing characters */
-                if (*s == '\\' && s+1 < PL_bufend) {
-                    if (!keep_bracketed_quoted
-                       && ( ((UV)s[1] == PL_multi_open)
-                         || ((UV)s[1] == PL_multi_close) ))
-                    {
-                        s++;
-                    }
-                    else
-                        *to++ = *s++;
+            else if (   s < PL_bufend - (delim_byte_len - 1)
+                     && memEQ(s, close_delim_str, delim_byte_len)
+                     && --brackets <= 0)
+            {
+                /* Found unescaped closing delimiter, unnested if we care about
+                 * that; so are done.
+                 *
+                 * In the case of the opening and closing delimiters being
+                 * different, we have to deal with nesting; the conditional
+                 * above makes sure we don't get here until the nesting level,
+                 * 'brackets', is back down to zero.  In the other case,
+                 * nesting isn't an issue, and 'brackets' never can get
+                 * incremented above 0, so will come here at the first closing
+                 * delimiter.
+                 *
+                 * Only grapheme delimiters are legal. */
+                if (   UTF  /* All Non-UTF-8's are graphemes */
+                    && UNLIKELY(! is_grapheme((U8 *) start,
+                                              (U8 *) s,
+                                              (U8 *) PL_bufend,
+                                              close_delim_code)))
+                {
+                    yyerror(non_grapheme_msg);
                 }
-                /* allow nested opens and closes */
-                else if (*(U8 *) s == PL_multi_close && --brackets <= 0)
-                    break;
-                else if (*(U8 *) s == PL_multi_open)
-                    brackets++;
-                else if (!d_is_utf8 && !UTF8_IS_INVARIANT((U8)*s) && UTF)
-                    d_is_utf8 = TRUE;
-                *to = *s;
+
+                break;
             }
-        }
-        /* terminate the copied string and update the sv's end-of-string */
+                        /* No nesting if open eq close */
+            else if (   PL_multi_open != PL_multi_close
+                     && s < PL_bufend - (delim_byte_len - 1)
+                     && memEQ(s, open_delim_str, delim_byte_len))
+            {
+                brackets++;
+            }
+
+            /* Here, still in the middle of the string; copy this character */
+            if (! UTF || UTF8_IS_INVARIANT((U8) *s)) {
+                *to++ = *s++;
+            }
+            else {
+                size_t this_char_len = UTF8SKIP(s);
+                Copy(s, to, this_char_len, char);
+                s  += this_char_len;
+                to += this_char_len;
+
+                d_is_utf8 = TRUE;
+            }
+        } /* End of loop through buffer */
+
+        /* Here, found end of the string, OR ran out of buffer: terminate the
+         * copied string and update the sv's end-of-string */
         *to = '\0';
         SvCUR_set(sv, to - SvPVX_const(sv));
 
@@ -11518,13 +11600,13 @@ Perl_scan_str(pTHX_ char *start, int keep_bracketed_quoted, int keep_delims, int
             return NULL;
         }
         s = start = PL_bufptr;
-    }
+    } /* End of infinite loop */
 
     /* at this point, we have successfully read the delimited string */
 
     if (keep_delims)
-            sv_catpvn(sv, s, termlen);
-    s += termlen;
+            sv_catpvn(sv, s, delim_byte_len);
+    s += delim_byte_len;
 
     if (d_is_utf8)
         SvUTF8_on(sv);
@@ -11547,7 +11629,7 @@ Perl_scan_str(pTHX_ char *start, int keep_bracketed_quoted, int keep_delims, int
         PL_parser->lex_sub_repl = sv;
     else
         PL_lex_stuff = sv;
-    if (delimp) *delimp = PL_multi_open == PL_multi_close ? s-termlen : s;
+    if (delimp) *delimp = PL_multi_open == PL_multi_close ? s-delim_byte_len : s;
     return s;
 }
 
@@ -12265,8 +12347,12 @@ S_scan_formline(pTHX_ char *s)
             }
         }
         eol = (char *) memchr(s,'\n',PL_bufend-s);
-        if (!eol++)
-                eol = PL_bufend;
+        if (! eol) {
+            eol = PL_bufend;
+        }
+        else {
+            eol++;
+        }
         if (*s != '#') {
             char *t;
             for (t = s; t < eol; t++) {
@@ -12317,7 +12403,7 @@ S_scan_formline(pTHX_ char *s)
             if (*s2 == '{') {
                 PL_expect = XTERMBLOCK;
                 NEXTVAL_NEXTTOKE.ival = 0;
-                force_next(DO);
+                force_next(KW_DO);
             }
             NEXTVAL_NEXTTOKE.ival = 0;
             force_next(FORMLBRACK);
@@ -12336,6 +12422,23 @@ S_scan_formline(pTHX_ char *s)
     }
     return s;
 }
+
+/*
+=for apidoc start_subparse
+
+Set things up for parsing a subroutine.
+
+If C<is_format> is non-zero, the input is to be considered a format sub
+(a specialised sub used to implement perl's C<format> feature); else a
+normal C<sub>.
+
+C<flags> are added to the flags for C<PL_compcv>.
+
+This returns the value of C<PL_savestack_ix> that was in effect upon entry to
+the function;
+
+=cut
+*/
 
 I32
 Perl_start_subparse(pTHX_ I32 is_format, U32 flags)
@@ -12358,6 +12461,92 @@ Perl_start_subparse(pTHX_ I32 is_format, U32 flags)
         CvPADLIST(PL_compcv)->xpadl_outid = CvPADLIST(outsidecv)->xpadl_id;
 
     return oldsavestack_ix;
+}
+
+/* If o represents a builtin attribute, apply it to cv and returns true.
+ * Otherwise does nothing and returns false
+ */
+
+STATIC bool
+S_apply_builtin_cv_attribute(pTHX_ CV *cv, OP *o)
+{
+    assert(o->op_type == OP_CONST);
+    SV *sv = cSVOPo_sv;
+    STRLEN len = SvCUR(sv);
+
+    /* NOTE: any CV attrs applied here need to be part of
+       the CVf_BUILTIN_ATTRS define in cv.h! */
+
+    if(memEQs(SvPVX(sv), len, "lvalue"))
+        CvLVALUE_on(cv);
+    else if(memEQs(SvPVX(sv), len, "method"))
+        CvNOWARN_AMBIGUOUS_on(cv);
+    else if(memEQs(SvPVX(sv), len, "const")) {
+        Perl_ck_warner_d(aTHX_
+            packWARN(WARN_EXPERIMENTAL__CONST_ATTR),
+           ":const is experimental"
+        );
+        CvANONCONST_on(cv);
+        if (!CvANON(cv))
+            yyerror(":const is not permitted on named subroutines");
+    }
+    else
+        return false;
+
+    return true;
+}
+
+/*
+=for apidoc apply_builtin_cv_attributes
+
+Given an OP_LIST containing attribute definitions, filter it for known builtin
+attributes to apply to the cv, returning a possibly-smaller list containing
+just the remaining ones.
+
+=cut
+*/
+
+OP *
+Perl_apply_builtin_cv_attributes(pTHX_ CV *cv, OP *attrlist)
+{
+    PERL_ARGS_ASSERT_APPLY_BUILTIN_CV_ATTRIBUTES;
+
+    if(!attrlist)
+        return attrlist;
+
+    if(attrlist->op_type != OP_LIST) {
+        /* Not in fact a list but just a single attribute */
+        if(S_apply_builtin_cv_attribute(aTHX_ cv, attrlist)) {
+            op_free(attrlist);
+            return NULL;
+        }
+
+        return attrlist;
+    }
+
+    OP *prev = cLISTOPx(attrlist)->op_first;
+    assert(prev->op_type == OP_PUSHMARK);
+    OP *o = OpSIBLING(prev);
+
+    OP *next;
+    for(; o; o = next) {
+        next = OpSIBLING(o);
+
+        if(S_apply_builtin_cv_attribute(aTHX_ cv, o)) {
+            op_sibling_splice(attrlist, prev, 1, NULL);
+            op_free(o);
+        }
+        else {
+            prev = o;
+        }
+    }
+
+    if(OpHAS_SIBLING(cLISTOPx(attrlist)->op_first))
+        return attrlist;
+
+    /* The list is now entirely empty, we might as well discard it */
+    op_free(attrlist);
+    return NULL;
 }
 
 
@@ -12404,15 +12593,24 @@ S_yywarn(pTHX_ const char *const s, U32 flags)
 }
 
 void
-Perl_abort_execution(pTHX_ const char * const msg, const char * const name)
+Perl_abort_execution(pTHX_ SV* msg_sv, const char * const name)
 {
     PERL_ARGS_ASSERT_ABORT_EXECUTION;
 
-    if (PL_minus_c)
-        Perl_croak(aTHX_ "%s%s had compilation errors.\n", msg, name);
-    else {
-        Perl_croak(aTHX_
-                "%sExecution of %s aborted due to compilation errors.\n", msg, name);
+    if (msg_sv) {
+        if (PL_minus_c)
+            Perl_croak(aTHX_ "%" SVf "%s had compilation errors.\n", SVfARG(msg_sv), name);
+        else {
+            Perl_croak(aTHX_
+                    "%" SVf "Execution of %s aborted due to compilation errors.\n", SVfARG(msg_sv), name);
+        }
+    } else {
+        if (PL_minus_c)
+            Perl_croak(aTHX_ "%s had compilation errors.\n", name);
+        else {
+            Perl_croak(aTHX_
+                    "Execution of %s aborted due to compilation errors.\n", name);
+        }
     }
     NOT_REACHED; /* NOTREACHED */
 }
@@ -12500,9 +12698,9 @@ Perl_yyerror_pvn(pTHX_ const char *const s, STRLEN len, U32 flags)
                 Perl_sv_catpvf(aTHX_ where_sv, "\\%03o", yychar & 255);
         }
         msg = newSVpvn_flags(s, len, (flags & SVf_UTF8) | SVs_TEMP);
-        Perl_sv_catpvf(aTHX_ msg, " at %s line %" IVdf ", ",
+        Perl_sv_catpvf(aTHX_ msg, " at %s line %" LINE_Tf ", ",
             OutCopFILE(PL_curcop),
-            (IV)(PL_parser->preambling == NOLINE
+            (PL_parser->preambling == NOLINE
                    ? CopLINE(PL_curcop)
                    : PL_parser->preambling));
         if (context)
@@ -12515,8 +12713,8 @@ Perl_yyerror_pvn(pTHX_ const char *const s, STRLEN len, U32 flags)
         {
             Perl_sv_catpvf(aTHX_ msg,
             "  (Might be a runaway multi-line %c%c string starting on"
-            " line %" IVdf ")\n",
-                    (int)PL_multi_open,(int)PL_multi_close,(IV)PL_multi_start);
+            " line %" LINE_Tf ")\n",
+                    (int)PL_multi_open,(int)PL_multi_close,(line_t)PL_multi_start);
             PL_multi_end = 0;
         }
         if (PL_in_eval & EVAL_WARNONLY) {
@@ -12527,22 +12725,37 @@ Perl_yyerror_pvn(pTHX_ const char *const s, STRLEN len, U32 flags)
             qerror(msg);
         }
     }
-    if (s == NULL || PL_error_count >= 10) {
-        const char * msg = "";
+    if ( s == NULL ||
+         PL_error_count >= PERL_STOP_PARSING_AFTER_N_ERRORS
+    ) {
         const char * const name = OutCopFILE(PL_curcop);
+        SV * errsv = NULL;
+        U8 raw_error_count = PERL_PARSE_ERROR_COUNT(PL_error_count);
 
         if (PL_in_eval) {
-            SV * errsv = ERRSV;
-            if (SvCUR(errsv)) {
-                msg = Perl_form(aTHX_ "%" SVf, SVfARG(errsv));
-            }
+            errsv = ERRSV;
         }
 
         if (s == NULL) {
-            abort_execution(msg, name);
+            abort_execution(errsv, name);
+        }
+        else
+        if (raw_error_count >= PERL_STOP_PARSING_AFTER_N_ERRORS) {
+            if (errsv) {
+                Perl_croak(aTHX_ "%" SVf "%s has too many errors.\n",
+                    SVfARG(errsv), name);
+            } else {
+                Perl_croak(aTHX_ "%s has too many errors.\n", name);
+            }
         }
         else {
-            Perl_croak(aTHX_ "%s%s has too many errors.\n", msg, name);
+            /* This is a syntax error, and we should stop compiling. */
+            assert(PERL_PARSE_IS_SYNTAX_ERROR(PL_error_count));
+            if (errsv) {
+                Perl_croak_sv(aTHX_ errsv);
+            } else {
+                abort_execution(errsv, name);
+            }
         }
     }
     PL_in_my = 0;
@@ -12803,6 +13016,8 @@ S_add_utf16_textfilter(pTHX_ U8 *const s, bool reversed)
 #endif
 
 /*
+=for apidoc scan_vstring
+
 Returns a pointer to the next character after the parsed
 vstring, as well as updating the passed in sv.
 
@@ -12820,6 +13035,7 @@ calling scope, hence the sv_2mortal in the example (to prevent
 a leak).  Make sure to do SvREFCNT_inc afterwards if you use
 sv_2mortal.
 
+=cut
 */
 
 char *
@@ -12905,6 +13121,7 @@ Perl_keyword_plugin_standard(pTHX_
 }
 
 /*
+=for apidoc_section $lexer
 =for apidoc wrap_keyword_plugin
 
 Puts a C function into the chain of keyword plugins.  This is the

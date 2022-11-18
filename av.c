@@ -210,9 +210,9 @@ Perl_av_extend_guts(pTHX_ AV *av, SSize_t key, SSize_t *maxp, SV ***allocp,
 =for apidoc av_fetch
 
 Returns the SV at the specified index in the array.  The C<key> is the
-index.  If lval is true, you are guaranteed to get a real SV back (in case
+index.  If C<lval> is true, you are guaranteed to get a real SV back (in case
 it wasn't real before), which you can then modify.  Check that the return
-value is non-null before dereferencing it to a C<SV*>.
+value is non-NULL before dereferencing it to a C<SV*>.
 
 See L<perlguts/"Understanding the Magic of Tied Hashes and Arrays"> for
 more information on how to use this function on tied arrays. 
@@ -393,48 +393,11 @@ Perl_av_store(pTHX_ AV *av, SSize_t key, SV *val)
 }
 
 /*
-=for apidoc av_new_alloc
-
-Creates a new AV and allocates its SV* array.
-
-This is similar to but more efficient than doing:
-
-    AV *av = newAV();
-    av_extend(av, key);
-
-The size parameter is used to pre-allocate a SV* array large enough to
-hold at least elements 0..(size-1). size must be at least 1.
-
-The zeroflag parameter controls whether the array is NULL initialized.
-
-=cut
-*/
-
-AV *
-Perl_av_new_alloc(pTHX_ SSize_t size, bool zeroflag)
-{
-    AV * const av = newAV();
-    SV** ary;
-    PERL_ARGS_ASSERT_AV_NEW_ALLOC;
-    assert(size > 0);
-
-    Newx(ary, size, SV*); /* Newx performs the memwrap check */
-    AvALLOC(av) = ary;
-    AvARRAY(av) = ary;
-    AvMAX(av) = size - 1;
-
-    if (zeroflag)
-        Zero(ary, size, SV*);
-
-    return av;
-}
-
-/*
 =for apidoc av_make
 
-Creates a new AV and populates it with a list of SVs.  The SVs are copied
-into the array, so they may be freed after the call to C<av_make>.  The new AV
-will have a reference count of 1.
+Creates a new AV and populates it with a list (C<**strp>, length C<size>) of
+SVs.  A copy is made of each SV, so their refcounts are not changed.  The new
+AV will have a reference count of 1.
 
 Perl equivalent: C<my @new_array = ($scalar1, $scalar2, $scalar3...);>
 
@@ -484,6 +447,113 @@ Perl_av_make(pTHX_ SSize_t size, SV **strp)
             PL_tmps_stack[orig_ix] = &PL_sv_undef;
     }
     return av;
+}
+
+/*
+=for apidoc newAVav
+
+Creates a new AV and populates it with values copied from an existing AV.  The
+new AV will have a reference count of 1, and will contain newly created SVs
+copied from the original SV.  The original source will remain unchanged.
+
+Perl equivalent: C<my @new_array = @existing_array;>
+
+=cut
+*/
+
+AV *
+Perl_newAVav(pTHX_ AV *oav)
+{
+    PERL_ARGS_ASSERT_NEWAVAV;
+
+    Size_t count = av_count(oav);
+
+    if(UNLIKELY(!oav) || count == 0)
+        return newAV();
+
+    AV *ret = newAV_alloc_x(count);
+
+    /* avoid ret being leaked if croak when calling magic below */
+    EXTEND_MORTAL(1);
+    PL_tmps_stack[++PL_tmps_ix] = (SV *)ret;
+    SSize_t ret_at_tmps_ix = PL_tmps_ix;
+
+    Size_t i;
+    if(LIKELY(!SvRMAGICAL(oav) && AvREAL(oav) && (SvTYPE(oav) == SVt_PVAV))) {
+        for(i = 0; i < count; i++) {
+            SV **svp = av_fetch_simple(oav, i, 0);
+            av_push_simple(ret, svp ? newSVsv(*svp) : &PL_sv_undef);
+        }
+    } else {
+        for(i = 0; i < count; i++) {
+            SV **svp = av_fetch(oav, i, 0);
+            av_push_simple(ret, svp ? newSVsv(*svp) : &PL_sv_undef);
+        }
+    }
+
+    /* disarm leak guard */
+    if(LIKELY(PL_tmps_ix == ret_at_tmps_ix))
+        PL_tmps_ix--;
+    else
+        PL_tmps_stack[ret_at_tmps_ix] = &PL_sv_undef;
+
+    return ret;
+}
+
+/*
+=for apidoc newAVhv
+
+Creates a new AV and populates it with keys and values copied from an existing
+HV.  The new AV will have a reference count of 1, and will contain newly
+created SVs copied from the original HV.  The original source will remain
+unchanged.
+
+Perl equivalent: C<my @new_array = %existing_hash;>
+
+=cut
+*/
+
+AV *
+Perl_newAVhv(pTHX_ HV *ohv)
+{
+    PERL_ARGS_ASSERT_NEWAVHV;
+
+    if(UNLIKELY(!ohv))
+        return newAV();
+
+    bool tied = SvRMAGICAL(ohv) && mg_find(MUTABLE_SV(ohv), PERL_MAGIC_tied);
+
+    Size_t nkeys = hv_iterinit(ohv);
+    /* This number isn't perfect but it doesn't matter; it only has to be
+     * close to make the initial allocation about the right size
+     */
+    AV *ret = newAV_alloc_xz(nkeys ? nkeys * 2 : 2);
+
+    /* avoid ret being leaked if croak when calling magic below */
+    EXTEND_MORTAL(1);
+    PL_tmps_stack[++PL_tmps_ix] = (SV *)ret;
+    SSize_t ret_at_tmps_ix = PL_tmps_ix;
+
+
+    HE *he;
+    while((he = hv_iternext(ohv))) {
+        if(tied) {
+            av_push_simple(ret, newSVsv(hv_iterkeysv(he)));
+            av_push_simple(ret, newSVsv(hv_iterval(ohv, he)));
+        }
+        else {
+            av_push_simple(ret, newSVhek(HeKEY_hek(he)));
+            av_push_simple(ret, HeVAL(he) ? newSVsv(HeVAL(he)) : &PL_sv_undef);
+        }
+    }
+
+    /* disarm leak guard */
+    if(LIKELY(PL_tmps_ix == ret_at_tmps_ix))
+        PL_tmps_ix--;
+    else
+        PL_tmps_stack[ret_at_tmps_ix] = &PL_sv_undef;
+
+    return ret;
 }
 
 /*

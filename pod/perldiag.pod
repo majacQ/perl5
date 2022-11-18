@@ -486,24 +486,9 @@ plugin API.
 had never been malloc()ed in the first place.  Mandatory, but can
 be disabled by setting the environment variable C<PERL_BADFREE> to 1.
 
-=item Bad symbol for array
+=item Bad symbol for %s
 
-(P) An internal request asked to add an array entry to something that
-wasn't a symbol table entry.
-
-=item Bad symbol for dirhandle
-
-(P) An internal request asked to add a dirhandle entry to something
-that wasn't a symbol table entry.
-
-=item Bad symbol for filehandle
-
-(P) An internal request asked to add a filehandle entry to something
-that wasn't a symbol table entry.
-
-=item Bad symbol for hash
-
-(P) An internal request asked to add a hash entry to something that
+(P) An internal request asked to add an entry of the named type to something that
 wasn't a symbol table entry.
 
 =item Bad symbol for scalar
@@ -644,6 +629,13 @@ which was too long, so it was truncated to the string shown.
 C<builtin::> namespace, which is currently experimental. The existence
 or nature of the function may be subject to change in a future version
 of Perl.
+
+=item builtin::import can only be called at compile time
+
+(F) The C<import> method of the C<builtin> package was invoked when no code
+is currently being compiled. Since this method is used to introduce new
+lexical subroutines into the scope currently being compiled, this is not
+going to have any effect.
 
 =item Callback called exit
 
@@ -1582,6 +1574,18 @@ or if you use an explicit C<continue>.)
 with an assignment operator, which implies modifying the value itself.
 Perhaps you need to copy the value to a temporary, and repeat that.
 
+=item catch block requires a (VAR)
+
+(F) You tried to use the C<try> and C<catch> syntax of C<use feature 'try'>
+but did not include the error variable in the C<catch> block. The
+parenthesized variable name is not optional, unlike in some other forms of
+syntax you may be familiar with from CPAN modules or other languages.
+
+The required syntax is
+
+    try { ... }
+    catch ($var) { ... }
+
 =item Character following "\c" must be printable ASCII
 
 (F) In C<\cI<X>>, I<X> must be a printable (non-control) ASCII character.
@@ -1795,18 +1799,6 @@ Perl yourself.  The #! line at the top of your file could look like
 (F) Perl could not compile a file specified in a C<require> statement.
 Perl uses this generic message when none of the errors that it
 encountered were severe enough to halt compilation immediately.
-
-=item Complex regular subexpression recursion limit (%d) exceeded
-
-(W regexp) The regular expression engine uses recursion in complex
-situations where back-tracking is required.  Recursion depth is limited
-to 32766, or perhaps less in architectures where the stack cannot grow
-arbitrarily.  ("Simple" and "medium" situations are handled without
-recursion and are not subject to a limit.)  Try shortening the string
-under examination; looping in Perl code (e.g. with C<while>) rather than
-in the regular expression engine; or rewriting the regular expression so
-that it is simpler or backtracks less.  (See L<perlfaq2> for information
-on I<Mastering Regular Expressions>.)
 
 =item connect() on closed socket %s
 
@@ -2243,6 +2235,10 @@ Catamount. See L<perlport>.
 
 (F) The final summary message when a Perl compilation fails.
 
+=item Execution of %s aborted due to compilation errors.
+
+(F) The final summary message when a Perl compilation fails.
+
 =item exists argument is not a HASH or ARRAY element or a subroutine
 
 (F) The argument to C<exists> must be a hash or array element or a
@@ -2282,6 +2278,12 @@ as a goto, or a loop control statement.
 
 (W exiting) You are exiting a substitution by unconventional means, such
 as a return, a goto, or a loop control statement.
+
+=item Expected %s reference in export_lexically
+
+(F) The type of a reference given to L<builtin/export_lexically> did not
+match the sigil of the preceding name, or the value was not a reference at
+all. 
 
 =item Expecting close bracket in regex; marked by S<<-- HERE> in m/%s/
 
@@ -2335,6 +2337,12 @@ the effect of blessing the reference into the package main.  This is
 usually not what you want.  Consider providing a default target package,
 e.g. bless($ref, $p || 'MyPackage');
 
+=item export_lexically can only be called at compile time
+
+(F) L<builtin/export_lexically> was called at runtime.  Because it creates
+new names in the lexical scope currently being compiled, it can only be
+called from code inside C<BEGIN> block in that scope.
+
 =item %s: Expression syntax
 
 (A) You've accidentally run your script through B<csh> instead of Perl.
@@ -2384,20 +2392,6 @@ which can't encode values above 63.  So there is no point in asking for
 a line length bigger than that.  Perl will behave as if you specified
 C<u63> as the format.
 
-=item File::Glob::glob() will disappear in perl 5.30. Use File::Glob::bsd_glob() instead.
-
-(D deprecated) C<< File::Glob >> has a function called C<< glob >>, which
-just calls C<< bsd_glob >>. However, its prototype is different from the
-prototype of C<< CORE::glob >>, and hence, C<< File::Glob::glob >> should
-not be used.
-
-C<< File::Glob::glob() >> was deprecated in perl 5.8.0. A deprecation
-message was issued from perl 5.26.0 onwards, and the function will
-disappear in perl 5.30.0.
-
-Code using C<< File::Glob::glob() >> should call
-C<< File::Glob::bsd_glob() >> instead.
-
 =item Filehandle %s opened only for input
 
 (W io) You tried to write on a read-only filehandle.  If you intended
@@ -2424,6 +2418,11 @@ previously.
 
 (W io) You opened for writing a filehandle that got the same filehandle id
 as STDIN.  This occurred because you closed STDIN previously.
+
+=item Filehandle STD%s reopened as %s only for input
+
+(W io) You opened for reading a filehandle that got the same filehandle id
+as STDOUT or STDERR.  This occurred because you closed the handle previously.
 
 =item Final $ should be \$ or $name
 
@@ -3234,14 +3233,6 @@ neither as a system call nor an ioctl call (SIOCATMARK).
 Perl.  The current valid ones are given in
 L<perlrebackslash/\b{}, \b, \B{}, \B>.
 
-=item %s is forbidden - matches null string many times in regex; marked by S<<-- HERE> in
-m/%s/
-
-(F) The pattern you've specified might cause the regular expression to
-infinite loop so it is forbidden.  The S<<-- HERE>
-shows whereabouts in the regular expression the problem was discovered.
-See L<perlre>.
-
 =item %s() isn't allowed on :utf8 handles
 
 (F) The sysread(), recv(), syswrite() and send() operators are
@@ -3448,11 +3439,21 @@ considered punctuation in the C locale (and the POSIX standard defers to
 the C standard), and Unicode is generally considered a superset of
 the C locale.  But Unicode has added an extra category, "Symbol", and
 classifies these particular characters as being symbols.  Most UTF-8
-locales have them treated as punctuation, so that L<ispunct(2)> returns
+locales have them treated as punctuation, so that L<ispunct(3)> returns
 non-zero for them.  But a few locales have it return 0.   Perl takes
 the first approach, not using C<ispunct()> at all (see L<Note [5] in
 perlrecharclass|perlrecharclass/[5]>), and this message is raised to notify you that you
 are getting Perl's approach, not the locale's.
+
+=item Locale '%s' is unsupported, and may crash the interpreter.
+
+(S locale) The named locale is not supported by Perl, and using it leads
+to undefined behavior, including potentially crashing the computer.
+
+Currently the only locales that generate this severe warning are
+non-UTF-8 ones which have characters that require more than one byte to
+represent (common in older East Asian language locales).  See
+L<perllocale>.
 
 =item Locale '%s' may not work well.%s
 
@@ -3722,6 +3723,11 @@ See L</500 Server error>.
 (S) An advisory indicating that the previous error may have been caused
 by a missing delimiter on a string or pattern, because it eventually
 ended earlier on the current line.
+
+=item Mismatched brackets in template
+
+(F) A pack template could not be parsed because pairs of C<[...]> or
+C<(...)> could not be matched up. See L<perlfunc/pack>.
 
 =item Misplaced _ in number
 
@@ -4474,6 +4480,12 @@ arguments.  The arguments should come in pairs.
 
 (W misc) You specified an odd number of elements to initialize a hash,
 which is odd, because hashes come in key/value pairs.
+
+=item Odd number of elements in export_lexically
+
+(F) A call to L<builtin/export_lexically> contained an odd number of
+arguments.  This is not permitted, because each name must be paired with a
+valid reference value.
 
 =item Odd number of elements in hash assignment
 
@@ -5236,6 +5248,13 @@ definition.
 the sub name and via the prototype attribute.  The prototype in
 parentheses is useless, since it will be replaced by the prototype
 from the attribute before it's ever used.
+
+=item %s on BEGIN block ignored
+
+(W syntax) C<BEGIN> blocks are executed immediately after they are parsed
+and then thrown away. Any prototypes or attributes are therefore
+meaningless and are ignored. You should remove them from the C<BEGIN> block.
+Note this also means you cannot create a constant called C<BEGIN>.
 
 =item Quantifier follows nothing in regex; marked by S<<-- HERE> in m/%s/
 
@@ -6191,18 +6210,6 @@ according to the probings of Configure.
 (S experimental::private_use) This feature is actually a hook for future
 use.
 
-=item The regex_sets feature is experimental
-
-(S experimental::regex_sets) This warning is emitted if you
-use the syntax S<C<(?[   ])>> in a regular expression.
-The details of this feature are subject to change.
-If you want to use it, but know that in doing so you
-are taking the risk of using an experimental feature which may
-change in a future Perl version, you can do this to silence the
-warning:
-
-    no warnings "experimental::regex_sets";
-
 =item The stat preceding %s wasn't an lstat
 
 (F) It makes no sense to test the current stat buffer for symbolic
@@ -6384,6 +6391,19 @@ setting C<${^RE_COMPILE_RECURSION_LIMIT}> to some other value.  This may
 need to be done in a BEGIN block before the regular expression pattern
 is compiled.
 
+=item Too many nested BEGIN blocks, maximum of %d allowed
+
+(F) You have executed code that nests too many BEGIN blocks inside of
+each other, either explicitly as BEGIN{} or implicitly as use statements.
+This limit defaults to a rather high number which should not be exceeded
+in normal circumstances, and triggering likely indicates something is
+very wrong in your code. For instance infinite recursion of eval and
+BEGIN blocks is known to trigger this error.
+
+If you know that you have good reason to exceed the limit you can change
+it by setting C<${^MAX_NESTED_EVAL_BEGIN_BLOCKS}> to a different value from
+the default of 1000.
+
 =item Too many )'s
 
 (A) You've accidentally run your script through B<csh> instead of Perl.
@@ -6409,6 +6429,15 @@ C<$tr> or C<$y> may cause this error.
 
 (F) The lexer couldn't find the final delimiter of a tr///, tr[][],
 y/// or y[][] construct.
+
+=item Treating %s::INIT block as BEGIN block as workaround
+
+(S) A package is using an old version of C<Module::Install::DSL> to
+install, which makes unsafe assumptions about when INIT blocks will be
+called. Because C<Module::Install::DSL> is used to install other modules
+and is difficult to upgrade we have a special workaround in place to
+deal with this. Unless you are a maintainer of an affected module you
+can ignore this warning. We emit it only as a sanity check.
 
 =item '%s' trapped by operation mask
 
@@ -6752,6 +6781,21 @@ problems when being input or output, which is likely where this message
 came from.  If you really really know what you are doing you can turn
 off this warning by C<no warnings 'surrogate';>.
 
+=item Unimplemented
+
+(F) In Perl 5.12 and above, you have executed an
+L<ellipsis statement|perlsyn/"The Ellipsis Statement">.  This is a
+bare C<...;>, meant to be used to allow you to outline code that
+is to be written, but is not complete, similar to the following:
+
+    sub not_done_yet {
+      my($self, $arg1, $arg2) = @_;
+      ...
+    }
+
+If C<not_done_yet()> is called, Perl will die with an C<Unimplemented> error
+at the line containing C<...>.
+
 =item Unknown charname '%s'
 
 (F) The name you used inside C<\N{}> is unknown to Perl.  Check the
@@ -6771,6 +6815,8 @@ compiler does not recognize.  Check your spelling.
 
 (P) Perl was about to print an error message in C<$@>, but the C<$@> variable
 did not exist, even after an attempt to create it.
+
+=item Unknown locale category %d
 
 =item Unknown locale category %d; can't set it to %s
 
@@ -7164,6 +7210,18 @@ The C<"?"> and C<"+"> don't have any effect, as they modify whether to
 match more or fewer when there is a choice, and by specifying to match
 exactly a given number, there is no room left for a choice.
 
+=item Useless use of %s in scalar context
+
+(W scalar) You did something whose only interesting return value is a
+list without a side effect in scalar context, which does not accept a
+list.
+
+For example
+
+    my $x = sort @y;
+
+This is not very useful, and perl currently optimizes this away.
+
 =item Useless use of %s in void context
 
 (W void) You did something without a side effect in a context that does
@@ -7212,14 +7270,6 @@ so is futile.
 =item Useless use of "re" pragma
 
 (W) You did C<use re;> without any arguments.  That isn't very useful.
-
-=item Useless use of sort in scalar context
-
-(W scalar) You used sort in scalar context, as in :
-
-    my $x = sort @y;
-
-This is not very useful, and perl currently optimizes this away.
 
 =item Useless use of %s with no values
 
@@ -7350,6 +7400,29 @@ This was deprecated in Perl 5.004, and was made fatal in Perl 5.28.
 
 (F) You attempted to use a feature of printf that is accessible from
 only C.  This usually means there's a better way to do it in Perl.
+
+=item Use of '%s' is deprecated as a string delimiter
+
+(D deprecated) You used the given character as a starting delimiter of a
+string outside the scope of S<C<use feature 'extra_paired_delimiters'>>.
+This character is the mirror image of another Unicode character; within
+the scope of that feature, the two are considered a pair for delimitting
+strings.  It is planned to make that feature the default, at which point
+this usage would become illegal; hence this warning.
+
+For now, you may live with this warning, or turn it off, but this code
+will no longer compile in a future version of Perl.  Or you can turn on
+S<C<use feature 'extra_paired_delimiters'>> and use the character that
+is the mirror image of this one for the closing string delimiter.
+
+=item Use of '%s' is experimental as a string delimiter
+
+(S experimental::extra_paired_delimiters)   This warning is emitted if
+you use as a string delimiter one of the non-ASCII mirror image ones
+enabled by S<C<use feature 'extra_paired_delimiters'>>.  Simply suppress
+the warning if you want to use the feature, but know that in doing so
+you are taking the risk of using an experimental feature which may
+change or be removed in a future Perl version:
 
 =item Use of %s is not allowed in Unicode property wildcard
 subpatterns in regex; marked by S<<-- HERE> in m/%s/
@@ -7849,7 +7922,7 @@ the beginning of the string being (un)packed.  See L<perlfunc/pack>.
 
 =item 'x' outside of string in unpack
 
-(F) You had a pack template that specified a relative position after
+(F) You had an unpack template that specified a relative position after
 the end of the string being unpacked.  See L<perlfunc/pack>.
 
 =item YOU HAVEN'T DISABLED SET-ID SCRIPTS IN THE KERNEL YET!

@@ -5,15 +5,15 @@
 [ this is a template for a new perldelta file.  Any text flagged as XXX needs
 to be processed before release. ]
 
-perldelta - what is new for perl v5.35.10
+perldelta - what is new for perl v5.37.6
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.35.9 release and the 5.35.10
+This document describes differences between the 5.37.5 release and the 5.37.6
 release.
 
-If you are upgrading from an earlier release such as 5.35.8, first read
-L<perl5359delta>, which describes differences between 5.35.8 and 5.35.9.
+If you are upgrading from an earlier release such as 5.37.4, first read
+L<perl5375delta>, which describes differences between 5.37.4 and 5.37.5.
 
 =head1 Notice
 
@@ -26,20 +26,6 @@ enhancements.  Particularly prominent performance optimisations could go
 here, but most should go in the L</Performance Enhancements> section.
 
 [ List each enhancement as a =head2 entry ]
-
-=head2 Variable length lookbehind is mostly no longer considered experimental.
-
-Prior to this release any form of variable length lookbehind was
-considered experimental. With this release the experimental status has
-been reduced to cover only lookbehind that contains capturing parenthesis.
-This is because it is not clear if
-
-    "aaz"=~/(?=z)(?<=(a|aa))/
-
-should match and leave $1 equaling "a" or "aa". Currently it will match
-the longest possible alternative, "aa". We are confident that the overall
-construct will now match only when it should, we are not confident that we
-will keep the current "longest match" behavior.
 
 =head1 Security
 
@@ -58,6 +44,12 @@ XXX For a release on a stable branch, this section aspires to be:
     report.  See L</Reporting Bugs> below.
 
 [ List each incompatible change as a =head2 entry ]
+
+=head2 L<C<utf8::upgrade()>|utf8/Utility functions>
+
+Starting in this release, if the input string is C<undef>, it remains
+C<undef>.  Previously it would be changed into a defined, zero-length
+string.
 
 =head1 Deprecations
 
@@ -129,6 +121,14 @@ release manager will have to investigate the situation carefully.)
 
 =item *
 
+Support for RFC-18, C<use feature "module_true";> has been added to
+the default feature bundle for 5.37 and later. It may also be used
+explicitly. When enabled inside of a module the module does not need
+to return true explicitly, and in fact the return will be forced to
+a simple true value regardless of what it originally was.
+
+=item *
+
 XXX Remove this section if not applicable.
 
 =back
@@ -139,9 +139,15 @@ XXX Remove this section if not applicable.
 
 =item *
 
-L<XXX> has been upgraded from version A.xx to B.yy.
+L<Storable> has been upgraded from version 3.27 to 3.28.
 
-If there was something important to note about this change, include that here.
+The C<STORABLE_freeze> callback now supports regular expression
+objects.
+
+The error message when Storable attempts to call C<STORABLE_freeze>
+for an unsupported type such as GLOBs has been improved from
+C<"Unexpected object type (8) in store_hook()"> to indicate the perl
+object type and the class.
 
 =back
 
@@ -212,13 +218,6 @@ and New Warnings
 
 XXX L<message|perldiag/"message">
 
-=item *
-
-L<Wide character in $0|perldiag/"Wide character in %s">
-
-Attempts to put wide characters into the program name (C<$0>) now
-provoke this warning.
-
 =back
 
 =head3 New Warnings
@@ -239,13 +238,24 @@ XXX Changes (i.e. rewording) of diagnostic messages go here
 
 =item *
 
+Various warnings that used to produce parenthesized hints underneath the
+main warning message and after its "location data" were chanaged to put
+the hint inline with the main message. For instance:
+
+ Bareword found where operator expected at -e line 1, near "foo bar"
+     (Do you need to predeclare foo?)
+
+will now look like this but as one line:
+
+ Bareword found where operator expected (Do you need to predeclare
+ foo?) at -e line 1, near "foo bar"
+
+as a result such warnings will no longer trigger C<$SIG{__WARN__}>
+twice, and the hint will be visible when fatal warnings is in effect.
+
+=item *
+
 XXX Describe change here
-
-=item * New 'scalar' category for "Useless use of sort in scalar context"
-
-When C<sort> is used in scalar context, it provokes a warning that this is not
-useful. This warning used to be in the C<void> category. A new category for
-warnings about scalar context has now been added, called C<scalar>.
 
 =back
 
@@ -261,6 +271,12 @@ Use L<XXX> with program names to get proper documentation linking. ]
 =head2 L<XXX>
 
 =over 4
+
+=item *
+
+C<I32>/C<U32> formatting symbols added in 5.37.2, C<I32df>, C<U32xf>, etc.
+used to be defined in F<perl.h> using preprocessor conditionals.
+They are now determined in F<Configure> and defined in F<config.h>.
 
 =item *
 
@@ -330,6 +346,14 @@ source tree.
 
 =over 4
 
+=item Windows
+
+stat() now works on AF_UNIX socket files. [github #20204]
+
+readlink() now returns the C<PrintName> from a symbolic link reparse
+point instead of the C<SubstituteName>, which should make it better
+match the name the link was created with.  [github #20271]
+
 =item XXX-some-platform
 
 XXX
@@ -375,14 +399,16 @@ well.
 
 =item *
 
-XXX
+A new magic type C<PERL_MAGIC_extvalue> has been added. This is available for
+use like C<PERL_MAGIC_ext>, but is a value magic: upon localization the new
+value will not be magical.
 
 =item *
 
-C<sv_dump> (and L<Devel::Peek>’s C<Dump> function) now escapes high-bit
-octets in the PV as hex rather than octal. Since most folks understand hex
-more readily than octal, this should make these dumps a bit more legible.
-This does B<not> affect any other diagnostic interfaces like C<pv_display>.
+The C<SSNEW()>, C<SSNEWt()>, C<SSNEWa()> and C<SSNEWat()> APIs now
+return a C<SSize_t> value.  The C<SSPTR()> and C<SSPTRt()> macros now
+expect a C<SSize_t> parameter, and enforce that on debugging builds.
+[github #20411]
 
 =back
 
@@ -397,7 +423,20 @@ files in F<ext/> and F<lib/> are best summarized in L</Modules and Pragmata>.
 
 =item *
 
-XXX
+Fixes to memory handling for C<PL_splitstr>:
+
+=over
+
+=item *
+
+If a thread was created the allocated string would be freed twice.
+
+=item *
+
+If two C<-F> switches were supplied the memory allocated for the first
+switch wouldn't be freed.
+
+=back
 
 =back
 
@@ -437,7 +476,7 @@ died, add a short obituary here.
 
 XXX Generate this with:
 
-  perl Porting/acknowledgements.pl v5.35.9..HEAD
+  perl Porting/acknowledgements.pl v5.37.5..HEAD
 
 =head1 Reporting Bugs
 

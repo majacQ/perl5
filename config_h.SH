@@ -1495,6 +1495,10 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	Can we handle GCC attribute for functions that should always be
  *	inlined.
  */
+/* HASATTRIBUTE_VISIBILITY:
+ *	Can we handle GCC attribute for functions that should have a
+ *	different visibility.
+ */
 #$d_attribute_deprecated HASATTRIBUTE_DEPRECATED	/**/
 #$d_attribute_format HASATTRIBUTE_FORMAT	/**/
 #$d_printf_format_null PRINTF_FORMAT_NULL_OK	/**/
@@ -1505,6 +1509,7 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #$d_attribute_unused HASATTRIBUTE_UNUSED	/**/
 #$d_attribute_warn_unused_result HASATTRIBUTE_WARN_UNUSED_RESULT	/**/
 #$d_attribute_always_inline HASATTRIBUTE_ALWAYS_INLINE	/**/
+#$d_attribute_visibility HASATTRIBUTE_VISIBILITY	/**/
 
 /* HAS_BACKTRACE:
  *	This symbol, if defined, indicates that the backtrace() routine is
@@ -3294,6 +3299,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_sendmsg HAS_SENDMSG		/**/
 
+/* HAS_SETENV:
+ *	This symbol, if defined, indicates that the setenv routine is
+ *	available for use.
+ */
+#$d_setenv HAS_SETENV		/**/
+
 /* HAS_SETITIMER:
  *	This symbol, if defined, indicates that the setitimer routine is
  *	available to set interval timers.
@@ -3400,9 +3411,9 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	does have the f_flags member containing the mount flags of
  *	the filesystem containing the file.
  *	This kind of struct statfs is coming from <sys/mount.h> (BSD 4.3),
- *	not from <sys/statfs.h> (SYSV).  Older BSDs (like Ultrix) do not
- *	have statfs() and struct statfs, they have ustat() and getmnt()
- *	with struct ustat and struct fs_data.
+ *	not from <sys/statfs.h> (SYSV).  Older BSDs do not have statfs() and
+ *	struct statfs, they have ustat() and getmnt() with struct ustat and
+ *	struct fs_data.
  */
 #$d_statfs_f_flags HAS_STRUCT_STATFS_F_FLAGS		/**/
 
@@ -4180,6 +4191,26 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	This symbol defines the format string used for printing a Perl NV
  *	using %g-ish floating point format.
  */
+/* I32df:
+ *	This symbol defines the format string used for printing a Perl I32
+ *	as a signed decimal integer.
+ */
+/* U32uf:
+ *	This symbol defines the format string used for printing a Perl U32
+ *	as an unsigned decimal integer.
+ */
+/* U32of:
+ *	This symbol defines the format string used for printing a Perl U32
+ *	as an unsigned octal integer.
+ */
+/* U32xf:
+ *	This symbol defines the format string used for printing a Perl U32
+ *	as an unsigned hexadecimal integer in lowercase abcdef.
+ */
+/* U32Xf:
+ *	This symbol defines the format string used for printing a Perl U32
+ *	as an unsigned hexadecimal integer in uppercase ABCDEF.
+ */
 #define	IVdf		$ivdformat		/**/
 #define	UVuf		$uvuformat		/**/
 #define	UVof		$uvoformat		/**/
@@ -4188,6 +4219,11 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define	NVef		$nveformat		/**/
 #define	NVff		$nvfformat		/**/
 #define	NVgf		$nvgformat		/**/
+#define	I32df		$i32dformat		/**/
+#define	U32uf		$u32uformat		/**/
+#define	U32of		$u32oformat		/**/
+#define	U32xf		$u32xformat		/**/
+#define	U32Xf		$u32XUformat		/**/
 
 /* SELECT_MIN_BITS:
  *	This symbol holds the minimum number of bits operated by select.

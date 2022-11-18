@@ -58,6 +58,7 @@ PP(pp_nextstate)
 PP(pp_gvsv)
 {
     dSP;
+    assert(SvTYPE(cGVOP_gv) == SVt_PVGV);
     EXTEND(SP,1);
     if (UNLIKELY(PL_op->op_private & OPpLVAL_INTRO))
         PUSHs(save_scalar(cGVOP_gv));
@@ -96,6 +97,9 @@ PP(pp_stringify)
 PP(pp_gv)
 {
     dSP;
+    /* cGVOP_gv might be a real GV or might be an RV to a CV */
+    assert(SvTYPE(cGVOP_gv) == SVt_PVGV ||
+           (SvTYPE(cGVOP_gv) <= SVt_PVMG && SvROK(cGVOP_gv) && SvTYPE(SvRV(cGVOP_gv)) == SVt_PVCV));
     XPUSHs(MUTABLE_SV(cGVOP_gv));
     RETURN;
 }
@@ -121,6 +125,98 @@ PP(pp_and)
             return cLOGOP->op_other;
         }
     }
+}
+
+/*
+ * Mashup of simple padsv + sassign OPs
+ * Doesn't support the following lengthy and unlikely sassign case:
+ *    (UNLIKELY(PL_op->op_private & OPpASSIGN_CV_TO_GV))
+ *  These cases have a separate optimization, so are not handled here:
+ *    (PL_op->op_private & OPpASSIGN_BACKWARDS) {or,and,dor}assign
+*/
+
+PP(pp_padsv_store)
+{
+    dSP;
+    OP * const op = PL_op;
+    SV** const padentry = &PAD_SVl(op->op_targ);
+    SV* targ = *padentry; /* lvalue to assign into */
+    SV* const val = TOPs; /* RHS value to assign */
+
+    /* !OPf_STACKED is not handled by this OP */
+    assert(op->op_flags & OPf_STACKED);
+
+    /* Inlined, simplified pp_padsv here */
+    if ((op->op_private & (OPpLVAL_INTRO|OPpPAD_STATE)) == OPpLVAL_INTRO) {
+        save_clearsv(padentry);
+    }
+
+    /* Inlined, simplified pp_sassign from here */
+    assert(TAINTING_get || !TAINT_get);
+    if (UNLIKELY(TAINT_get) && !SvTAINTED(val))
+        TAINT_NOT;
+
+    if (
+      UNLIKELY(SvTEMP(targ)) && !SvSMAGICAL(targ) && SvREFCNT(targ) == 1 &&
+      (!isGV_with_GP(targ) || SvFAKE(targ)) && ckWARN(WARN_MISC)
+    )
+        Perl_warner(aTHX_
+            packWARN(WARN_MISC), "Useless assignment to a temporary"
+        );
+    SvSetMagicSV(targ, val);
+
+    SETs(targ);
+    RETURN;
+}
+
+/* A mashup of simplified AELEMFAST_LEX + SASSIGN OPs */
+
+PP(pp_aelemfastlex_store)
+{
+    dSP;
+    OP * const op = PL_op;
+    SV* const val = TOPs; /* RHS value to assign */
+    AV * const av = MUTABLE_AV(PAD_SV(op->op_targ));
+    const I8 key   = (I8)PL_op->op_private;
+    SV * targ = NULL;
+
+    /* !OPf_STACKED is not handled by this OP */
+    assert(op->op_flags & OPf_STACKED);
+
+    /* Inlined, simplified pp_aelemfast here */
+    assert(SvTYPE(av) == SVt_PVAV);
+
+    /* inlined av_fetch() for simple cases ... */
+    if (!SvRMAGICAL(av) && key >=0 && key <= AvFILLp(av)) {
+        targ = AvARRAY(av)[key];
+    }
+    /* ... else do it the hard way */
+    if (!targ) {
+        SV **svp = av_fetch(av, key, 1);
+
+        if (svp)
+            targ = *svp;
+        else
+            DIE(aTHX_ PL_no_aelem, (int)key);
+    }
+
+    /* Inlined, simplified pp_sassign from here */
+    assert(TAINTING_get || !TAINT_get);
+    if (UNLIKELY(TAINT_get) && !SvTAINTED(val))
+        TAINT_NOT;
+
+    /* This assertion is a deviation from pp_sassign, which uses an if()
+     * condition to check for "Useless assignment to a temporary" and
+     * warns if the condition is true. Here, the condition should NEVER
+     * be true when the LHS is the result of an array fetch. The
+     * assertion is here as a final check that this remains the case.
+     */
+    assert(!(SvTEMP(targ) && SvREFCNT(targ) == 1 && !SvSMAGICAL(targ)));
+
+    SvSetMagicSV(targ, val);
+
+    SETs(targ);
+    RETURN;
 }
 
 PP(pp_sassign)
@@ -1637,6 +1733,9 @@ PP(pp_aelemfast)
         if (sv) {
             PUSHs(sv);
             RETURN;
+        } else if (!lval) {
+            PUSHs(&PL_sv_undef);
+            RETURN;
         }
     }
 
@@ -2222,7 +2321,7 @@ PP(pp_aassign)
     SV **relem;
     SV **lelem;
     U8 gimme;
-    /* PL_delaymagic is restored by JUMPENV_POP on dieing, so we
+    /* PL_delaymagic is restored by JMPENV_POP on dieing, so we
      * only need to save locally, not on the save stack */
     U16 old_delaymagic = PL_delaymagic;
 #ifdef DEBUGGING
@@ -3285,14 +3384,19 @@ Perl_do_readline(pTHX)
                 || SNARF_EOF(gimme, PL_rs, io, sv)
                 || PerlIO_error(fp)))
         {
-            PerlIO_clearerr(fp);
             if (IoFLAGS(io) & IOf_ARGV) {
                 fp = nextargv(PL_last_in_gv, PL_op->op_flags & OPf_SPECIAL);
-                if (fp)
+                if (fp) {
                     continue;
+                }
                 (void)do_close(PL_last_in_gv, FALSE);
             }
             else if (type == OP_GLOB) {
+                /* clear any errors here so we only fail on the pclose()
+                   failing, which should only happen on the child
+                   failing
+                */
+                PerlIO_clearerr(fp);
                 if (!do_close(PL_last_in_gv, FALSE)) {
                     Perl_ck_warner(aTHX_ packWARN(WARN_GLOB),
                                    "glob failed (child exited with status %d%s)",
@@ -3389,7 +3493,7 @@ PP(pp_helem)
         MAGIC *mg;
         HV *stash;
 
-        /* If we can determine whether the element exist,
+        /* If we can determine whether the element exists,
          * Try to preserve the existenceness of a tied hash
          * element by using EXISTS and DELETE if possible.
          * Fallback to FETCH and STORE otherwise. */
@@ -4247,7 +4351,6 @@ PP(pp_subst)
     STRLEN len;
     int force_on_match = 0;
     const I32 oldsave = PL_savestack_ix;
-    STRLEN slen;
     bool doutf8 = FALSE; /* whether replacement is in utf8 */
 #ifdef PERL_ANY_COW
     bool was_cow;
@@ -4313,10 +4416,12 @@ PP(pp_subst)
         DIE(aTHX_ "panic: pp_subst, pm=%p, orig=%p", pm, orig);
 
     strend = orig + len;
-    slen = DO_UTF8(TARG) ? utf8_length((U8*)orig, (U8*)strend) : len;
-    maxiters = 2 * slen + 10;	/* We can match twice at each
-                                   position, once with zero-length,
-                                   second time with non-zero. */
+    /* We can match twice at each position, once with zero-length,
+     * second time with non-zero.
+     * Don't handle utf8 specially; we can use length-in-bytes as an
+     * upper bound on length-in-characters, and avoid the cpu-cost of
+     * computing a tighter bound. */
+    maxiters = 2 * len + 10;
 
     /* handle the empty pattern */
     if (!RX_PRELEN(rx) && PL_curpm && !prog->mother_re) {
@@ -5657,7 +5762,7 @@ PP(pp_method_named)
 {
     dSP;
     GV* gv;
-    SV* const meth = cMETHOPx_meth(PL_op);
+    SV* const meth = cMETHOP_meth;
     HV* const stash = opmethod_stash(meth);
 
     if (LIKELY(SvTYPE(stash) == SVt_PVHV)) {
@@ -5676,7 +5781,7 @@ PP(pp_method_super)
     dSP;
     GV* gv;
     HV* cache;
-    SV* const meth = cMETHOPx_meth(PL_op);
+    SV* const meth = cMETHOP_meth;
     HV* const stash = CopSTASH(PL_curcop);
     /* Actually, SUPER doesn't need real object's (or class') stash at all,
      * as it uses CopSTASH. However, we must ensure that object(class) is
@@ -5698,12 +5803,12 @@ PP(pp_method_redir)
 {
     dSP;
     GV* gv;
-    SV* const meth = cMETHOPx_meth(PL_op);
-    HV* stash = gv_stashsv(cMETHOPx_rclass(PL_op), 0);
+    SV* const meth = cMETHOP_meth;
+    HV* stash = gv_stashsv(cMETHOP_rclass, 0);
     opmethod_stash(meth); /* not used but needed for error checks */
 
     if (stash) { METHOD_CHECK_CACHE(stash, stash, meth); }
-    else stash = MUTABLE_HV(cMETHOPx_rclass(PL_op));
+    else stash = MUTABLE_HV(cMETHOP_rclass);
 
     gv = gv_fetchmethod_sv_flags(stash, meth, GV_AUTOLOAD|GV_CROAK);
     assert(gv);
@@ -5717,11 +5822,11 @@ PP(pp_method_redir_super)
     dSP;
     GV* gv;
     HV* cache;
-    SV* const meth = cMETHOPx_meth(PL_op);
-    HV* stash = gv_stashsv(cMETHOPx_rclass(PL_op), 0);
+    SV* const meth = cMETHOP_meth;
+    HV* stash = gv_stashsv(cMETHOP_rclass, 0);
     opmethod_stash(meth); /* not used but needed for error checks */
 
-    if (UNLIKELY(!stash)) stash = MUTABLE_HV(cMETHOPx_rclass(PL_op));
+    if (UNLIKELY(!stash)) stash = MUTABLE_HV(cMETHOP_rclass);
     else if ((cache = HvMROMETA(stash)->super)) {
          METHOD_CHECK_CACHE(stash, cache, meth);
     }

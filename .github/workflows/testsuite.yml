@@ -1,3 +1,52 @@
+#
+# Run the tests on various build configurations and various operating systems.
+#
+# In the Perl/perl5 repository all jobs are run by default.
+#
+# To enable the testing on a fork of the perl5 repository you first need to
+# enable GitHub Actions in 'Settings' -> 'Actions' -> 'General'.
+#
+# When actions are enabled then it will - by default - run the 'Sanity Check' job.
+#
+# Testing other build configurations is controlled by the 'Secrets' configured
+# in 'Settings' -> 'Secrets' -> 'Actions' -> 'Repository Secrets':
+#   - EXTENDED_TESTING: when this secret exists and is set to a true value then
+#     all build configurations are tested;
+#   - CI_SKIP_SANITY: if set to a true value then most of the 'Sanity Check' job is skipped;
+#   - CI_FORCE_LINUX: if set to a true value: run the 'linux' job;
+#   - CI_FORCE_LINUX_I386: if set to a true value: run the 'linux-i386' job;
+#   - CI_FORCE_INSTALL: if set to a true value: run the 'install' job;
+#   - CI_FORCE_MACOS: if set to a true value: run the 'smoke-macos-catalina-xcode12' job;
+#   - CI_FORCE_MSVC142: if set to a true value: run the 'windows-msvc142' job;
+#   - CI_FORCE_MINGW64: if set to a true value: run the 'mingw64' job;
+#   - CI_FORCE_CYGWIN: if set to a true value: run the 'cygwin' job;
+#   - CI_FORCE_MINITEST: if set to a true value: run the 'miniperl' job;
+#   - CI_FORCE_ASAN: if set to a true value: run the 'ASAN' job;
+#   - CI_FORCE_PERL_UNICODE: if set to a true value: run the 'PERL_UNICODE' job;
+#   - CI_FORCE_DIST_MODULES: if set to a true value: run the 'dist-modules' job;
+#
+# For the purpose of this workflow:
+#   - 'true value': any value that is not false
+#   - 'false value':
+#      * empty string
+#      * string containing only spaces (i.e. '    ')
+#      * string containing only zeroes (i.e. '0', '0000')
+#      * string containing only spaces and zeroes (i.e. '0  0 0 0')
+#
+# When setting a value it's best to set a long and complex value
+# since GitHub will mask the secrets in the output. Which means if you
+# set (for example) EXTENDED_TESTING to 1 then all occurrences of '1'
+# are replaced with '*'. (e.g. `s/1/*/g;`). So it's recommended to set
+# something that is unlikely to occur in the job(/build/test) output
+# (for example: '111111111111111111', 'Rumpelstiltskin', ...).
+#
+# Example: if you only want to run tests on cygwin then you can set:
+#   - EXTENDED_TESTING=00000000000000000000000000000000000000
+#   - CI_SKIP_SANITY=1111111111111111111111111111111111111111
+#   - CI_FORCE_CYGWIN=111111111111111111111111111111111111111
+#   - (and all other CI_FORCE_... secrets to 0000000000000000)
+#
+
 name: testsuite
 
 on:
@@ -18,13 +67,16 @@ env:
   PERL_SKIP_TTY_TEST: 1
   CONTINUOUS_INTEGRATION: 1
 
+permissions:
+  contents: read # to fetch code
+
 jobs:
   #  ___           _         ___       __                    _   _
   # / __|_ __  ___| |_____  |_ _|_ _  / _|___ _ _ _ __  __ _| |_(_)___ _ _  ___
   # \__ \ '  \/ _ \ / / -_)  | || ' \|  _/ _ \ '_| '  \/ _` |  _| / _ \ ' \(_-<
   # |___/_|_|_\___/_\_\___| |___|_||_|_| \___/_| |_|_|_\__,_|\__|_\___/_||_/__/
 
-  authors:
+  involved_authors_debug:
     runs-on: ubuntu-latest
     if: ( github.event.pull_request.head.repo.full_name == 'Perl/perl5' || github.repository == 'Perl/perl5' ) && github.base_ref != ''
     continue-on-error: true
@@ -47,7 +99,9 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
       - name: Involved authors
         run: |
-          git log --pretty=format:"Author: %an <%ae>" origin/${BASE_REF}...${SHA}^2 | sort -u
+          echo "Authors from origin/${BASE_REF}..${SHA}^2"
+          echo "specifically: $(git rev-parse origin/${BASE_REF})..$(git rev-parse ${SHA}^2)"
+          git log --pretty=format:"Author: %aN <%aE>" origin/${BASE_REF}..${SHA}^2 | sort | uniq -c
         env:
           BASE_REF: ${{ github.base_ref }}
           SHA: ${{ github.sha }}
@@ -78,38 +132,86 @@ jobs:
 
     outputs:
       run_all_jobs: ${{ steps.check_extended_testing.outputs.run_all_jobs }}
+      ci_force_linux: ${{ steps.ci_config.outputs.ci_force_linux }}
+      ci_force_linux_i386: ${{ steps.ci_config.outputs.ci_force_linux_i386 }}
+      ci_force_install: ${{ steps.ci_config.outputs.ci_force_install }}
+      ci_force_macos: ${{ steps.ci_config.outputs.ci_force_macos }}
+      ci_force_msvc142: ${{ steps.ci_config.outputs.ci_force_msvc142 }}
+      ci_force_mingw64: ${{ steps.ci_config.outputs.ci_force_mingw64 }}
+      ci_force_cygwin: ${{ steps.ci_config.outputs.ci_force_cygwin }}
+      ci_force_minitest: ${{ steps.ci_config.outputs.ci_force_minitest }}
+      ci_force_asan: ${{ steps.ci_config.outputs.ci_force_asan }}
+      ci_force_perl_unicode: ${{ steps.ci_config.outputs.ci_force_perl_unicode }}
+      ci_force_dist_modules: ${{ steps.ci_config.outputs.ci_force_dist_modules }}
 
     steps:
       - name: Dump GitHub context
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
         run: echo "$GITHUB_CONTEXT"
+      - name: Check what-to-do
+        id: ci_config
+        env:
+          CI_SKIP_SANITY: ${{ secrets.CI_SKIP_SANITY }}
+          CI_FORCE_LINUX: ${{ secrets.CI_FORCE_LINUX }}
+          CI_FORCE_LINUX_I386: ${{ secrets.CI_FORCE_LINUX_I386 }}
+          CI_FORCE_INSTALL: ${{ secrets.CI_FORCE_INSTALL }}
+          CI_FORCE_MACOS: ${{ secrets.CI_FORCE_MACOS }}
+          CI_FORCE_MSVC142: ${{ secrets.CI_FORCE_MSVC142 }}
+          CI_FORCE_MINGW64: ${{ secrets.CI_FORCE_MINGW64 }}
+          CI_FORCE_CYGWIN: ${{ secrets.CI_FORCE_CYGWIN }}
+          CI_FORCE_MINITEST: ${{ secrets.CI_FORCE_MINITEST }}
+          CI_FORCE_ASAN: ${{ secrets.CI_FORCE_ASAN }}
+          CI_FORCE_PERL_UNICODE: ${{ secrets.CI_FORCE_PERL_UNICODE }}
+          CI_FORCE_DIST_MODULES: ${{ secrets.CI_FORCE_DIST_MODULES }}
+        run: |
+          echo '::echo::on'
+          [[ -n "${CI_SKIP_SANITY}"        ]] && [[ "${CI_SKIP_SANITY%[!0 ]*}"        != "${CI_SKIP_SANITY}"        ]] && echo "ci_skip_sanity=true" >> "$GITHUB_OUTPUT"
+          [[ -n "${CI_FORCE_LINUX}"        ]] && [[ "${CI_FORCE_LINUX%[!0 ]*}"        != "${CI_FORCE_LINUX}"        ]] && echo "ci_force_linux=true" >> "$GITHUB_OUTPUT"
+          [[ -n "${CI_FORCE_LINUX_I386}"   ]] && [[ "${CI_FORCE_LINUX_I386%[!0 ]*}"   != "${CI_FORCE_LINUX_I386}"   ]] && echo "ci_force_linux_i386=true" >> "$GITHUB_OUTPUT"
+          [[ -n "${CI_FORCE_INSTALL}"      ]] && [[ "${CI_FORCE_INSTALL%[!0 ]*}"      != "${CI_FORCE_INSTALL}"      ]] && echo "ci_force_install=true" >> "$GITHUB_OUTPUT"
+          [[ -n "${CI_FORCE_MACOS}"        ]] && [[ "${CI_FORCE_MACOS%[!0 ]*}"        != "${CI_FORCE_MACOS}"        ]] && echo "ci_force_macos=true" >> "$GITHUB_OUTPUT"
+          [[ -n "${CI_FORCE_MSVC142}"      ]] && [[ "${CI_FORCE_MSVC142%[!0 ]*}"      != "${CI_FORCE_MSVC142}"      ]] && echo "ci_force_msvc142=true" >> "$GITHUB_OUTPUT"
+          [[ -n "${CI_FORCE_MINGW64}"      ]] && [[ "${CI_FORCE_MINGW64%[!0 ]*}"      != "${CI_FORCE_MINGW64}"      ]] && echo "ci_force_mingw64=true" >> "$GITHUB_OUTPUT"
+          [[ -n "${CI_FORCE_CYGWIN}"       ]] && [[ "${CI_FORCE_CYGWIN%[!0 ]*}"       != "${CI_FORCE_CYGWIN}"       ]] && echo "ci_force_cygwin=true" >> "$GITHUB_OUTPUT"
+          [[ -n "${CI_FORCE_MINITEST}"     ]] && [[ "${CI_FORCE_MINITEST%[!0 ]*}"     != "${CI_FORCE_MINITEST}"     ]] && echo "ci_force_minitest=true" >> "$GITHUB_OUTPUT"
+          [[ -n "${CI_FORCE_ASAN}"         ]] && [[ "${CI_FORCE_ASAN%[!0 ]*}"         != "${CI_FORCE_ASAN}"         ]] && echo "ci_force_asan=true" >> "$GITHUB_OUTPUT"
+          [[ -n "${CI_FORCE_PERL_UNICODE}" ]] && [[ "${CI_FORCE_PERL_UNICODE%[!0 ]*}" != "${CI_FORCE_PERL_UNICODE}" ]] && echo "ci_force_perl_unicode=true" >> "$GITHUB_OUTPUT"
+          [[ -n "${CI_FORCE_DIST_MODULES}" ]] && [[ "${CI_FORCE_DIST_MODULES%[!0 ]*}" != "${CI_FORCE_DIST_MODULES}" ]] && echo "ci_force_dist_modules=true" >> "$GITHUB_OUTPUT"
+          echo '::echo::off'
       - name: Install System dependencies
+        if: steps.ci_config.outputs.ci_skip_sanity != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgdbm-dev libdb-dev
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: git cfg + fetch tags
+        if: steps.ci_config.outputs.ci_skip_sanity != 'true'
+      - name: git cfg
+        if: steps.ci_config.outputs.ci_skip_sanity != 'true'
         run: |
           git config diff.renameLimit 999999
-          git fetch --depth=1 origin +refs/tags/*:refs/tags/*
       - name: Configure
+        if: steps.ci_config.outputs.ci_skip_sanity != 'true'
         run: |
           ./Configure -des -Dusedevel ${CONFIGURE_ARGS} -Dprefix="$HOME/perl-blead"
         env:
           CONFIGURE_ARGS: "-Dusethreads"
       - name: Build
+        if: steps.ci_config.outputs.ci_skip_sanity != 'true'
+        id: build
         run: |
           make -j2 test_prep
       - name: Show Config
+        if: steps.ci_config.outputs.ci_skip_sanity != 'true'
         run: |
           ./perl -Ilib -V
           ./perl -Ilib -e 'use Config; print Config::config_sh'
-      - name: Run Tests
+      - name: Run Tests (excluding t/porting)
+        if: steps.ci_config.outputs.ci_skip_sanity != 'true'
         run: |
-          TEST_JOBS=2 ./perl t/harness
+          TEST_JOBS=2 ./perl t/harness -nre='^porting/'
 
       # Set a variable for dependent jobs to signal if full testsuite is enabled
       - name: "Check if EXTENDED_TESTING is set"
@@ -118,13 +220,21 @@ jobs:
           EXTENDED_TESTING: ${{ secrets.EXTENDED_TESTING }}
           CURRENT_REPOSITORY: ${{ github.repository }}
         run: |
-          if [[ -z "${EXTENDED_TESTING}" && "${CURRENT_REPOSITORY}" != 'Perl/perl5' ]]; then
-            echo "Skipping extended test jobs."
-            echo "::set-output name=run_all_jobs::false"
-          else
+          if [[ "${CURRENT_REPOSITORY}" = 'Perl/perl5' ]]; then
             echo "Running all test jobs"
-            echo "::set-output name=run_all_jobs::true"
+            echo "run_all_jobs=true" >> "$GITHUB_OUTPUT"
+          elif [[ -n "${EXTENDED_TESTING}" ]] && [[ "${EXTENDED_TESTING%[!0 ]*}" != "${EXTENDED_TESTING}" ]]; then
+            echo "Running all test jobs"
+            echo "run_all_jobs=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping extended test jobs."
+            echo "run_all_jobs=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Run Porting Tests (t/porting)
+        if: (! cancelled() && steps.ci_config.outputs.ci_skip_sanity != 'true' && steps.build.outcome == 'success')
+        run: |
+          TEST_JOBS=2 ./perl t/harness -re='^porting/'
 
   #  _ _
   # | (_)_ _ _  ___ __
@@ -135,7 +245,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     needs: sanity_check
-    if: needs.sanity_check.outputs.run_all_jobs == 'true'
+    if: (! cancelled() && (needs.sanity_check.outputs.run_all_jobs == 'true' || needs.sanity_check.outputs.ci_force_linux == 'true'))
 
     strategy:
       fail-fast: false
@@ -149,6 +259,7 @@ jobs:
           - "-Duseshrplib -Dusequadmath -Dusecbacktrace -Dusethreads"
           - "-Duserelocatableinc"
           - "-Dcc='clang'"
+          - "-Dcc='g++'"
 
     steps:
       - name: Install System dependencies
@@ -156,10 +267,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgdbm-dev libdb-dev
       - uses: actions/checkout@v2
-      - name: git cfg + fetch tags
+      - name: git cfg
         run: |
           git config diff.renameLimit 999999
-          git fetch --depth=1 origin +refs/tags/*:refs/tags/*
       - name: Configure
         run: |
           ./Configure -des -Dusedevel ${{ matrix.CONFIGURE_ARGS }} -Dprefix="$HOME/perl-blead" -DDEBUGGING
@@ -191,7 +301,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     needs: sanity_check
-    if: needs.sanity_check.outputs.run_all_jobs == 'true'
+    if: (! cancelled() && (needs.sanity_check.outputs.run_all_jobs == 'true' || needs.sanity_check.outputs.ci_force_linux_i386 == 'true'))
 
     # https://hub.docker.com/r/i386/ubuntu/
     container:
@@ -208,14 +318,20 @@ jobs:
         run: |
           apt-get update
           apt-get install -y build-essential git-core libgdbm-dev libdb-dev
-      # actions/checkout@v2 doesn't work in a container, so we use v1.
+      # actions/checkout@v2 doesn't work in a i386 container: the GitHub runner
+      # uses `node` that is installed on the host inside the container. The host
+      # is (likely) running x86_64 and using a binary build for x86_64 inside a
+      # i386 container just doesn't work.
+      # Upstream reports:
+      # - https://github.com/actions/checkout/issues/334#issuecomment-1241306390
+      # - https://github.com/actions/runner/issues/2115
       - uses: actions/checkout@v1
-      - name: fix git remote credential
-        run: git remote set-url origin "https://$GITHUB_ACTOR:${{ secrets.GITHUB_TOKEN }}@github.com/$GITHUB_REPOSITORY"
-      - name: git cfg + fetch tags
+        with:
+          fetch-depth: 1
+      - name: git cfg
         run: |
+          git config --global --add safe.directory /__w/perl5/perl5
           git config diff.renameLimit 999999
-          git fetch --depth=1 origin +refs/tags/*:refs/tags/*
       - name: Configure
         run: |
           ./Configure -des -Dusedevel ${{ matrix.CONFIGURE_ARGS }} -Dprefix="$HOME/perl-blead"
@@ -243,7 +359,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     needs: sanity_check
-    if: needs.sanity_check.outputs.run_all_jobs == 'true'
+    if: (! cancelled() && (needs.sanity_check.outputs.run_all_jobs == 'true' || needs.sanity_check.outputs.ci_force_install == 'true'))
 
     steps:
       - name: Install System dependencies
@@ -251,10 +367,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgdbm-dev libdb-dev
       - uses: actions/checkout@v2
-      - name: git cfg + fetch tags
+      - name: git cfg
         run: |
           git config diff.renameLimit 999999
-          git fetch --depth=1 origin +refs/tags/*:refs/tags/*
       - name: Configure
         run: |
           ./Configure -des -Dusedevel -Duseshrplib -Dusesitecustomize -Duselongdouble -Dprefix="$HOME/perl-blead" -DDEBUGGING
@@ -288,12 +403,12 @@ jobs:
   # | '  \/ _` / _| (_) \__ \
   # |_|_|_\__,_\__|\___/|___/
 
-  smoke-macos-catalina-xcode12:
-    name: "macOS (catalina) xcode 12"
-    runs-on: macos-10.15
+  smoke-macos-big-sur-xcode13:
+    name: "macOS (big sur) xcode 13"
+    runs-on: macos-11
     timeout-minutes: 120
     needs: sanity_check
-    if: needs.sanity_check.outputs.run_all_jobs == 'true'
+    if: (! cancelled() && (needs.sanity_check.outputs.run_all_jobs == 'true' || needs.sanity_check.outputs.ci_force_macos == 'true'))
 
     strategy:
       fail-fast: false
@@ -306,7 +421,6 @@ jobs:
       - uses: actions/checkout@v2
       - name: Configure
         run: |
-          export SDK=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.15.sdk
           sh ./Configure -des -Dusedevel ${{ matrix.CONFIGURE_ARGS }}
       - name: Build
         run: |
@@ -329,7 +443,7 @@ jobs:
     runs-on: windows-2019
     timeout-minutes: 120
     needs: sanity_check
-    if: needs.sanity_check.outputs.run_all_jobs == 'true'
+    if: (! cancelled() && (needs.sanity_check.outputs.run_all_jobs == 'true' || needs.sanity_check.outputs.ci_force_msvc142 == 'true'))
 
     steps:
       - run: git config --global core.autocrlf false
@@ -360,7 +474,7 @@ jobs:
         run: |
           call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           cd win32
-          nmake CCTYPE=MSVC142
+          nmake CCTYPE=MSVC142 CFG=Debug
       - name: Show Config
         shell: cmd
         run: |
@@ -371,7 +485,7 @@ jobs:
         run: |
           call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           cd win32
-          nmake CCTYPE=MSVC142 test
+          nmake CCTYPE=MSVC142 CFG=Debug test
 
   #            _                       __   _  _
   #  _ __ ___ (_)_ __   __ ___      __/ /_ | || |
@@ -385,7 +499,7 @@ jobs:
     runs-on: windows-2019
     timeout-minutes: 120
     needs: sanity_check
-    if: needs.sanity_check.outputs.run_all_jobs == 'true'
+    if: (! cancelled() && (needs.sanity_check.outputs.run_all_jobs == 'true' || needs.sanity_check.outputs.ci_force_mingw64 == 'true'))
 
     steps:
       - run: git config --global core.autocrlf false
@@ -410,7 +524,7 @@ jobs:
         shell: cmd
         run: |
           cd win32
-          gmake CCHOME=C:\strawberry\c -f GNUMakefile -j2
+          gmake CCHOME=C:\strawberry\c CFG=Debug -f GNUMakefile -j2
       - name: Show Config
         shell: cmd
         run: |
@@ -421,7 +535,7 @@ jobs:
         run: |
           cd win32
           set HARNESS_OPTIONS=j2
-          gmake CCHOME=C:\strawberry\c -f GNUMakefile test
+          gmake CCHOME=C:\strawberry\c CFG=Debug -f GNUMakefile test
 
   #                            _
   #   ___ _   _  __ ___      _(_)_ __
@@ -435,43 +549,65 @@ jobs:
     runs-on: windows-2019
     timeout-minutes: 120
     needs: sanity_check
-    if: needs.sanity_check.outputs.run_all_jobs == 'true'
+    if: (! cancelled() && (needs.sanity_check.outputs.run_all_jobs == 'true' || needs.sanity_check.outputs.ci_force_cygwin == 'true'))
 
     steps:
       # we use Cygwin git, so no need to configure git here.
 
       - name: Set up Cygwin
-        shell: cmd
-        run: |
-          choco install cygwin --params="/InstallDir:%GITHUB_WORKSPACE%\cygwin"
-          choco install cyg-get
-          cyg-get cygwin-devel gcc-core gcc gcc-g++ make cygwin64-w32api-headers ^
-                  binutils libtool git ccache lib libgdbm-devel libdb-devel
+        uses: cygwin/cygwin-install-action@v2
+        with:
+          packages: >
+              cygwin-devel gcc-core gcc-g++ make w32api-headers binutils libtool
+              git ccache libgdbm-devel libdb-devel
+          install-dir: ${{ github.workspace }}\cygwin
       - name: Check out using Cygwin git, to ensure correct file permissions
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: cmd
+          PATH: /usr/bin:/bin
+          SHELLOPTS: igncr
+        shell: sh
         run: |
-          path %GITHUB_WORKSPACE%\cygwin\bin;%GITHUB_WORKSPACE%\cygwin\usr\bin
-          sh -c "git config --global core.autocrlf false"
-          sh -c "mkdir -p ~; cd ~; git clone -qn \"https://$GITHUB_ACTOR:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY\" work ; cd work ; if [ \"$GITHUB_EVENT_NAME\" = pull_request ] ; then git fetch origin \"$GITHUB_REF\" && git checkout FETCH_HEAD ; else  git checkout \"$GITHUB_SHA\" ; fi"
+          git config --global core.autocrlf false
+          mkdir -p ~
+          cd ~
+          git init work
+          cd work
+          git remote add origin "https://$GITHUB_ACTOR:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY"
+          git config --local gc.auto 0
+          git fetch origin --depth=1 "$GITHUB_SHA"
+          git checkout "$GITHUB_SHA"
       - name: Configure
-        shell: cmd
+        shell: sh
+        env:
+          PATH: /usr/bin:/bin
+          SHELLOPTS: igncr
         run: |
-          path %GITHUB_WORKSPACE%\cygwin\bin;%GITHUB_WORKSPACE%\cygwin\usr\bin
-          sh -c "cd ~/work; ./Configure -des -Dusedevel -Doptimize=-g -DDEBUGGING"
+          cd ~/work
+          set +e
+          ./Configure -des -Dusedevel -Doptimize=-g -DDEBUGGING || exit 1
       - name: Build
-        shell: cmd
+        shell: sh
+        env:
+          PATH: /usr/bin:/bin
+          SHELLOPTS: igncr
         run: |
-          path %GITHUB_WORKSPACE%\cygwin\bin;%GITHUB_WORKSPACE%\cygwin\usr\bin
-          sh -c "cd ~/work; make -j2 test_prep"
+          cd ~/work
+          make -j2 test_prep
       - name: Show Config
-        shell: cmd
+        shell: sh
+        env:
+          PATH: /usr/bin:/bin
+          SHELLOPTS: igncr
         run: |
-          path %GITHUB_WORKSPACE%\cygwin\bin;%GITHUB_WORKSPACE%\cygwin\usr\bin
-          sh -c "cd ~/work; ./perl -Ilib -V; ./perl -Ilib -e 'use Config; print Config::config_sh'"
+          cd ~/work
+          ./perl -Ilib -V
+          ./perl -Ilib -e 'use Config; print Config::config_sh'
       - name: Run Tests
-        shell: cmd
+        shell: sh
+        env:
+          PATH: /usr/bin:/bin
+          SHELLOPTS: igncr
         # Descend far enough down the cygwin yak warren, and one discovers that
         # hints/cygwin.sh sets ldlibpthname=PATH
         # Meaning that the Makefile variable LDLIBPTH is "PATH=..."
@@ -484,8 +620,8 @@ jobs:
         # about 40 seconds, which is nearly 1% of the total wallclock time for
         # complete all CI runs.
         run: |
-          path %GITHUB_WORKSPACE%\cygwin\bin;%GITHUB_WORKSPACE%\cygwin\usr\bin
-          sh -c "cd ~/work; PATH=`pwd`:.:$PATH ./perl.exe t/TEST"
+          cd ~/work
+          PATH=`pwd`:.:$PATH TEST_JOBS=2 ./perl.exe t/harness
 
   #            _       _ _            _
   #  _ __ ___ (_)_ __ (_) |_ ___  ___| |_
@@ -498,7 +634,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     needs: sanity_check
-    if: needs.sanity_check.outputs.run_all_jobs == 'true'
+    if: (! cancelled() && (needs.sanity_check.outputs.run_all_jobs == 'true' || needs.sanity_check.outputs.ci_force_minitest == 'true'))
 
     outputs:
       run_all_jobs: ${{ steps.check_extended_testing.outputs.run_all_jobs }}
@@ -513,10 +649,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgdbm-dev libdb-dev
       - uses: actions/checkout@v2
-      - name: git cfg + fetch tags
+      - name: git cfg
         run: |
           git config diff.renameLimit 999999
-          git fetch --depth=1 origin +refs/tags/*:refs/tags/*
       - name: manicheck
         run: |
           perl Porting/manicheck --exitstatus
@@ -547,7 +682,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     needs: sanity_check
-    if: needs.sanity_check.outputs.run_all_jobs == 'true'
+    if: (! cancelled() && (needs.sanity_check.outputs.run_all_jobs == 'true' || needs.sanity_check.outputs.ci_force_asan == 'true'))
 
     strategy:
       matrix:
@@ -565,10 +700,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgdbm-dev libdb-dev
       - uses: actions/checkout@v2
-      - name: git cfg + fetch tags
+      - name: git cfg
         run: |
           git config diff.renameLimit 999999
-          git fetch --depth=1 origin +refs/tags/*:refs/tags/*
       - name: Configure
         run: |
           ./Configure -des -Dusedevel -Dcc="clang -fsanitize=address" -Dld="clang -fsanitize=address" ${{ matrix.CONFIGURE_ARGS }} -Dprefix="$HOME/perl-blead"
@@ -598,7 +732,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     needs: sanity_check
-    if: needs.sanity_check.outputs.run_all_jobs == 'true'
+    if: (! cancelled() && (needs.sanity_check.outputs.run_all_jobs == 'true' || needs.sanity_check.outputs.ci_force_perl_unicode == 'true'))
 
     strategy:
       matrix:
@@ -614,10 +748,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgdbm-dev libdb-dev
       - uses: actions/checkout@v2
-      - name: git cfg + fetch tags
+      - name: git cfg
         run: |
           git config diff.renameLimit 999999
-          git fetch --depth=1 origin +refs/tags/*:refs/tags/*
       - name: Show Locales
         run: locale -a
       - name: Configure
@@ -634,3 +767,69 @@ jobs:
         # LeakSanitizer is disabled because it randomly crashes, see [gh #19189]
         run: |
           ASAN_OPTIONS=detect_leaks=0 PERL_DESTRUCT_LEVEL=2 LC_ALL=en_US.UTF-8 PERL_UNICODE="" TEST_JOBS=2 ./perl t/harness
+
+  #      _ _     _                            _       _
+  #   __| (_)___| |_      _ __ ___   ___   __| |_   _| | ___  ___
+  #  / _` | / __| __|____| '_ ` _ \ / _ \ / _` | | | | |/ _ \/ __|
+  # | (_| | \__ \ ||_____| | | | | | (_) | (_| | |_| | |  __/\__ \
+  #  \__,_|_|___/\__|    |_| |_| |_|\___/ \__,_|\__,_|_|\___||___/
+
+  dist-modules:
+    name: dist-modules
+    needs: sanity_check
+    runs-on: ubuntu-latest
+    if: (! cancelled() && (needs.sanity_check.outputs.run_all_jobs == 'true' || needs.sanity_check.outputs.ci_force_dist_modules == 'true'))
+
+    env:
+      # some plugins still needs this to run their tests...
+      # these don't really matter, but might later
+      PERL_USE_UNSAFE_INC: 0
+      AUTHOR_TESTING: 1
+      AUTOMATED_TESTING: 1
+      RELEASE_TESTING: 1
+
+    strategy:
+      fail-fast: false
+      matrix:
+        perl-version:
+          - 'latest'
+          - '5.24'
+          - '5.10'
+          - '5.8'
+
+    container:
+      image: perldocker/perl-tester:${{ matrix.perl-version }}
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: perl -V
+        run: perl -V
+      - name: Build and test dist modules
+        run:
+          perl Porting/test-dist-modules.pl -continue
+
+  dist-modules-sys-macos:
+    name: "Test dist/ modules on MacOS system perl"
+    needs: sanity_check
+    runs-on: macos-11
+    if: (! cancelled() && (needs.sanity_check.outputs.run_all_jobs == 'true' || needs.sanity_check.outputs.ci_force_dist_modules == 'true'))
+
+    env:
+      # some plugins still needs this to run their tests...
+      # these don't really matter, but might later
+      PERL_USE_UNSAFE_INC: 0
+      AUTHOR_TESTING: 1
+      AUTOMATED_TESTING: 1
+      RELEASE_TESTING: 1
+
+    strategy:
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: perl -V
+        run: /usr/bin/perl -V
+      - name: Build and test dist modules
+        run:
+          /usr/bin/perl Porting/test-dist-modules.pl -continue -separate
+

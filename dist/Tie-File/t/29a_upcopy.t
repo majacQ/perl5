@@ -131,12 +131,12 @@ sub try {
 
   my $o = tie my @lines, 'Tie::File', $file or die $!;
   local $SIG{ALRM} = sub { die "Alarm clock" };
-  my $a_retval = eval { alarm(5) unless $^P; $o->_upcopy($src, $dst, $len) };
+  my $a_retval = eval { alarm(10) unless $^P; $o->_upcopy($src, $dst, $len) };
   my $err = $@;
   undef $o; untie @lines; alarm(0);
   if ($err) {
     if ($err =~ /^Alarm clock/) {
-      print "# Timeout\n";
+      print STDERR "# $0 Timeout at test $N\n";
       print "not ok $N\n"; $N++;
       return;
     } else {
@@ -157,7 +157,9 @@ sub try {
   unless ($alen == $xlen) {
     print "# try(@_) expected file length $xlen, actual $alen!\n";
   }
-  print $actual eq $expected ? "ok $N\n" : "not ok $N\n";
+  my $desc = sprintf "try(%d, %d, %s)",
+                $src, $dst, (defined $len ? $len : "undef");
+  print $actual eq $expected ? "ok $N - $desc\n" : "not ok $N - $desc\n";
   $N++;
 }
 

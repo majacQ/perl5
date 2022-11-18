@@ -21,7 +21,9 @@ BEGIN {
     }
 }
 use Config;
+use I18N::Langinfo qw(langinfo RADIXCHAR);
 my $have_strtod = $Config{d_strtod} eq 'define';
+my $have_localeconv = defined $Config{d_locconv} && $Config{d_locconv} eq 'define';
 my @locales = find_locales( [ 'LC_ALL', 'LC_CTYPE', 'LC_NUMERIC' ]);
 skip_all("no locales available") unless @locales;
 note("locales available: @locales");
@@ -34,8 +36,8 @@ if (defined $ARGV[0] && $ARGV[0] ne "") {
         exit 1
     }
     $debug = 1;
-    $switches = "switches => [ '-DLv' ]";
 }
+$switches = "switches => [ '-DLv' ]" if $debug;
 
 # reset the locale environment
 delete local @ENV{'LANGUAGE', 'LANG', (grep /^LC_[A-Z]+$/, keys %ENV)};
@@ -140,7 +142,7 @@ EOF
         } else {
             $different ||= $_;
             $difference ||= $s;
-            my $radix = localeconv()->{decimal_point};
+            my $radix = langinfo(RADIXCHAR);
 
             # For utf8 locales with a non-ascii radix, it should be encoded as
             # UTF-8 with the internal flag so set.
@@ -182,11 +184,11 @@ EOF
 EOF
                 "format() does not look at LC_NUMERIC without 'use locale'");
 
-    {
-    fresh_perl_is(<<'EOF', "$difference\n", { eval $switches },
-    use POSIX;
-    use locale;
-    format STDOUT =
+            {
+                fresh_perl_is(<<'EOF', "$difference\n", { eval $switches },
+                use POSIX;
+                use locale;
+                format STDOUT =
 @.#
 4.179
 .
@@ -195,8 +197,12 @@ EOF
                 "format() looks at LC_NUMERIC with 'use locale'");
             }
 
-            {
-                fresh_perl_is(<<'EOF', ",,", { eval $switches },
+      SKIP: {
+                unless ($have_localeconv) {
+                    skip("no localeconv()", 1);
+                }
+                else {
+                    fresh_perl_is(<<'EOF', ",,", { eval $switches },
     use POSIX;
     no warnings "utf8";
     print localeconv()->{decimal_point};
@@ -204,6 +210,7 @@ EOF
     print localeconv()->{decimal_point};
 EOF
                 "localeconv() looks at LC_NUMERIC with and without 'use locale'");
+                }
             }
 
             {
@@ -442,6 +449,31 @@ EOF
 EOF
                 "1,5\n2,5", { stderr => 'devnull' }, "Can do math when radix is a comma"); # [perl 115800]
 
+            SKIP: {
+                skip "Perl not compiled with 'useithreads'", 1 if ! $Config{'useithreads'};
+
+                local $ENV{LC_ALL} = undef;
+                local $ENV{LC_NUMERIC} = $comma;
+                fresh_perl_is(<<"EOF",
+                    use threads;
+
+                    my \$x = eval "1.25";
+                    print "\$x", "\n";  # number is ok before thread
+                    my \$str_x = "\$x";
+
+                    my \$thr = threads->create(sub {});
+                    \$thr->join();
+
+                    print "\$x\n";  # number stringifies the same after thread
+
+                    my \$y = eval "1.25";
+                    print "\$y\n";  # number is ok after threads
+                    print "\$y" eq "\$str_x" || 0;    # new number stringifies the same as old number
+EOF
+                "1.25\n1.25\n1.25\n1", { eval $switches }, "Thread join doesn't disrupt calling thread"
+                ); # [GH 20155]
+            }
+
           SKIP: {
             unless ($have_strtod) {
                 skip("no strtod()", 1);
@@ -514,7 +546,7 @@ SKIP:
 {
     use locale;
     # look for an english locale (so a < B, hopefully)
-    my ($en) = grep /^en_/, @locales;
+    my ($en) = grep { /^en_/ } find_locales( [ 'LC_COLLATE' ]);
     defined $en
         or skip "didn't find a suitable locale", 1;
     POSIX::setlocale(LC_COLLATE, $en);
@@ -535,6 +567,51 @@ else {
      print "ok\n";
 }
 EOF
+}
+
+SKIP: {   # GH #20085
+    my @utf8_locales = find_utf8_ctype_locales();
+    skip "didn't find a UTF-8 locale", 1 unless @utf8_locales;
+
+    local $ENV{LC_CTYPE} = $utf8_locales[0];
+    local $ENV{LC_ALL} = undef;
+    fresh_perl_is(<<~'EOF', "ok\n", {}, "check that setlocale overrides startup");
+        use POSIX;
+
+        my $a_acute = "\N{LATIN SMALL LETTER A WITH ACUTE}";
+        my $egrave  = "\N{LATIN SMALL LETTER E WITH GRAVE}";
+        my $combo = "$a_acute.$egrave";
+
+        setlocale(&POSIX::LC_ALL, "C");
+        use locale;
+
+        # In a UTF-8 locale, \b matches Latin1 before string, mid, and end
+        if ($combo eq ($combo =~ s/\b/!/gr)) {
+            print "ok\n";
+        }
+        else {
+            print "not ok\n";
+        }
+    EOF
+}
+
+SKIP: {   # GH #20054
+    skip "Even illegal locale names are accepted", 1
+                    if $Config{d_setlocale_accepts_any_locale_name}
+                    && $Config{d_setlocale_accepts_any_locale_name} eq 'define';
+	
+    my @lc_all_locales = find_locales('LC_ALL');
+    my $locale = $lc_all_locales[0];
+    skip "LC_ALL not enabled on this platform", 1 unless $locale;
+
+    local $ENV{LC_ALL} = "This is not a legal locale name";
+    local $ENV{LANG} = "Nor this neither";
+
+    my $fallback = ($^O eq "MSWin32")
+                    ? "system default"
+                    : "standard";
+    fresh_perl_like("", qr/Falling back to the $fallback locale/,
+                    {}, "check that illegal startup environment falls back");
 }
 
 done_testing();

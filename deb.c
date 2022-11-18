@@ -41,6 +41,24 @@ Perl_deb_nocontext(const char *pat, ...)
 }
 #endif
 
+/*
+=for apidoc      deb
+=for apidoc_item deb_nocontext
+
+When perl is compiled with C<-DDEBUGGING>, this prints to STDERR the
+information given by the arguments, prefaced by the name of the file containing
+the script causing the call, and the line number within that file.
+
+If the C<v> (verbose) debugging option is in effect, the process id is also
+printed.
+
+The two forms differ only in that C<deb_nocontext> does not take a thread
+context (C<aTHX>) parameter, so is used in situations where the caller doesn't
+already have the thread context.
+
+=cut
+*/
+
 void
 Perl_deb(pTHX_ const char *pat, ...)
 {
@@ -55,21 +73,32 @@ Perl_deb(pTHX_ const char *pat, ...)
     va_end(args);
 }
 
+/*
+=for apidoc vdeb
+
+This is like C<L</deb>>, but C<args> are an encapsulated argument list.
+
+=cut
+*/
+
 void
 Perl_vdeb(pTHX_ const char *pat, va_list *args)
 {
 #ifdef DEBUGGING
     const char* const file = PL_curcop ? OutCopFILE(PL_curcop) : "<null>";
     const char* const display_file = file ? file : "<free>";
-    const long line = PL_curcop ? (long)CopLINE(PL_curcop) : 0;
+    line_t line = PL_curcop ? CopLINE(PL_curcop) : NOLINE;
+    if (line == NOLINE)
+        line = 0;
 
     PERL_ARGS_ASSERT_VDEB;
 
     if (DEBUG_v_TEST)
-        PerlIO_printf(Perl_debug_log, "(%ld:%s:%ld)\t",
+        PerlIO_printf(Perl_debug_log, "(%ld:%s:%" LINE_Tf ")\t",
                       (long)PerlProc_getpid(), display_file, line);
     else
-        PerlIO_printf(Perl_debug_log, "(%s:%ld)\t", display_file, line);
+        PerlIO_printf(Perl_debug_log, "(%s:%" LINE_Tf ")\t",
+                      display_file, line);
     (void) PerlIO_vprintf(Perl_debug_log, pat, *args);
 #else
     PERL_UNUSED_CONTEXT;
@@ -79,7 +108,7 @@ Perl_vdeb(pTHX_ const char *pat, va_list *args)
 }
 
 I32
-Perl_debstackptrs(pTHX)
+Perl_debstackptrs(pTHX)     /* Currently unused in cpan and core */
 {
 #ifdef DEBUGGING
     PerlIO_printf(Perl_debug_log,
@@ -157,7 +186,13 @@ S_deb_stack_n(pTHX_ SV** stack_base, I32 stack_min, I32 stack_max,
 }
 
 
-/* dump the current stack */
+/*
+=for apidoc debstack
+
+Dump the current stack
+
+=cut
+*/
 
 I32
 Perl_debstack(pTHX)

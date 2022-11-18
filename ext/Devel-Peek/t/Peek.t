@@ -8,8 +8,15 @@ BEGIN {
     }
     {
     package t;
-       my $core = !!$ENV{PERL_CORE};
-       require($core ? '../../t/test.pl' : './t/test.pl');
+        my $core = !!$ENV{PERL_CORE};
+        if ($core) {
+            require '../../t/test.pl';
+            require '../../t/charset_tools.pl';
+        }
+        else {
+            require './t/test.pl';
+            require './t/charset_tools.pl';
+        }
     }
 }
 
@@ -520,33 +527,33 @@ do_test('typeglob',
     FLAGS = $ADDR				# $] < 5.021004
     EGV = $ADDR\\t"a"');
 
-if (ord('A') == 193) {
-do_test('string with Unicode',
-	chr(256).chr(0).chr(512),
-'SV = PV\\($ADDR\\) at $ADDR
-  REFCNT = 1
-  FLAGS = \\((?:PADTMP,)?POK,READONLY,pPOK,UTF8\\)	# $] < 5.019003
-  FLAGS = \\((?:PADTMP,)?POK,(?:IsCOW,)?pPOK,UTF8\\)	# $] >=5.019003
-  PV = $ADDR "\\\\x8C\\\\x41\\x00\\\\x9D\\\\x41"\\\0 \[UTF8 "\\\x\{100\}\\\x\{0\}\\\x\{200\}"\]
-  CUR = 5
-  LEN = \\d+
-  COW_REFCNT = 1					# $] < 5.019007
-');
-} else {
-do_test('string with Unicode',
-	chr(256).chr(0).chr(512),
-'SV = PV\\($ADDR\\) at $ADDR
-  REFCNT = 1
-  FLAGS = \\((?:PADTMP,)?POK,READONLY,pPOK,UTF8\\)	# $] < 5.019003
-  FLAGS = \\((?:PADTMP,)?POK,(?:IsCOW,)?pPOK,UTF8\\)	# $] >=5.019003
-  PV = $ADDR "\\\\xC4\\\\x80\\\x00\\\\xC8\\\\x80"\\\0 \[UTF8 "\\\x\{100\}\\\x\{0\}\\\x\{200\}"\]
-  CUR = 5
-  LEN = \\d+
-  COW_REFCNT = 1					# $] < 5.019007
-');
+# Get native character set representations for these code points
+my $cp100_bytes = t::byte_utf8a_to_utf8n("\xC4\x80");
+my $cp0_bytes =   t::byte_utf8a_to_utf8n("\x00");
+my $cp200_bytes = t::byte_utf8a_to_utf8n("\xC8\x80");
+
+# Convert to e.g., \\\\xC4
+my $prefix = '\\\\x';
+foreach my $ref (\$cp100_bytes, \$cp0_bytes, \$cp200_bytes) {
+    my $revised = "";
+    $$ref =~ s/(.)/sprintf("$prefix%02X", ord $1)/eg;
 }
 
-if (ord('A') == 193) {
+do_test('string with Unicode',
+	chr(256).chr(0).chr(512),
+'SV = PV\\($ADDR\\) at $ADDR
+  REFCNT = 1
+  FLAGS = \\((?:PADTMP,)?POK,READONLY,pPOK,UTF8\\)	# $] < 5.019003
+  FLAGS = \\((?:PADTMP,)?POK,(?:IsCOW,)?pPOK,UTF8\\)	# $] >=5.019003
+  PV = $ADDR "' . $cp100_bytes
+                . $cp0_bytes
+                . $cp200_bytes
+                . '"\\\0 \[UTF8 "\\\x\{100\}\\\x\{0\}\\\x\{200\}"\]
+  CUR = 5
+  LEN = \\d+
+  COW_REFCNT = 1					# $] < 5.019007
+');
+
 do_test('reference to hash containing Unicode',
 	{chr(256)=>chr(512)},
 'SV = $RV\\($ADDR\\) at $ADDR
@@ -561,11 +568,11 @@ do_test('reference to hash containing Unicode',
     KEYS = 1
     FILL = 1
     MAX = 7
-    Elt "\\\\x8C\\\\x41" \[UTF8 "\\\x\{100\}"\] HASH = $ADDR
+    Elt "' . $cp100_bytes . '" \[UTF8 "\\\x\{100\}"\] HASH = $ADDR
     SV = PV\\($ADDR\\) at $ADDR
       REFCNT = 1
       FLAGS = \\(POK,(?:IsCOW,)?pPOK,UTF8\\)
-      PV = $ADDR "\\\\x9D\\\\x41"\\\0 \[UTF8 "\\\x\{200\}"\]
+      PV = $ADDR "' . $cp200_bytes . '"\\\0 \[UTF8 "\\\x\{200\}"\]
       CUR = 2
       LEN = \\d+
       COW_REFCNT = 1				# $] < 5.019007
@@ -573,34 +580,6 @@ do_test('reference to hash containing Unicode',
 	$] >= 5.015
 	    ? undef
 	    : 'The hash iterator used in dump.c sets the OOK flag');
-} else {
-do_test('reference to hash containing Unicode',
-	{chr(256)=>chr(512)},
-'SV = $RV\\($ADDR\\) at $ADDR
-  REFCNT = 1
-  FLAGS = \\(ROK\\)
-  RV = $ADDR
-  SV = PVHV\\($ADDR\\) at $ADDR
-    REFCNT = [12]
-    FLAGS = \\(SHAREKEYS,HASKFLAGS\\)
-    ARRAY = $ADDR  \\(0:7, 1:1\\)
-    hash quality = 100.0%
-    KEYS = 1
-    FILL = 1
-    MAX = 7
-    Elt "\\\\xC4\\\\x80" \[UTF8 "\\\x\{100\}"\] HASH = $ADDR
-    SV = PV\\($ADDR\\) at $ADDR
-      REFCNT = 1
-      FLAGS = \\(POK,(?:IsCOW,)?pPOK,UTF8\\)
-      PV = $ADDR "\\\\xC8\\\\x80"\\\0 \[UTF8 "\\\x\{200\}"\]
-      CUR = 2
-      LEN = \\d+
-      COW_REFCNT = 1				# $] < 5.019007
-',      '',
-	$] >= 5.015
-	    ? undef
-	    : 'The hash iterator used in dump.c sets the OOK flag');
-}
 
 my $x="";
 $x=~/.??/g;
@@ -1537,6 +1516,7 @@ dumpindent is 4 at -e line 1.
      |   FLAGS = (VOID,SLABBED,MORESIB)
      |   LINE = 1
      |   PACKAGE = "t"
+     |   HINTS = 00000100
      |     |   
 5    +--entersub UNOP(0xNNN) ===> 1 [leave 0xNNN]
          TARG = 1
@@ -1571,11 +1551,42 @@ EODUMP
 }
 
 {
-    my $one = 1.0;
     my $epsilon_p = 1.0;
-    $epsilon_p /= 2 while $one != $one + $epsilon_p / 2;
     my $epsilon_n = 1.0;
-    $epsilon_n /= 2 while $one != $one - $epsilon_n / 2;
+    if($Config{nvtype} eq 'long double' &&
+       $Config{longdblkind} >= 5 && $Config{longdblkind} <= 8) {
+      # For this (doubledouble) kind of NV we need to use a separate
+      # method for assigning values to $epsilon_p and $epsilon_n. 
+      # Theoretically, $epsilon_p should be set to 2 ** -107, and
+      # $epsilon_n to 2 ** -110. However, a known possible bug in "%.33g"
+      # formatting will render those values inaccurately, thereby
+      # incorrectly influencing the results of the "NV 1.0 + epsilon" 
+      # and "NV 1.0 - epsilon" tests. So we test for the presence of
+      # the bug, and set both of those "epsilon" variables to
+      # 2 ** -105 if the bug is detected.
+      # See the discussion at https://github.com/Perl/perl5/issues/19585.
+
+      if( sprintf("%.33g", 1.0 + (2 ** -108)) == 1
+          &&
+          sprintf("%.33g", 1.0 + (2 ** -107)) > 1 ) {
+
+          $epsilon_p = 2 ** -107;
+      }
+      else { $epsilon_p = 2 ** -105 } # Avoids the formatting bug.
+
+      if( sprintf("%.33g", 1.0 - (2 ** -111)) == 1
+          &&
+          sprintf("%.33g", 1.0 - (2 ** -110)) < 1 ) {
+
+          $epsilon_n = 2 ** -110;
+      }
+      else { $epsilon_n = 2 ** -105 } # Avoids the formatting bug.
+
+    }
+    else {
+        $epsilon_p /= 2 while 1.0 != 1.0 + $epsilon_p / 2;
+        $epsilon_n /= 2 while 1.0 != 1.0 - $epsilon_n / 2;
+    }
 
     my $head = 'SV = NV\($ADDR\) at $ADDR
 (?:.+
@@ -1584,11 +1595,11 @@ EODUMP
 (?:.+
 )*';
 
-    do_test('NV 1.0', $one,
+    do_test('NV 1.0', 1.0,
             $head . 'NV = 1' . $tail);
-    do_test('NV 1.0 + epsilon', $one + $epsilon_p,
+    do_test('NV 1.0 + epsilon', 1.0 + $epsilon_p,
             $head . 'NV = 1\.00000000\d+' . $tail);
-    do_test('NV 1.0 - epsilon', $one - $epsilon_p,
+    do_test('NV 1.0 - epsilon', 1.0 - $epsilon_n,
             $head . 'NV = 0\.99999999\d+' . $tail);
 }
 

@@ -1,14 +1,18 @@
 #!/usr/bin/perl
 
 BEGIN {
-  @INC = '..' if -f '../TestInit.pm';
+  if (-f './TestInit.pm') {
+    @INC = '.';
+  } elsif (-f '../TestInit.pm') {
+    @INC = '..';
+  }
 }
 use TestInit qw(T); # T is chdir to the top level
 
 use warnings;
 use strict;
 use Config;
-
+use Data::Dumper;
 require './t/test.pl';
 
 if ( $Config{usecrosscompile} ) {
@@ -40,6 +44,7 @@ foreach (@{(setup_embed())[0]}) {
   push @functions, 'S_' . $_->[2] if $_->[0] =~ /S/;
 };
 push @functions, 'Perl_mess';
+push @functions, 'PERL_DIAG_(?<wrapper>\w+)';
 
 my $regcomp_fail_re = '\b(?:(?:Simple_)?v)?FAIL[2-4]?(?:utf8f)?\b';
 my $regcomp_re =
@@ -57,12 +62,20 @@ my $bad_version_re = qr{BADVERSION\([^"]*$text_re};
 my $regcomp_call_re = qr/$regcomp_re.*?$text_re/;
 
 my %entries;
-
+my $data_start_line= 0;
 # Get the ignores that are compiled into this file
 my $reading_categorical_exceptions;
+# reset the DATA point to the top of the file, read until we find __DATA__
+# so that $. is "correct" for our purposes.
+seek DATA, 0, 0;
+while (<DATA>) {
+    /^__DATA__/ and last;
+}
 while (<DATA>) {
   chomp;
+  next if /^\s*#/ and !/\S/;
   $entries{$_}{todo} = 1;
+  $entries{$_}{todo_line}= $data_start_line + $.;
   $reading_categorical_exceptions and $entries{$_}{cattodo}=1;
   /__CATEGORIES__/ and ++$reading_categorical_exceptions;
 }
@@ -111,13 +124,16 @@ while (<$diagfh>) {
 
     if (exists $entries{$cur_entry} &&  $entries{$cur_entry}{todo}
                                     && !$entries{$cur_entry}{cattodo}) {
+        my $data_line= $entries{$cur_entry}{todo_line};
         TODO: {
-            local $::TODO = "Remove the TODO entry \"$cur_entry\" from DATA as it is already in $pod near line $.";
+            local $::TODO = "Remove the TODO entry \"$cur_entry\" from DATA "
+                          . "at $0 line $data_line as it is already in $pod near line $.";
             ok($cur_entry);
         }
     }
     # Make sure to init this here, so an actual entry in perldiag
     # overwrites one in DATA.
+    # diag("adding '$cur_entry'");
     $entries{$cur_entry}{todo} = 0;
     $entries{$cur_entry}{line_number} = $.;
   }
@@ -182,7 +198,9 @@ foreach my $cur_entry ( keys %entries) {
 # List from perlguts.pod "Formatted Printing of IVs, UVs, and NVs"
 # Convert from internal formats to ones that the readers will be familiar
 # with, while removing any format modifiers, such as precision, the
-# presence of which would just confuse the pod's explanation
+# presence of which would just confuse the pod's explanation.
+# Note that the 'S' formats get converted into \"%s\" as they inject
+# double quotes.
 my %specialformats = (IVdf => 'd',
 		      UVuf => 'd',
 		      UVof => 'o',
@@ -192,12 +210,18 @@ my %specialformats = (IVdf => 'd',
 		      NVff => 'f',
 		      NVgf => 'f',
 		      HEKf256=>'s',
+		      HEKf256_QUOTEDPREFIX => 'S',
 		      HEKf => 's',
+		      HEKf_QUOTEDPREFIX => 'S',
 		      UTF8f=> 's',
+		      UTF8f_QUOTEDPREFIX => 'S',
 		      SVf256=>'s',
 		      SVf32=> 's',
 		      SVf  => 's',
+		      SVf_QUOTEDPREFIX  => 'S',
+                      PVf_QUOTEDPREFIX  => 'S',
 		      PNf  => 's');
+
 my $format_modifiers = qr/ [#0\ +-]*              # optional flags
 			  (?: [1-9][0-9]* | \* )? # optional field width
 			  (?: \. \d* )?           # optional precision
@@ -205,8 +229,13 @@ my $format_modifiers = qr/ [#0\ +-]*              # optional flags
 			/x;
 
 my $specialformats =
- join '|', sort { length $b cmp length $a } keys %specialformats;
-my $specialformats_re = qr/%$format_modifiers"\s*($specialformats)(\s*")?/;
+ join '|', sort { length($b) <=> length($a) || $a cmp $b } keys %specialformats;
+my $specialformats_re = qr/%$format_modifiers"\s*($specialformats)(\s*(?:"|\z))?/;
+
+# We skip the bodies of most XS functions, but not within these files
+my @include_xs_files = (
+  "builtin.c",
+);
 
 if (@ARGV) {
   check_file($_) for @ARGV;
@@ -235,8 +264,14 @@ sub standardize {
   elsif ( $name =~ m/^(Invalid version format) \([^\)]*\)/ ) {
     $name = "$1 (\%s)";
   }
-  elsif ($name =~ m/^panic: /) {
-    $name = "panic: \%s";
+  elsif ($name =~ m/^(panic|Usage): /) {
+    $name = "$1: \%s";
+  }
+  else {
+    $name =~ s/ (*plb:^Function\ ")
+                (\w+)
+                (*pla:"\ not\ implemented\ in\ this\ version\ of\ perl\.)
+              /%s/gx;
   }
 
   return $name;
@@ -261,32 +296,32 @@ sub check_file {
     if (m<^[^#\s]> and $_ !~ m/^[{}]*$/) {
       $sub = $_;
     }
-    next if $sub =~ m/^XS/;
+    next if $sub =~ m/^XS/ and !grep { $_ eq $codefn } @include_xs_files;
     if (m</\*\s*diag_listed_as: (.*?)\s*\*/>) {
       $listed_as = $1;
       $listed_as_line = $.+1;
     }
     elsif (m</\*\s*diag_listed_as: (.*?)\s*\z>) {
-      $listed_as = $1;
-      my $finished;
+      my $new_listed_as = $1;
       while (<$codefh>) {
         if (m<\*/>) {
-          $listed_as .= $` =~ s/^\s*/ /r =~ s/\s+\z//r;
+          $new_listed_as .= $` =~ s/^\s*/ /r =~ s/\s+\z//r;
           $listed_as_line = $.+1;
-          $finished = 1;
+          $listed_as= $new_listed_as;
           last;
         }
         else {
-          $listed_as .= s/^\s*/ /r =~ s/\s+\z//r;
+          $new_listed_as .= s/^\s*/ /r =~ s/\s+\z//r;
         }
       }
-      if (!$finished) { $listed_as = undef }
     }
     next if /^#/;
 
     my $multiline = 0;
     # Loop to accumulate the message text all on one line.
-    if (m/(?!^)\b(?:$source_msg_re(?:_nocontext)?|$regcomp_re)\s*\(/) {
+    if (m/(?!^)\b(?:$source_msg_re(?:_nocontext)?|$regcomp_re)\s*\((?<tail>(?:[^()]+|\([^()]+\))+\))?/
+        and !$+{tail}
+    ) {
       while (not m/\);\s*$/) {
         my $nextline = <$codefh>;
         # Means we fell off the end of the file.  Not terribly surprising;
@@ -310,16 +345,23 @@ sub check_file {
     # in later lines.
 
     s/$specialformats_re/"%$specialformats{$1}" .  (defined $2 ? '' : '"')/ge;
+    s/\%S/\\"%s\\"/g; # convert an %S into a quoted %s.
 
     # Remove any remaining format modifiers, but not in %%
     s/ (?<!%) % $format_modifiers ( [dioxXucsfeEgGp] ) /%$1/xg;
 
     # The %"foo" thing needs to happen *before* this regex.
-    # diag($_);
+    # diag(">$_<");
     # DIE is just return Perl_die
-    my ($name, $category, $routine);
+    my ($name, $category, $routine, $wrapper);
     if (/\b$source_msg_call_re/) {
-      ($name, $category, $routine) = ($+{'text'}, $+{'category'}, $+{'routine'});
+      ($name, $category, $routine, $wrapper) = ($+{'text'}, $+{'category'}, $+{'routine'}, $+{'wrapper'});
+      if ($wrapper) {
+        $category = $wrapper if $wrapper=~/WARN/;
+        $routine = "Perl_warner" if $wrapper=~/WARN/;
+        $routine = "yyerror" if $wrapper=~/DIE/;
+      }
+      # diag(Dumper(\%+,{category=>$category, routine=>$routine, name=>$name}));
       # Sometimes the regexp will pick up too much for the category
       # e.g., WARN_UNINITIALIZED), PL_warn_uninit_sv ... up to the next )
       $category && $category =~ s/\).*//s;
@@ -374,8 +416,9 @@ sub check_file {
         join ", ",
               sort map {s/^WARN_//; lc $_} split /\s*[|,]\s*/, $category;
     }
-    if ($listed_as and $listed_as_line == $. - $multiline) {
+    if ($listed_as) {
       $name = $listed_as;
+      undef $listed_as;
     } else {
       # The form listed in perldiag ignores most sorts of fancy printf
       # formatting, or makes it more perlish.
@@ -437,6 +480,7 @@ sub check_message {
         TODO: {
           no warnings 'once';
           local $::TODO = 'in DATA';
+          # diag(Dumper($entries{$key}));
           # There is no listing, but it is in the list of exceptions.  TODO FAIL.
           fail($key);
           diag(
@@ -459,13 +503,13 @@ sub check_message {
         my $qr = $qrs{$severity} ||= qr/$severity/;
 
         like($entries{$key}{severity}, $qr,
-          $severity =~ /\[/
-            ? "severity is one of $severity for $key"
-            : "severity is $severity for $key");
+          ($severity =~ /\[/
+            ? "severity is one of $severity"
+            : "severity is $severity") . "for '$name' at $codefn line $.");
 
         is($entries{$key}{category}, $categories,
            ($categories ? "categories are [$categories]" : "no category")
-             . " for $key");
+             . " for '$name' at $codefn line $.");
       }
     } elsif ($partial) {
       # noop
@@ -499,28 +543,37 @@ sub check_message {
     return $ret;
 }
 
-# Lists all missing things as of the inauguration of this script, so we
-# don't have to go from "meh" to perfect all at once.
-# 
-# PLEASE DO NOT ADD TO THIS LIST.  Instead, write an entry in
-# pod/perldiag.pod for your new (warning|error).  Nevertheless,
-# listing exceptions here when this script is not smart enough
-# to recognize the messages is not so bad, as long as there are
-# entries in perldiag.
+# The DATA section includes two types of entries, in two sets separated by a
+# blank line.
+#
+# The first set are entries whose text we think is fully explanatory and don't
+# need further elaboration in perldiag.  This set should consist of very few
+# entries.
+#
+# The second set, after the blank line, consists of TODO entries.  (There are
+# actually two subsets described below.)  This list should basically be just
+# those entries that otherwise would have generated an error upon inauguration
+# of this program, so we didn't have to go from "meh" to perfect all at once.
+# The only valid reason we can think of to add to the list is for cases where
+# this program is not smart enough to recognize the message is something that
+# actually is in perldiag.  Otherwise, DO NOT ADD TO THIS LIST.  Instead,
+# write an entry in pod/perldiag.pod for your new (warning|error).
+#
+# This second set has a subcategory, after the line marked __CATEGORIES__ .
+# These are entries that are in perldiag but fail the severity/category test.
 
-# Entries after __CATEGORIES__ are those that are in perldiag but fail the
-# severity/category test.
-
-# Also FIXME this test, as the first entry in TODO *is* covered by the
-# description: Malformed UTF-8 character (%s)
 __DATA__
-Malformed UTF-8 character (unexpected non-continuation byte 0x%x, immediately after start byte 0x%x)
+Function "%s" not implemented in this version of perl.
+QUITing...
+Recompile perl with -DDEBUGGING to use -D switch (did you mean -d ?)
+System V IPC is not implemented on this machine
+Terminating on signal SIG%s(%d)
+This version of OS/2 does not support %s.%s
+Usage: %s
 
 Cannot apply "%s" in non-PerlIO perl
-Cannot set timer
 Can't find DLL name for the module `%s' by the handle %d, rc=%u=%x
 Can't find string terminator %c%s%c anywhere before EOF
-Can't fix broken locale name "%s"
 Can't get short module name from a handle
 Can't load DLL `%s', possible problematic module `%s'
 Can't locate %s:   %s
@@ -533,18 +586,15 @@ Can't %s "%s": %s
 Can't %s `%s' with ARGV[0] being `%s' (looking for executables only, not found)
 Can't use string ("%s"%s) as a subroutine ref while "strict refs" in use
 Character(s) in '%c' format wrapped in %s
-chown not implemented!
 clear %s
 Code missing after '/' in pack
 Code missing after '/' in unpack
-Could not find version 1.1 of winsock dll
 Could not find version 2.0 of winsock dll
 '%c' outside of string in pack
 Debug leaking scalars child failed%s with errno %d: %s
 detach of a thread which could not start
 detach on an already detached thread
 detach on a thread with a waiter
--Dp not implemented on this platform
 Empty array reference given to mod2fname
 endhostent not implemented!
 endnetent not implemented!
@@ -552,11 +602,9 @@ endprotoent not implemented!
 endservent not implemented!
 Error loading module '%s': %s
 Error reading "%s": %s
-execl not implemented!
 EVAL without pos change exceeded limit in regex
 Filehandle opened only for %sput
 Filehandle %s opened only for %sput
-Filehandle STD%s reopened as %s only for input
 file_type not implemented on DOS
 filter_del can only delete in reverse order (currently)
 fork() not available
@@ -564,29 +612,6 @@ fork() not implemented!
 YOU HAVEN'T DISABLED SET-ID SCRIPTS IN THE KERNEL YET! FIX YOUR KERNEL, PUT A C WRAPPER AROUND THIS SCRIPT, OR USE -u AND UNDUMP!
 free %s
 Free to wrong pool %p not %p
-Function "endnetent" not implemented in this version of perl.
-Function "endprotoent" not implemented in this version of perl.
-Function "endservent" not implemented in this version of perl.
-Function "getnetbyaddr" not implemented in this version of perl.
-Function "getnetbyname" not implemented in this version of perl.
-Function "getnetent" not implemented in this version of perl.
-Function "getprotobyname" not implemented in this version of perl.
-Function "getprotobynumber" not implemented in this version of perl.
-Function "getprotoent" not implemented in this version of perl.
-Function "getservbyport" not implemented in this version of perl.
-Function "getservent" not implemented in this version of perl.
-Function "getsockopt" not implemented in this version of perl.
-Function "recvmsg" not implemented in this version of perl.
-Function "sendmsg" not implemented in this version of perl.
-Function "sethostent" not implemented in this version of perl.
-Function "setnetent" not implemented in this version of perl.
-Function "setprotoent" not implemented in this version of perl.
-Function "setservent"  not implemented in this version of perl.
-Function "setsockopt" not implemented in this version of perl.
-Function "tcdrain" not implemented in this version of perl.
-Function "tcflow" not implemented in this version of perl.
-Function "tcflush" not implemented in this version of perl.
-Function "tcsendbreak" not implemented in this version of perl.
 get %s %p %p %p
 gethostent not implemented!
 getnetbyaddr not implemented!
@@ -602,20 +627,13 @@ Goto undefined subroutine
 Goto undefined subroutine &%s
 Got signal %d
 ()-group starts with a count in %s
-Illegal binary digit '%c' ignored
-Illegal character %sin prototype for %s : %s
-Illegal hexadecimal digit '%c' ignored
 Illegal octal digit '%c' ignored
 INSTALL_PREFIX too long: `%s'
 Invalid argument to sv_cat_decode
 Invalid range "%c-%c" in transliteration operator
 Invalid separator character %c%c%c in PerlIO layer specification %s
-Invalid TOKEN object ignored
 ioctl implemented only on sockets
-ioctlsocket not implemented!
 join with a thread with a waiter
-killpg not implemented!
-List form of pipe open not implemented
 Looks like we have no PM; will not load DLL %s without $ENV{PERL_ASIF_PM}
 Malformed integer in [] in %s
 Malformed %s
@@ -633,17 +651,12 @@ Operator or semicolon missing before %c%s
 Out of memory during list extend
 panic queryaddr
 Parse error
-PerlApp::TextQuery: no arguments, please
 POSIX syntax [%c %c] is reserved for future extensions in regex; marked by <-- HERE in m/%s/
 ptr wrong %p != %p fl=%x nl=%p e=%p for %d
-QUITing...
-Recompile perl with -DDEBUGGING to use -D switch (did you mean -d ?)
 recursion detected in %s
-Regexp *+ operand could be empty in regex; marked by <-- HERE in m/%s/
 Reversed %c= operator
 %s: Can't parse EXE/DLL name: '%s'
 %s(%f) failed
-%sCompilation failed in require
 %s: Error stripping dirs from EXE/DLL/INSTALLDIR name
 sethostent not implemented!
 setnetent not implemented!
@@ -659,19 +672,13 @@ Size magic not implemented
 %s not implemented!
 %s number > %s non-portable
 %srealloc() %signored
-%s in regex m/%s/
 %s on %s %s
-socketpair not implemented!
 %s: %s
 Starting Full Screen process with flag=%d, mytype=%d
 Starting PM process with flag=%d, mytype=%d
-sv_2iv assumed (U_V(fabs((double)SvNVX(sv))) < (UV)IV_MAX) but SvNVX(sv)=%f U_V is 0x%x, IV_MAX is 0x%x
 switching effective gid is not implemented
 switching effective uid is not implemented
-System V IPC is not implemented on this machine
-Terminating on signal SIG%s(%d)
 This perl was compiled without taint support. Cowardly refusing to run with -t or -T flags
-This version of OS/2 does not support %s.%s
 Too deeply nested ()-groups in %s
 Too many args on %s line of "%s"
 U0 mode on a byte string
@@ -681,27 +688,11 @@ Unexpected program mode %d when morphing back from PM
 Unrecognized character %s; marked by <-- HERE after %s<-- HERE near column %d
 Unstable directory path, current directory changed unexpectedly
 Unterminated compressed integer in unpack
-Usage: %s(%s)
-Usage: %s::%s(%s)
-Usage: CODE(0x%x)(%s)
-Usage: File::Copy::rmscopy(from,to[,date_flag])
-Usage: VMS::Filespec::candelete(spec)
-Usage: VMS::Filespec::fileify(spec)
-Usage: VMS::Filespec::pathify(spec)
-Usage: VMS::Filespec::rmsexpand(spec[,defspec])
-Usage: VMS::Filespec::unixify(spec)
-Usage: VMS::Filespec::unixpath(spec)
-Usage: VMS::Filespec::unixrealpath(spec)
-Usage: VMS::Filespec::vmsify(spec)
-Usage: VMS::Filespec::vmspath(spec)
-Usage: VMS::Filespec::vmsrealpath(spec)
 utf8 "\x%X" does not map to Unicode
 Value of logical "%s" too long. Truncating to %i bytes
 waitpid: process %x is not a child of process %x
 Wide character
 Wide character in $/
-win32_get_osfhandle() TBD on this platform
-win32_open_osfhandle() TBD on this platform
 Within []-length '*' not allowed in %s
 Within []-length '%c' not allowed in %s
 Wrong size of loadOrdinals array: expected %d, actual %d

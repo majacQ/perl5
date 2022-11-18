@@ -434,8 +434,13 @@ EOP
 }
 
 # Check that assigning to $0 properly handles UTF-8-stored strings:
+SKIP:
 {
-
+  # setproctitle() misbehaves on dragonfly
+  # https://bugs.dragonflybsd.org/issues/3319
+  # https://github.com/Perl/perl5/issues/19894
+  skip "setproctitle() is flaky on DragonflyBSD", 11
+      if $^O eq "dragonfly";
   # Test both ASCII and EBCDIC systems:
   my $char = chr( utf8::native_to_unicode(0xe9) );
 
@@ -469,7 +474,22 @@ EOP
     open my $rfh, '<', "/proc/$$/cmdline"
       or skip "failed to read '/proc/$$/cmdline': $!", $skip;
     my $got = do { local $/; <$rfh> };
-    $got=~s/\0\z//;
+
+    # Some kernels leave a trailing NUL on. Some add a bunch of spaces
+    # after that NUL. We want neither.
+    #
+    # A selection of kernels/distros tested:
+    #
+    #   4.18.0-348.20.1.el8_5.x86_64 (AlmaLinux 8.5): NUL then spaces
+    #   4.18.0-348.23.1.el8_5.x86_64 (AlmaLinux 8.5): NUL, spaces, then NUL
+    #   3.10.0-1160.62.1.el7.x86_64 (CentOS 7.9.2009): no NUL nor spaces
+    #   2.6.32-954.3.5.lve1.4.87.el6.x86_64 (CloudLinux 6.10): ^^ ditto
+    #
+    #   5.13.0-1025-raspi (Ubuntu 21.10): NUL only
+    #   5.10.103-v7+ (RaspiOS 10): NUL only
+    #
+    $got =~ s/\0[\s\0]*\z//;
+
     return $got;
   };
 
@@ -932,10 +952,14 @@ SKIP: {
     }
 }
 
+# in some situations $SIG{ALRM} might be 'IGNORE', eg:
+# git rebase --exec='perl -e "print \$SIG{ALRM}" && git co -f' HEAD~2
+# will print out 'IGNORE'
+my $sig_alarm_expect= $SIG{ALRM};
 {
 	local %SIG = (%SIG, ALRM => sub {})
 };
-is $SIG{ALRM}, undef;
+is $SIG{ALRM}, $sig_alarm_expect, '$SIG{ALRM} is as expected';
 
 # test case-insignificance of %ENV (these tests must be enabled only
 # when perl is compiled with -DENV_IS_CASELESS)

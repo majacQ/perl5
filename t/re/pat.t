@@ -27,7 +27,7 @@ skip_all_without_unicode_tables();
 
 my $has_locales = locales_enabled('LC_CTYPE');
 
-plan tests => 1022;  # Update this when adding/deleting tests.
+plan tests => 1214;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -35,6 +35,34 @@ run_tests() unless caller;
 # Tests start here.
 #
 sub run_tests {
+    {
+        # see https://github.com/Perl/perl5/issues/12948
+        my $string="ABCDEFGHIJKL";
+        my $pat= "(.)" x length($string);
+        my $ok= $string=~/^$pat\z/;
+        foreach my $n (1 .. length($string)) {
+            $ok= eval sprintf 'is $%d, "%s", q($%d = %s); 1', ($n, substr($string,$n-1,1))x2;
+            ok($ok, "eval for \$$n test");
+            $ok= eval sprintf 'is ${%d}, "%s", q(${%d} = %s); 1', ($n, substr($string,$n-1,1))x2;
+            ok($ok, "eval for \${$n} test");
+
+            $ok= eval sprintf 'is $0%d, "%s", q($0%d = %s); 1', ($n, substr($string,$n-1,1))x2;
+            ok(!$ok, "eval failed as expected for \$0$n test");
+            $ok= eval sprintf 'is ${0%d}, "%s", q(${0%d} = %s); 1', ($n, substr($string,$n-1,1))x2;
+            ok(!$ok, "eval failed as expected for \${0$n} test");
+
+            no strict 'refs';
+            $ok= eval sprintf 'is ${0b%b}, "%s", q(${0b%b} = %s); 1', ($n, substr($string,$n-1,1))x2;
+            ok($ok, sprintf "eval for \${0b%b} test", $n);
+            $ok= eval sprintf 'is ${0x%x}, "%s", q(${0x%x} = %s); 1', ($n, substr($string,$n-1,1))x2;
+            ok($ok, sprintf "eval for \${0x%x} test", $n);
+            $ok= eval sprintf 'is ${0b%08b}, "%s", q(${0b%08b} = %s); 1', ($n, substr($string,$n-1,1))x2;
+            ok($ok, sprintf "eval for \${0b%b} test", $n);
+            $ok= eval sprintf 'is ${0x%04x}, "%s", q(${0x%04x} = %s); 1', ($n, substr($string,$n-1,1))x2;
+            ok($ok, sprintf "eval for \${0x%04x} test", $n);
+        }
+    }
+
     my $sharp_s = uni_to_native("\xdf");
 
     {
@@ -670,7 +698,47 @@ sub run_tests {
         @_ = /(bbb)/g;
         is("@_", "", $message);
     }
-
+    {
+        my $message = 'ACCEPT and CLOSE - ';
+        $_ = "aced";
+        #12           3  4  5
+        /((a?(*ACCEPT)())())()/
+            or die "Failed to match";
+        is($1,"a",$message . "buffer 1 is defined with expected value");
+        is($2,"a",$message . "buffer 2 is defined with expected value");
+        ok(!defined($3),$message . "buffer 3 is not defined");
+        ok(!defined($4),$message . "buffer 4 is not defined");
+        ok(!defined($5),$message . "buffer 5 is not defined");
+        ok(!defined($6),$message . "buffer 6 is not defined");
+        $message= 'NO ACCEPT and CLOSE - ';
+        /((a?())())()/
+            or die "Failed to match";
+        is($1,"a",$message . "buffer 1 is defined with expected value");
+        is($2,"a",$message . "buffer 2 is defined with expected value");
+        is($3,"", $message . "buffer 3 is defined with expected value");
+        is($4,"", $message . "buffer 4 is defined with expected value");
+        is($5,"",$message . "buffer 5 is defined with expected value");
+        ok(!defined($6),$message . "buffer 6 is not defined");
+        #12           3  4  5
+        $message = 'ACCEPT and CLOSE - ';
+        /((a?(*ACCEPT)(c))(e))(d)/
+            or die "Failed to match";
+        is($1,"a",$message . "buffer 1 is defined with expected value");
+        is($2,"a",$message . "buffer 2 is defined with expected value");
+        ok(!defined($3),$message . "buffer 3 is not defined");
+        ok(!defined($4),$message . "buffer 4 is not defined");
+        ok(!defined($5),$message . "buffer 5 is not defined");
+        ok(!defined($6),$message . "buffer 6 is not defined");
+        $message= 'NO ACCEPT and CLOSE - ';
+        /((a?(c))(e))(d)/
+            or die "Failed to match";
+        is($1,"ace", $message . "buffer 1 is defined with expected value");
+        is($2,"ac", $message . "buffer 2 is defined with expected value");
+        is($3,"c", $message . "buffer 3 is defined with expected value");
+        is($4,"e", $message . "buffer 4 is defined with expected value");
+        is($5,"d", $message . "buffer 5 is defined with expected value");
+        ok(!defined($6),$message . "buffer 6 is not defined");
+    }
     {
         my $message = '@- and @+ and @{^CAPTURE} tests';
 

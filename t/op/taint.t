@@ -18,7 +18,14 @@ use strict;
 use warnings;
 use Config;
 
-plan tests => 1054;
+my $NoTaintSupport = exists($Config{taint_support}) && !$Config{taint_support};
+
+if ($NoTaintSupport) {
+    skip_all("your perl was built without taint support");
+    exit 0;
+}
+
+plan tests => 1065;
 
 $| = 1;
 
@@ -124,7 +131,7 @@ sub violates_taint {
 
 # We need an external program to call.
 my $ECHO = ($Is_MSWin32 ? ".\\tmpecho$$" : "./tmpecho$$");
-END { unlink $ECHO }
+END { unlink $ECHO unless $NoTaintSupport }
 open my $fh, '>', $ECHO or die "Can't create $ECHO: $!";
 print $fh 'print "@ARGV\n"', "\n";
 close $fh;
@@ -138,14 +145,17 @@ my $TEST = 'TEST';
 {
     $ENV{'DCL$PATH'} = '' if $Is_VMS;
 
-    $ENV{PATH} = ($Is_Cygwin) ? '/usr/bin' : '';
+    # Empty path is the same as "." on *nix, so we have to set it
+    # to something or we will fail taint tests. perhaps setting it
+    # to "/" would be better. Anything absolute will do.
+    $ENV{PATH} = '/usr/bin';
     delete @ENV{@MoreEnv};
     $ENV{TERM} = 'dumb';
 
     is(eval { `$echo 1` }, "1\n");
 
     SKIP: {
-        skip "Environment tainting tests skipped", 4
+        skip "Environment tainting tests skipped", 11
           if $Is_MSWin32 || $Is_VMS;
 
 	my @vars = ('PATH', @MoreEnv);
@@ -156,6 +166,16 @@ my $TEST = 'TEST';
 	    shift @vars;
 	}
 	is("@vars", "");
+
+        # make sure that the empty path or empty path components
+        # trigger an "Insecure directory in $ENV{PATH}" error.
+        for my $path ("", ".", "/:", ":/", "/::/", ".:/", "/:.") {
+            local $ENV{PATH} = $path;
+            eval {`$echo 1`};
+            ok($@ =~ /Insecure directory in \$ENV\{PATH\}/,
+                "path '$path' is insecure as expected")
+                or diag "$@";
+        }
 
 	# tainted $TERM is unsafe only if it contains metachars
 	local $ENV{TERM};
@@ -2948,6 +2968,18 @@ is_tainted("$ovtaint", "overload preserves taint");
     taint_sig3($TAINT);
 }
 
+{
+	# GH 19478: panic on s///gre with tainted utf8 strings
+	my $u = "\x{10469}";
+	my $r1 = ("foo$TAINT" =~ s/./"$u"/gre);
+	is($r1, "$u$u$u", 'tainted string with utf8 s/.//gre');
+	my $r2 = ("foo$TAINT" =~ s/.*/"${u}"/gre);
+	is($r2, "$u$u", 'tainted string with utf8 s/.*//gre');
+	my $r3 = ("foo$TAINT" =~ s/.+/"${u}"/gre);
+	is($r3, $u, 'tainted string with utf8 s/.+//gre');
+	my $r4 = ("$u$TAINT" =~ s/./""/gre);
+	is($r4, '', 'tainted utf8 string with s///gre');
+}
 
 # This may bomb out with the alarm signal so keep it last
 SKIP: {

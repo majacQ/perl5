@@ -21,7 +21,6 @@ use warnings;
 $| = 1;
 
 use utf8;
-no warnings 'experimental::regex_sets';
 
 like("a", qr/(?[ [a]      # This is a comment
                     ])/, 'Can ignore a comment');
@@ -104,6 +103,7 @@ like("a", qr/(?[ (?#comment) [a]])/, "Can have (?#comments)");
 if (! is_miniperl() && locales_enabled('LC_CTYPE')) {
     my $utf8_locale = find_utf8_ctype_locale;
     SKIP: {
+        skip("No LC_ALL on this platform", 8) unless locales_enabled('LC_ALL');
         skip("No utf8 locale available on this platform", 8) unless $utf8_locale;
 
         setlocale(&POSIX::LC_ALL, "C");
@@ -173,13 +173,13 @@ for my $char ("٠", "٥", "٩") {
 
 # RT #126481 !! with syntax error panics
 {
-    fresh_perl_like('no warnings "experimental::regex_sets"; qr/(?[ ! ! (\w])/',
+    fresh_perl_like('qr/(?[ ! ! (\w])/',
                     qr/^Unmatched \(/, {},
                     'qr/(?[ ! ! (\w])/ doesnt panic');
 
     # The following didn't panic before, but easy to add this here with a
     # paren between the !!
-    fresh_perl_like('no warnings "experimental::regex_sets";qr/(?[ ! ( ! (\w)])/',
+    fresh_perl_like('qr/(?[ ! ( ! (\w)])/',
                     qr/^Unmatched \(/, {},
                     'qr/qr/(?[ ! ( ! (\w)])/');
 }
@@ -205,19 +205,19 @@ for my $char ("٠", "٥", "٩") {
 }
 
 {   # [perl #132167]
-    fresh_perl_is('no warnings "experimental::regex_sets";
-        print "c" =~ qr/(?[ ( \p{Uppercase} ) + (\p{Lowercase} - ([a] + [b]))  ])/;',
+    fresh_perl_is(
+        'print "c" =~ qr/(?[ ( \p{Uppercase} ) + (\p{Lowercase} - ([a] + [b]))  ])/;',
         1, {},
         'qr/(?[ ( \p{Uppercase} ) + (\p{Lowercase} - ([a] + [b]))  ]) compiles and properly matches');
-    fresh_perl_is('no warnings "experimental::regex_sets";
-        print "b" =~ qr/(?[ ( \p{Uppercase} ) + (\p{Lowercase} - ([a] + [b]))  ])/;',
+    fresh_perl_is(
+        'print "b" =~ qr/(?[ ( \p{Uppercase} ) + (\p{Lowercase} - ([a] + [b]))  ])/;',
         "", {},
         'qr/(?[ ( \p{Uppercase} ) + (\p{Lowercase} - ([a] + [b]))  ]) compiles and properly matches');
 }
 
 {   # [perl #133889]    Caused assertion failure
-    fresh_perl_like('no warnings "experimental::regex_sets";
-        qr/(?[\P{Is0}])/', qr/\QUnknown user-defined property name "Is0"/, {}, "[perl #133889]");
+    fresh_perl_like(
+        'qr/(?[\P{Is0}])/', qr/\QUnknown user-defined property name "Is0"/, {}, "[perl #133889]");
 }
 
 {

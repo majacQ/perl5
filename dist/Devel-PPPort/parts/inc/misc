@@ -227,7 +227,11 @@ __UNDEFINED__ SvRXOK(sv) (!!SvRX(sv))
 #endif
 
 __UNDEFINED__  NOOP          /*EMPTY*/(void)0
-__UNDEFINED__  dNOOP         extern int /*@unused@*/ Perl___notused PERL_UNUSED_DECL
+
+#if { VERSION < 5.6.1 } && { VERSION < 5.27.7 }
+#undef dNOOP
+__UNDEFINED__ dNOOP struct Perl___notused_struct
+#endif
 
 #ifndef NVTYPE
 #  if defined(USE_LONG_DOUBLE) && defined(HAS_LONG_DOUBLE)
@@ -295,17 +299,12 @@ __UNDEF_NOT_PROVIDED__  PERL_GCC_BRACE_GROUPS_FORBIDDEN
 
 #undef STMT_START
 #undef STMT_END
-#if defined(VOIDFLAGS) && defined(PERL_USE_GCC_BRACE_GROUPS)
-#  define STMT_START    (void)( /* gcc supports ``({ STATEMENTS; })'' */
-#  define STMT_END      )
-#else
-#  if defined(VOIDFLAGS) && (VOIDFLAGS) && (defined(sun) || defined(__sun__)) && !defined(__GNUC__)
+#if defined(VOIDFLAGS) && (VOIDFLAGS) && (defined(sun) || defined(__sun__)) && !defined(__GNUC__)
 #    define STMT_START  if (1)
 #    define STMT_END    else (void)0
-#  else
+#else
 #    define STMT_START  do
 #    define STMT_END    while (0)
-#  endif
 #endif
 
 __UNDEFINED__  boolSV(b)    ((b) ? &PL_sv_yes : &PL_sv_no)

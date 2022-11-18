@@ -476,6 +476,19 @@ sub like_yn ($$$@) {
     _ok($pass, _where(), $name, @mess);
 }
 
+sub refcount_is {
+    # Don't unpack first arg; access it directly via $_[0] to avoid creating
+    # another reference and upsetting the refcount
+    my (undef, $expected, $name, @mess) = @_;
+    my $got = &Internals::SvREFCNT($_[0]) + 1; # +1 to account for the & calling style
+    my $pass = $got == $expected;
+    unless ($pass) {
+        unshift @mess, "#      got $got references\n" .
+                       "# expected $expected\n";
+    }
+    _ok($pass, _where(), $name, @mess);
+}
+
 sub pass {
     _ok(1, '', @_);
 }
@@ -776,6 +789,11 @@ sub untaint_path {
             $path = $path . $sep;
         }
         $path = $path . '/bin';
+    } elsif (!$is_vms and !length $path) {
+        # empty PATH is the same as a path of "." on *nix so to prevent
+        # tests from dieing under taint we need to return something
+        # absolute. Perhaps "/" would be better? Anything absolute will do.
+        $path = "/usr/bin";
     }
 
     $path;
@@ -1706,17 +1724,58 @@ sub warning_like {
     }
 }
 
-# Set a watchdog to timeout the entire test file
+# Set a watchdog to timeout the entire test file.  The input seconds is
+# multiplied by $ENV{PERL_TEST_TIME_OUT_FACTOR} (default 1; minimum 1).
+# Set this in your profile for slow boxes, or use it to override the timeout
+# temporarily for debugging.
+#
 # NOTE:  If the test file uses 'threads', then call the watchdog() function
 #        _AFTER_ the 'threads' module is loaded.
+{ # Closure
+    my $watchdog;
+    my $watchdog_thread;
+
 sub watchdog ($;$)
 {
     my $timeout = shift;
-    my $method  = shift || "";
+
+    # If cancelling, use the state variables to know which method was used to
+    # create the watchdog.
+    if ($timeout == 0) {
+        if ($watchdog_thread) {
+            $watchdog_thread->kill('KILL');
+            undef $watch_dog_thread;
+        }
+        elsif ($watchdog) {
+            kill('KILL', $watchdog);
+            undef $watch_dog;
+        }
+        else {
+            alarm(0);
+        }
+
+        return;
+    }
+
+    # Make sure these aren't defined.
+    undef $watchdog;
+    undef $watchdog_thread;
+
+    my $method = shift || "";
+
     my $timeout_msg = 'Test process timed out - terminating';
 
+    # Accept either spelling
+    my $timeout_factor = $ENV{PERL_TEST_TIME_OUT_FACTOR}
+                      || $ENV{PERL_TEST_TIMEOUT_FACTOR}
+                      || 1;
+    $timeout_factor = 1 if $timeout_factor < 1;
+    $timeout_factor = $1 if $timeout_factor =~ /^(\d+)$/;
+
     # Valgrind slows perl way down so give it more time before dying.
-    $timeout *= 10 if $ENV{PERL_VALGRIND};
+    $timeout_factor = 10 if $timeout_factor < 10 && $ENV{PERL_VALGRIND};
+
+    $timeout *= $timeout_factor;
 
     my $pid_to_kill = $$;   # PID for this process
 
@@ -1732,7 +1791,9 @@ sub watchdog ($;$)
     if (!$threads_on || $method eq "process") {
 
         # On Windows and VMS, try launching a watchdog process
-        #   using system(1, ...) (see perlport.pod)
+        #   using system(1, ...) (see perlport.pod).  system() returns
+        #   immediately on these platforms with effectively a pid of the new
+        #   process
         if ($is_mswin || $is_vms) {
             # On Windows, try to get the 'real' PID
             if ($is_mswin) {
@@ -1746,7 +1807,7 @@ sub watchdog ($;$)
             return if ($pid_to_kill <= 0);
 
             # Launch watchdog process
-            my $watchdog;
+            undef $watchdog;
             eval {
                 local $SIG{'__WARN__'} = sub {
                     _diag("Watchdog warning: $_[0]");
@@ -1795,7 +1856,7 @@ sub watchdog ($;$)
         }
 
         # Try using fork() to generate a watchdog process
-        my $watchdog;
+        undef $watchdog;
         eval { $watchdog = fork() };
         if (defined($watchdog)) {
             if ($watchdog) {   # Parent process
@@ -1840,9 +1901,15 @@ sub watchdog ($;$)
     # Use a watchdog thread because either 'threads' is loaded,
     #   or fork() failed
     if (eval {require threads; 1}) {
-        'threads'->create(sub {
+        $watchdog_thread = 'threads'->create(sub {
                 # Load POSIX if available
                 eval { require POSIX; };
+
+                $SIG{'KILL'} = sub { threads->exit(); };
+
+                # Detach after the signal handler is set up; the parent knows
+                # not to signal until detached.
+                'threads'->detach();
 
                 # Execute the timeout
                 my $time_left = $timeout;
@@ -1856,7 +1923,18 @@ sub watchdog ($;$)
                 POSIX::_exit(1) if (defined(&POSIX::_exit));
                 my $sig = $is_vms ? 'TERM' : 'KILL';
                 kill($sig, $pid_to_kill);
-            })->detach();
+        });
+
+        # Don't proceed until the watchdog has set up its signal handler.
+        # (Otherwise there is a possibility that we will exit with threads
+        # running.)  The watchdog tells us the handler is set by detaching
+        # itself.  (The 'is_running()' is a fail-safe.)
+        while (     $watchdog_thread->is_running()
+               && ! $watchdog_thread->is_detached())
+        {
+            'threads'->yield();
+        }
+
         return;
     }
 
@@ -1876,6 +1954,7 @@ WATCHDOG_VIA_ALARM:
         };
     }
 }
+} # End closure
 
 # Orphaned Docker or Linux containers do not necessarily attach to PID 1. They might attach to 0 instead.
 sub is_linux_container {

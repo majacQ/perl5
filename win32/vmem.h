@@ -69,12 +69,30 @@ inline void MEMODSlx(char *str, long x)
 
 #ifdef _USE_LINKED_LIST
 class VMem;
+
+/*
+ * Address an alignment issue with x64 mingw-w64 ports of gcc-12 and
+ * (presumably) later. We do the same thing again 16 lines further down.
+ * See https://github.com/Perl/perl5/issues/19824
+ */
+
+#if defined(__MINGW64__) && __GNUC__ > 11
+typedef struct _MemoryBlockHeader* PMEMORY_BLOCK_HEADER __attribute__ ((aligned(16)));
+#else
 typedef struct _MemoryBlockHeader* PMEMORY_BLOCK_HEADER;
+#endif
+
 typedef struct _MemoryBlockHeader {
     PMEMORY_BLOCK_HEADER    pNext;
     PMEMORY_BLOCK_HEADER    pPrev;
     VMem *owner;
+
+#if defined(__MINGW64__) && __GNUC__ > 11
+} MEMORY_BLOCK_HEADER __attribute__ ((aligned(16))), *PMEMORY_BLOCK_HEADER;
+#else
 } MEMORY_BLOCK_HEADER, *PMEMORY_BLOCK_HEADER;
+#endif
+
 #endif
 
 class VMem

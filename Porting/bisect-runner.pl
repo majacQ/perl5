@@ -54,35 +54,35 @@ my %defines =
 push @paths, qw(/usr/local/lib /lib /usr/lib)
         unless $linux64;
 
-unless(GetOptions(\%options,
-                  'target=s', 'make=s', 'jobs|j=i', 'crash', 'expect-pass=i',
-                  'expect-fail' => sub { $options{'expect-pass'} = 0; },
-                  'clean!', 'one-liner|e=s@', 'c', 'l', 'w', 'match=s',
-                  'no-match=s' => sub {
-                      $options{match} = $_[1];
-                      $options{'expect-pass'} = 0;
-                  },
-                  'force-manifest', 'force-regen', 'setpgrp!', 'timeout=i',
-                  'test-build', 'validate',
-                  'all-fixups', 'early-fixup=s@', 'late-fixup=s@', 'valgrind',
-                  'check-args', 'check-shebang!', 'usage|help|?', 'gold=s',
-                  'module=s', 'with-module=s', 'cpan-config-dir=s',
-                  'test-module=s', 'no-module-tests',
-                  'A=s@',
-                  'D=s@' => sub {
-                      my (undef, $val) = @_;
-                      if ($val =~ /\A([^=]+)=(.*)/s) {
-                          $defines{$1} = length $2 ? $2 : "\0";
-                      } else {
-                          $defines{$val} = '';
-                      }
-                  },
-                  'U=s@' => sub {
-                      $defines{$_[1]} = undef;
-                  },
-		 )) {
-    pod2usage(exitval => 255, verbose => 1);
-}
+my $rv = GetOptions(
+    \%options,
+    'target=s', 'make=s', 'jobs|j=i', 'crash', 'expect-pass=i',
+    'expect-fail' => sub { $options{'expect-pass'} = 0; },
+    'clean!', 'one-liner|e=s@', 'c', 'l', 'w', 'match=s',
+    'no-match=s' => sub {
+        $options{match} = $_[1];
+        $options{'expect-pass'} = 0;
+    },
+    'force-manifest', 'force-regen', 'setpgrp!', 'timeout=i',
+    'test-build', 'validate',
+    'all-fixups', 'early-fixup=s@', 'late-fixup=s@', 'valgrind',
+    'check-args', 'check-shebang!', 'usage|help|?', 'gold=s',
+    'module=s', 'with-module=s', 'cpan-config-dir=s',
+    'test-module=s', 'no-module-tests',
+    'A=s@',
+    'D=s@' => sub {
+        my (undef, $val) = @_;
+        if ($val =~ /\A([^=]+)=(.*)/s) {
+            $defines{$1} = length $2 ? $2 : "\0";
+        } else {
+            $defines{$val} = '';
+        }
+    },
+    'U=s@' => sub {
+        $defines{$_[1]} = undef;
+    },
+);
+exit 255 unless $rv;
 
 my ($target, $match) = @options{qw(target match)};
 
@@ -966,13 +966,13 @@ A second investigator was able to create a reduction of the code needed to
 trigger a crash, then used this reduced case and the commit reported at the
 end of Stage 1 to further bisect.
 
-    .../perl/Porting/bisect.pl \
-        --start v5.18.4 \
-        --end ed958fa315 \
-        -DDEBUGGING \
-        --target miniperl \
-        --crash \
-        -- ./miniperl -Ilib -DXv -e '{ my $n=1; *foo= sub () { $n }; }'
+ .../perl/Porting/bisect.pl \
+   --start v5.18.4 \
+   --end ed958fa315 \
+   -DDEBUGGING \
+   --target miniperl \
+   --crash \
+   -- ./miniperl -Ilib -DXv -e '{ my $n=1; *foo= sub () { $n }; }'
 
 =back
 
@@ -1059,6 +1059,38 @@ on throughout the F<dist/Tie-File/> directory.
 =item * Reference
 
 L<Commit 125e1a3|https://github.com/Perl/perl5/commit/125e1a36a939>
+
+=back
+
+=head2 When did perl stop segfaulting on certain code?
+
+=over 4
+
+=item * Problem
+
+It was reported that perl was segfaulting on this code in perl-5.36.0:
+
+    @a = sort{eval"("}1,2
+
+Bisection subsequently identified the commit at which the segfaulting first
+appeared.  But when we ran that code against what was then the HEAD of blead
+(L<Commit 70d911|https://github.com/Perl/perl5/commit/70d911984f>), we got no
+segfault.  So the next question we faced was: At what commit did the
+segfaulting cease?
+
+=item * Solution
+
+Because the code in question loaded no libraries, it was amenable to bisection
+with C<miniperl>, thereby shortening bisection time considerably.
+
+    perl Porting/bisect.pl \
+        --start=v5.36.0 \
+        --target=miniperl \
+        --expect-fail -e '@a = sort{eval"("}1,2'
+
+=item * Reference
+
+L<GH issue 20261|https://github.com/Perl/perl5/issues/20261>
 
 =back
 

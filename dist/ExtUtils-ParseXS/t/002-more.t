@@ -19,7 +19,7 @@ ExtUtils::ParseXS->import('process_file');
 chdir 't' if -d 't';
 push @INC, '.';
 
-use Carp; $SIG{__WARN__} = \&Carp::cluck;
+use Carp; #$SIG{__WARN__} = \&Carp::cluck;
 
 # See the comments about this in 001-basics.t
 @INC = map { File::Spec->rel2abs($_) } @INC;
@@ -47,7 +47,7 @@ SKIP: {
 }
 
 SKIP: {
-  skip "no dynamic loading", 28
+  skip "no dynamic loading", 29
     if !$b->have_compiler || !$Config{usedl};
   my $module = 'XSMore';
   $lib_file = $b->link( objects => $obj_file, module_name => $module );

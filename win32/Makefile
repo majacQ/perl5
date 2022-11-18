@@ -4,7 +4,7 @@
 #	Microsoft Visual C++ 12.0 or later
 #
 # This is set up to build a perl.exe that runs off a shared library
-# (perl535.dll).  Also makes individual DLLs for the XS extensions.
+# (perl537.dll).  Also makes individual DLLs for the XS extensions.
 #
 
 ##
@@ -37,7 +37,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.35.10
+#INST_VER	= \5.37.6
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -171,7 +171,7 @@ DEFAULT_INC_EXCLUDES_DOT = define
 # set this to additionally provide a statically linked perl-static.exe.
 # Note that dynamic loading will not work with this perl, so you must
 # include required modules statically using the STATIC_EXT or ALL_STATIC
-# variables below. A static library perl535s.lib will also be created.
+# variables below. A static library perl537s.lib will also be created.
 # Ordinary perl.exe is not affected by this option.
 #
 #BUILD_STATIC	= define
@@ -320,7 +320,7 @@ PROCESSOR_ARCHITECTURE	= x86
 !  IF "$(PROCESSOR_ARCHITEW6432)" != ""
 PROCESSOR_ARCHITECTURE	= $(PROCESSOR_ARCHITEW6432)
 WIN64			= define
-!  ELSEIF "$(PROCESSOR_ARCHITECTURE)" == "AMD64" || "$(PROCESSOR_ARCHITECTURE)" == "IA64"
+!  ELSEIF "$(PROCESSOR_ARCHITECTURE)" == "AMD64" || "$(PROCESSOR_ARCHITECTURE)" == "IA64" || "$(PROCESSOR_ARCHITECTURE)" == "ARM64"
 WIN64			= define
 !  ELSE
 WIN64			= undef
@@ -332,10 +332,13 @@ USE_64_BIT_INT	= define
 !ENDIF
 
 ARCHITECTURE = $(PROCESSOR_ARCHITECTURE)
+
 !IF "$(ARCHITECTURE)" == "AMD64"
 ARCHITECTURE	= x64
 !ELSEIF "$(ARCHITECTURE)" == "IA64"
 ARCHITECTURE	= ia64
+!ELSEIF "$(ARCHITECTURE)" == "ARM64"
+ARCHITECTURE	= arm64
 !ENDIF
 
 !IF "$(USE_MULTI)" == "define"
@@ -374,7 +377,9 @@ CCLIBDIR	= $(CCHOME)\lib\amd64
 CCLIBDIR	= $(CCHOME)\lib
 !  ENDIF
 !ELSE
-!  IF "$(WIN64)" == "define"
+!  IF "$(ARCHITECTURE)" == "arm64"
+CCLIBDIR	= $(CCHOME)\lib\arm64
+!  ELSEIF "$(WIN64)" == "define"
 CCLIBDIR	= $(CCHOME)\lib\x64
 !  ELSE
 CCLIBDIR	= $(CCHOME)\lib\x86
@@ -574,9 +579,9 @@ $(o).dll:
 
 # makedef.pl must be updated if this changes, and this should normally
 # only change when there is an incompatible revision of the public API.
-PERLIMPLIB	= ..\perl535.lib
-PERLSTATICLIB	= ..\perl535s.lib
-PERLDLL		= ..\perl535.dll
+PERLIMPLIB	= ..\perl537.lib
+PERLSTATICLIB	= ..\perl537s.lib
+PERLDLL		= ..\perl537.dll
 
 MINIPERL	= ..\miniperl.exe
 MINIDIR		= .\mini
@@ -683,6 +688,7 @@ MICROCORE_SRC	=		\
 		..\numeric.c	\
 		..\op.c		\
 		..\pad.c	\
+		..\peep.c	\
 		..\perl.c	\
 		..\perly.c	\
 		..\pp.c		\
@@ -823,11 +829,13 @@ CFG_VARS	=					\
 		"usemultiplicity=$(USE_MULTI)"		\
 		"use64bitint=$(USE_64_BIT_INT)"		\
 		"uselongdouble=undef"			\
+		"usequadmath=undef"			    \
 		"usesitecustomize=$(USE_SITECUST)"	\
 		"default_inc_excludes_dot=$(DEFAULT_INC_EXCLUDES_DOT)"	\
 		"LINK_FLAGS=$(LINK_FLAGS:"=\")"		\
 		"optimize=$(OPTIMIZE:"=\")"		\
-		"WIN64=$(WIN64)"
+		"WIN64=$(WIN64)"                        \
+		"SKIP_CCHOME_CHECK=$(SKIP_CCHOME_CHECK)"
 
 #
 # Top targets
@@ -865,7 +873,8 @@ perlglob$(o)  : perlglob.c
 ..\perl$(o) : ..\git_version.h
 
 ..\config.sh : $(CFGSH_TMPL) config_sh.PL FindExt.pm $(MINIPERL)
-	$(MINIPERL) -I..\lib config_sh.PL $(CFG_VARS) $(CFGSH_TMPL) > ..\config.sh
+	$(MINIPERL) -I..\lib config_sh.PL $(CFG_VARS) $(CFGSH_TMPL) > ..\config.sh.tmp
+	rename ..\config.sh.tmp config.sh
 
 # This target is for when changes to the main config.sh happen.
 # Edit config.vc, then make perl in a minimal configuration (i.e. with MULTI,
@@ -1136,7 +1145,6 @@ utils: $(PERLEXE) ..\utils\Makefile
 	copy ..\README.jp       ..\pod\perljp.pod
 	copy ..\README.ko       ..\pod\perlko.pod
 	copy ..\README.linux    ..\pod\perllinux.pod
-	copy ..\README.macos    ..\pod\perlmacos.pod
 	copy ..\README.macosx   ..\pod\perlmacosx.pod
 	copy ..\README.openbsd  ..\pod\perlopenbsd.pod
 	copy ..\README.os2      ..\pod\perlos2.pod
@@ -1151,7 +1159,7 @@ utils: $(PERLEXE) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl53510delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5376delta.pod
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
@@ -1251,15 +1259,15 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl53510delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl5376delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlcn.pod perlcygwin.pod \
 	    perlfreebsd.pod perlhaiku.pod perlhpux.pod perlhurd.pod \
 	    perlintern.pod perlirix.pod perljp.pod perlko.pod perllinux.pod \
-	    perlmacos.pod perlmacosx.pod perlmodlib.pod perlopenbsd.pod \
-	    perlos2.pod perlos390.pod perlos400.pod perlplan9.pod \
-	    perlqnx.pod perlriscos.pod perlsolaris.pod perlsynology.pod \
-	    perltoc.pod perltru64.pod perltw.pod perluniprops.pod \
-	    perlvos.pod perlwin32.pod
+	    perlmacosx.pod perlmodlib.pod perlopenbsd.pod perlos2.pod \
+	    perlos390.pod perlos400.pod perlplan9.pod perlqnx.pod \
+	    perlriscos.pod perlsolaris.pod perlsynology.pod perltoc.pod \
+	    perltru64.pod perltw.pod perluniprops.pod perlvos.pod \
+	    perlwin32.pod
 	-cd ..\utils && del /f h2ph splain perlbug pl2pm h2xs \
 	    perldoc perlivp libnetcfg enc2xs encguess piconv cpan streamzip *.bat \
 	    xsubpp pod2html instmodsh json_pp prove ptar ptardiff ptargrep shasum corelist zipdetails
@@ -1317,12 +1325,12 @@ test-prep : all utils ../pod/perltoc.pod
 
 test : test-prep
 	cd ..\t
-	perl.exe harness $(TEST_SWITCHES) $(TEST_FILES)
+	perl.exe harness $(TEST_ARGS) $(TEST_SWITCHES) $(TEST_FILES)
 	cd ..\win32
 
 test_porting : test-prep
 	cd ..\t
-	perl.exe harness $(TEST_SWITCHES) porting\*.t ..\lib\diagnostics.t
+	perl.exe harness $(TEST_ARGS) $(TEST_SWITCHES) porting\*.t ..\lib\diagnostics.t
 	cd ..\win32
 
 test-reonly : reonly utils
@@ -1341,7 +1349,7 @@ regen :
 test-notty : test-prep
 	set PERL_SKIP_TTY_TEST=1
 	cd ..\t
-	perl.exe harness $(TEST_SWITCHES) $(TEST_FILES)
+	perl.exe harness $(TEST_ARGS) $(TEST_SWITCHES) $(TEST_FILES)
 	cd ..\win32
 
 _test : 
@@ -1349,7 +1357,7 @@ _test :
        $(XCOPY) $(PERLDLL) ..\t\$(NULL)
        $(XCOPY) $(GLOBEXE) ..\t\$(NULL)
        cd ..\t
-       perl.exe harness $(TEST_SWITCHES) $(TEST_FILES)
+       perl.exe harness $(TEST_ARGS) $(TEST_SWITCHES) $(TEST_FILES)
        cd ..\win32
 
 _clean :

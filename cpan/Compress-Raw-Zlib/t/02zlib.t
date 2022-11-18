@@ -11,8 +11,8 @@ use warnings;
 use bytes;
 
 use Test::More  ;
-use CompTestUtils;
 
+use constant ZLIB_1_2_12_0 => 0x12C0;
 
 BEGIN
 {
@@ -24,19 +24,21 @@ BEGIN
 
     my $count = 0 ;
     if ($] < 5.005) {
-        $count = 245 ;
+        $count = 249 ;
     }
     elsif ($] >= 5.006) {
-        $count = 349 ;
+        $count = 353 ;
     }
     else {
-        $count = 304 ;
+        $count = 308 ;
     }
 
     plan tests => $count + $extra;
 
     use_ok('Compress::Raw::Zlib', 2) ;
 }
+
+use CompTestUtils;
 
 
 my $Zlib_ver = Compress::Raw::Zlib::zlib_version ;
@@ -49,12 +51,7 @@ EOM
 my $len   = length $hello ;
 
 # Check zlib_version and ZLIB_VERSION are the same.
-SKIP: {
-    skip "TEST_SKIP_VERSION_CHECK is set", 1
-        if $ENV{TEST_SKIP_VERSION_CHECK};
-    is Compress::Raw::Zlib::zlib_version, ZLIB_VERSION,
-        "ZLIB_VERSION matches Compress::Raw::Zlib::zlib_version" ;
-}
+test_zlib_header_matches_library();
 
 {
     title "Error Cases" ;
@@ -490,7 +487,17 @@ SKIP:
         last if $status == Z_STREAM_END or $status != Z_OK ;
     }
 
-    cmp_ok $status, '==', Z_DATA_ERROR ;
+    # Z_STREAM_END returned by 1.12.2, Z_DATA_ERROR for older zlib
+    # ZLIB_NG has the fix for all versions
+    if (ZLIB_VERNUM >= ZLIB_1_2_12_0 ||  Compress::Raw::Zlib::is_zlibng)
+    {
+        cmp_ok $status, '==', Z_STREAM_END ;
+    }
+    else
+    {
+        cmp_ok $status, '==', Z_DATA_ERROR ;
+    }
+
     is $GOT, $goodbye ;
 
 
@@ -514,7 +521,17 @@ SKIP:
     is length($rest), $len2, "expected compressed output";
 
     $GOT = '';
-    cmp_ok $k->inflate($rest, $GOT), '==', Z_DATA_ERROR, "inflate returns Z_DATA_ERROR";
+    $status = $k->inflate($rest, $GOT);
+    # Z_STREAM_END returned by 1.12.2, Z_DATA_ERROR for older zlib
+    if (ZLIB_VERNUM >= ZLIB_1_2_12_0 || Compress::Raw::Zlib::is_zlibng)
+    {
+        cmp_ok $status, '==', Z_STREAM_END ;
+    }
+    else
+    {
+        cmp_ok $status, '==', Z_DATA_ERROR ;
+    }
+
     is $GOT, $goodbye ;
 }
 
@@ -1003,7 +1020,7 @@ SKIP:
 
     my $flags = Compress::Raw::Zlib::zlibCompileFlags;
 
-    if (ZLIB_VERNUM() < 0x1210)
+    if (!Compress::Raw::Zlib::is_zlibng && ZLIB_VERNUM() < 0x1210)
     {
         is $flags, 0, "zlibCompileFlags == 0 if < 1.2.1";
     }
@@ -1055,6 +1072,46 @@ SKIP:
     is eval('Compress::Raw::Zlib::crc32("A" x 0x100, 0, 0x101); 0x1234'), undef;
     like $@,  mkErr("^Offset out of range in Compress::Raw::Zlib::crc32") ;
 
+}
+
+SKIP:
+{
+    title "crc32_combine";
+
+   skip "crc32_combine needs zlib 1.2.3 or better, you have $Zlib_ver", 1
+        if ZLIB_VERNUM() < 0x1230 ;
+
+    my $first = "1234";
+    my $second = "5678";
+
+    my $crc1 = Compress::Raw::Zlib::crc32($first);
+    my $crc2 = Compress::Raw::Zlib::crc32($second);
+
+    my $composite_crc = Compress::Raw::Zlib::crc32($first . $second);
+
+    my $combined_crc = Compress::Raw::Zlib::crc32_combine($crc1, $crc2, length $second);
+
+    is $combined_crc, $composite_crc ;
+}
+
+SKIP:
+{
+    title "adler32_combine";
+
+   skip "adler32_combine needs zlib 1.2.3 or better, you have $Zlib_ver", 1
+        if ZLIB_VERNUM() < 0x1230 ;
+
+    my $first = "1234";
+    my $second = "5678";
+
+    my $adler1 = Compress::Raw::Zlib::adler32($first);
+    my $adler2 = Compress::Raw::Zlib::adler32($second);
+
+    my $composite_adler = Compress::Raw::Zlib::adler32($first . $second);
+
+    my $combined_adler = Compress::Raw::Zlib::adler32_combine($adler1, $adler2, length $second);
+
+    is $combined_adler, $composite_adler ;
 }
 
 if (0)

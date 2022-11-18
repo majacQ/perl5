@@ -534,7 +534,7 @@ like runperl(stderr => 1, switches => [ '-MO=-qq,Deparse', $path ],
 
 is runperl(stderr => 1, switches => [ '-MO=-qq,Deparse', $path ],
              prog => 'BEGIN { $::{f}=\!0 }'),
-   "sub BEGIN {\n    \$main::{'f'} = \\1;\n}\n",
+   "sub BEGIN {\n    \$main::{'f'} = \\!0;\n}\n",
    '&PL_sv_yes constant (used to croak)';
 
 is runperl(stderr => 1, switches => [ '-MO=-qq,Deparse', $path, '-T' ],
@@ -876,6 +876,13 @@ do { my $x = 1; $x };
 my $f = sub {
     +{[]};
 } ;
+####
+# anonconst
+# CONTEXT no warnings 'experimental::const_attr';
+my $f = sub : const {
+    123;
+}
+;
 ####
 # bug #43010
 '!@$%'->();
@@ -2101,7 +2108,6 @@ no warnings "experimental::lexical_subs";
 my sub f {}
 print f();
 >>>>
-BEGIN {${^WARNING_BITS} = "\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x55\x55\x55\x55\x55"}
 my sub f {
     
 }
@@ -2114,7 +2120,6 @@ no warnings 'experimental::lexical_subs';
 state sub f {}
 print f();
 >>>>
-BEGIN {${^WARNING_BITS} = "\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x55\x55\x55\x55\x55"}
 state sub f {
     
 }
@@ -3221,3 +3226,13 @@ $x = builtin::refaddr(undef);
 $x = builtin::reftype(undef);
 $x = builtin::ceil($x);
 $x = builtin::floor($x);
+$x = builtin::is_tainted($x);
+####
+# boolean true preserved
+my $x = !0;
+####
+# boolean false preserved
+my $x = !1;
+####
+# const NV: NV-ness preserved
+my(@x) = (-2.0, -1.0, -0.0, 0.0, 1.0, 2.0);

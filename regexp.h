@@ -22,6 +22,13 @@
 
 typedef SSize_t regnode_offset;
 
+struct regnode_meta {
+    U8 type;
+    U8 arg_len;
+    U8 arg_len_varies;
+    U8 off_by_arg;
+};
+
 struct regnode {
     U8	flags;
     U8  type;
@@ -39,7 +46,7 @@ struct regexp;
 
 struct reg_substr_datum {
     SSize_t min_offset; /* min pos (in chars) that substr must appear */
-    SSize_t max_offset  /* max pos (in chars) that substr must appear */;
+    SSize_t max_offset; /* max pos (in chars) that substr must appear */
     SV *substr;		/* non-utf8 variant */
     SV *utf8_substr;	/* utf8 variant */
     SSize_t end_shift;  /* how many fixed chars must end the string */
@@ -557,20 +564,24 @@ and check for NULL.
 /* Stuff that needs to be included in the pluggable extension goes below here */
 
 #ifdef PERL_ANY_COW
-#  define RXp_MATCH_COPY_FREE(prog) \
-        STMT_START {if (RXp_SAVED_COPY(prog)) { \
-            SV_CHECK_THINKFIRST_COW_DROP(RXp_SAVED_COPY(prog)); \
-        } \
-        if (RXp_MATCH_COPIED(prog)) { \
-            Safefree(RXp_SUBBEG(prog)); \
-            RXp_MATCH_COPIED_off(prog); \
-        }} STMT_END
+#  define RXp_MATCH_COPY_FREE(prog)                                 \
+    STMT_START {                                                    \
+        if (RXp_SAVED_COPY(prog)) {                                 \
+            SV_CHECK_THINKFIRST_COW_DROP(RXp_SAVED_COPY(prog));     \
+        }                                                           \
+        if (RXp_MATCH_COPIED(prog)) {                               \
+            Safefree(RXp_SUBBEG(prog));                             \
+            RXp_MATCH_COPIED_off(prog);                             \
+        }                                                           \
+    } STMT_END
 #else
-#  define RXp_MATCH_COPY_FREE(prog) \
-        STMT_START {if (RXp_MATCH_COPIED(prog)) { \
-            Safefree(RXp_SUBBEG(prog)); \
-            RXp_MATCH_COPIED_off(prog); \
-        }} STMT_END
+#  define RXp_MATCH_COPY_FREE(prog)                     \
+    STMT_START {                                        \
+        if (RXp_MATCH_COPIED(prog)) {                   \
+            Safefree(RXp_SUBBEG(prog));                 \
+            RXp_MATCH_COPIED_off(prog);                 \
+        }                                               \
+    } STMT_END
 #endif
 #define RX_MATCH_COPY_FREE(rx_sv)       RXp_MATCH_COPY_FREE(ReANY(rx_sv))
 

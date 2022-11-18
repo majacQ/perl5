@@ -102,6 +102,15 @@ Perl_mro_set_private_data(pTHX_ struct mro_meta *const smeta,
     return data;
 }
 
+/*
+=for apidoc mro_get_from_name
+
+Returns the previously registered mro with the given C<name>, or NULL if not
+registered.  See L</C<mro_register>>.
+
+=cut
+*/
+
 const struct mro_alg *
 Perl_mro_get_from_name(pTHX_ SV *name) {
     SV **data;
@@ -259,7 +268,7 @@ S_mro_get_linear_isa_dfs(pTHX_ HV *stash, U32 level)
     /* We use this later in this function, but don't need a reference to it
        beyond the end of this function, so reference count is fine.  */
     our_name = newSVhek(stashhek);
-    av_push(retval, our_name); /* add ourselves at the top */
+    av_push_simple(retval, our_name); /* add ourselves at the top */
 
     /* fetch our @ISA */
     gvp = (GV**)hv_fetchs(stash, "ISA", FALSE);
@@ -317,7 +326,7 @@ S_mro_get_linear_isa_dfs(pTHX_ HV *stash, U32 level)
 
                         HeVAL(he) = &PL_sv_undef;
                         sv_sethek(val, key);
-                        av_push(retval, val);
+                        av_push_simple(retval, val);
                     }
                 }
             } else {
@@ -349,7 +358,7 @@ S_mro_get_linear_isa_dfs(pTHX_ HV *stash, U32 level)
                        as if we'd copied it from what theirs should be.  */
                     stored = MUTABLE_HV(newSV_type_mortal(SVt_PVHV));
                     (void) hv_stores(stored, "UNIVERSAL", &PL_sv_undef);
-                    av_push(retval,
+                    av_push_simple(retval,
                             newSVhek(HeKEY_hek(hv_store_ent(stored, sv,
                                                             &PL_sv_undef, 0))));
                 }
@@ -406,7 +415,7 @@ Perl_mro_get_linear_isa(pTHX_ HV *stash)
     AV *isa;
 
     PERL_ARGS_ASSERT_MRO_GET_LINEAR_ISA;
-    if(!SvOOK(stash))
+    if(!HvHasAUX(stash))
         Perl_croak(aTHX_ "Can't linearize anonymous symbol table");
 
     meta = HvMROMETA(stash);
@@ -416,8 +425,8 @@ Perl_mro_get_linear_isa(pTHX_ HV *stash)
 
     if (meta->mro_which != &dfs_alg) { /* skip for dfs, for speed */
         SV * const namesv =
-            (HvENAME(stash)||HvNAME(stash))
-              ? newSVhek(HvENAME_HEK(stash)
+            (HvHasENAME_HEK(stash) || HvHasNAME(stash))
+              ? newSVhek(HvHasENAME_HEK(stash)
                           ? HvENAME_HEK(stash)
                           : HvNAME_HEK(stash))
               : NULL;
@@ -778,12 +787,12 @@ Perl_mro_package_moved(pTHX_ HV * const stash, HV * const oldstash,
     if(!(flags & 1)) {
         SV **svp;
         if(
-         !GvSTASH(gv) || !HvENAME(GvSTASH(gv)) ||
+         !GvSTASH(gv) || !HvHasENAME(GvSTASH(gv)) ||
          !(svp = hv_fetchhek(GvSTASH(gv), GvNAME_HEK(gv), 0)) ||
          *svp != (SV *)gv
         ) return;
     }
-    assert(SvOOK(GvSTASH(gv)));
+    assert(HvHasAUX(GvSTASH(gv)));
     assert(GvNAMELEN(gv));
     assert(GvNAME(gv)[GvNAMELEN(gv) - 1] == ':');
     assert(GvNAMELEN(gv) == 1 || GvNAME(gv)[GvNAMELEN(gv) - 2] == ':');
@@ -803,7 +812,7 @@ Perl_mro_package_moved(pTHX_ HV * const stash, HV * const oldstash,
                 : newSVpvs_flags("",  SVs_TEMP);
         }
         else {
-            namesv = sv_2mortal(newSVhek(*namep));
+            namesv = newSVhek_mortal(*namep);
             if (GvNAMELEN(gv) == 1) sv_catpvs(namesv, ":");
             else                    sv_catpvs(namesv, "::");
         }
@@ -837,7 +846,7 @@ Perl_mro_package_moved(pTHX_ HV * const stash, HV * const oldstash,
                     GvNAMEUTF8(gv) ? SV_CATUTF8 : SV_CATBYTES
                 );
             }
-            av_push((AV *)namesv, aname);
+            av_push_simple((AV *)namesv, aname);
         }
     }
 
@@ -894,7 +903,7 @@ S_mro_gather_and_rename(pTHX_ HV * const stashes, HV * const seen_stashes,
     HE *entry;
     I32 riter = -1;
     I32 items = 0;
-    const bool stash_had_name = stash && HvENAME(stash);
+    const bool stash_had_name = stash && HvHasENAME(stash);
     bool fetched_isarev = FALSE;
     HV *seen = NULL;
     HV *isarev = NULL;
@@ -1154,7 +1163,7 @@ S_mro_gather_and_rename(pTHX_ HV * const stashes, HV * const seen_stashes,
                             stashentry && *stashentry && isGV(*stashentry)
                          && (substash = GvHV(*stashentry))
                         )
-                     || (oldsubstash && HvENAME_get(oldsubstash))
+                     || (oldsubstash && HvHasENAME(oldsubstash))
                     )
                     {
                         /* Add :: and the key (minus the trailing ::)
@@ -1177,7 +1186,7 @@ S_mro_gather_and_rename(pTHX_ HV * const stashes, HV * const seen_stashes,
                                            ? SV_CATUTF8 : SV_CATBYTES
                                     );
                                 }
-                                av_push((AV *)subname, aname);
+                                av_push_simple((AV *)subname, aname);
                             }
                         }
                         else {
@@ -1260,7 +1269,7 @@ S_mro_gather_and_rename(pTHX_ HV * const stashes, HV * const seen_stashes,
                                            ? SV_CATUTF8 : SV_CATBYTES
                                     );
                                 }
-                                av_push((AV *)subname, aname);
+                                av_push_simple((AV *)subname, aname);
                             }
                         }
                         else {
@@ -1318,16 +1327,17 @@ via, C<mro::method_changed_in(classname)>.
 void
 Perl_mro_method_changed_in(pTHX_ HV *stash)
 {
-    const char * const stashname = HvENAME_get(stash);
-    const STRLEN stashname_len = HvENAMELEN_get(stash);
-
-    SV ** const svp = hv_fetchhek(PL_isarev, HvENAME_HEK(stash), 0);
-    HV * const isarev = svp ? MUTABLE_HV(*svp) : NULL;
-
     PERL_ARGS_ASSERT_MRO_METHOD_CHANGED_IN;
+
+    const char * const stashname = HvENAME_get(stash);
 
     if(!stashname)
         Perl_croak(aTHX_ "Can't call mro_method_changed_in() on anonymous symbol table");
+
+    const STRLEN stashname_len = HvENAMELEN_get(stash);
+
+    SV ** const svp = hv_fetchhek(PL_isarev, HvENAME_HEK_NN(stash), 0);
+    HV * const isarev = svp ? MUTABLE_HV(*svp) : NULL;
 
     /* Inc the package generation, since a local method changed */
     HvMROMETA(stash)->pkg_gen++;
@@ -1368,6 +1378,17 @@ Perl_mro_method_changed_in(pTHX_ HV *stash)
     /* pessimise derefs for now. Will get recalculated by Gv_AMupdate() */
     HvAUX(stash)->xhv_aux_flags &= ~HvAUXf_NO_DEREF;
 }
+
+/*
+=for apidoc mro_set_mro
+
+Set C<meta> to the value contained in the registered mro plugin whose name is
+C<name>.
+
+Croaks if C<name> hasn't been registered
+
+=cut
+*/
 
 void
 Perl_mro_set_mro(pTHX_ struct mro_meta *const meta, SV *const name)

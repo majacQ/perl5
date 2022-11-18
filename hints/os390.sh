@@ -35,6 +35,9 @@ esac
 # "unicode literals" to be enabled
 def_os390_cflags='-qlanglvl=extc1x';
 
+# For #ifdefs in code
+def_os390_defs="-DOS390 -DZOS";
+
 # Turn on POSIX compatibility modes
 #  https://www.ibm.com/support/knowledgecenter/SSLTBW_2.4.0/com.ibm.zos.v2r4.bpxbd00/ftms.htm
 def_os390_defs="$def_os390_defs -D_ALL_SOURCE";
@@ -60,8 +63,6 @@ myfirstchar=$(od -A n -N 1 -t x $me | xargs | tr [:lower:] [:upper:] | tr -d 0)
 if [ "${myfirstchar}" = "23" ]; then # 23 is '#' in ASCII
   unset ebcdic
   def_os390_cflags="$def_os390_cflags -qascii"
-  # ensure that 'safe' putenv is used and avoid direct environ manipulation
-  def_os390_defs="$def_os390_defs -DPERL_USE_SAFE_PUTENV";
 else
   ebcdic=true
 fi

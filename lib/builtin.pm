@@ -1,4 +1,4 @@
-package builtin 0.003;
+package builtin 0.008;
 
 use strict;
 use warnings;
@@ -20,7 +20,12 @@ builtin - Perl pragma to import built-in utility functions
         true false is_bool
         weaken unweaken is_weak
         blessed refaddr reftype
+        created_as_string created_as_number
         ceil floor
+        indexed
+        trim
+        is_tainted
+        export_lexically
     );
 
 =head1 DESCRIPTION
@@ -37,6 +42,10 @@ parameters on the C<use> statement for this pragma.
 
 The overall C<builtin> mechanism, as well as every individual function it
 provides, are currently B<experimental>.
+
+B<Warning>:  At present, the entire C<builtin> namespace is experimental.
+Calling functions in it will trigger warnings of the C<experimental::builtin>
+category.
 
 =head2 Lexical Import
 
@@ -154,6 +163,54 @@ Returns the basic container type of the referent of a reference, or C<undef>
 for a non-reference. This is returned as a string in all-capitals, such as
 C<ARRAY> for array references, or C<HASH> for hash references.
 
+=head2 created_as_string
+
+    $bool = created_as_string($val);
+
+Returns a boolean representing if the argument value was originally created as
+a string. It will return true for any scalar expression whose most recent
+assignment or modification was of a string-like nature - such as assignment
+from a string literal, or the result of a string operation such as
+concatenation or regexp. It will return false for references (including any
+object), numbers, booleans and undef.
+
+It is unlikely that you will want to use this for regular data validation
+within Perl, as it will not return true for regular numbers that are still
+perfectly usable as strings, nor for any object reference - especially objects
+that overload the stringification operator in an attempt to behave more like
+strings. For example
+
+    my $val = URI->new( "https://metacpan.org/" );
+
+    if( created_as_string $val ) { ... }    # this will not execute
+
+=head2 created_as_number
+
+    $bool = created_as_number($val);
+
+Returns a boolean representing if the argument value was originally created as
+a number. It will return true for any scalar expression whose most recent
+assignment or modification was of a numerical nature - such as assignment from
+a number literal, or the result of a numerical operation such as addition. It
+will return false for references (including any object), strings, booleans and
+undef.
+
+It is unlikely that you will want to use this for regular data validation
+within Perl, as it will not return true for regular strings of decimal digits
+that are still perfectly usable as numbers, nor for any object reference -
+especially objects that overload the numification operator in an attempt to
+behave more like numbers. For example
+
+    my $val = Math::BigInt->new( 123 );
+
+    if( created_as_number $val ) { ... }    # this will not execute
+
+While most Perl code should operate on scalar values without needing to know
+their creation history, these two functions are intended to be used by data
+serialisation modules such as JSON encoders or similar situations, where
+language interoperability concerns require making a distinction between values
+that are fundamentally stringlike versus numberlike in nature.
+
 =head2 ceil
 
     $num = ceil($num);
@@ -168,8 +225,99 @@ numerical argument.
 Returns the largest integer value less than or equal to the given numerical
 argument.
 
+=head2 indexed
+
+    @ivpairs = indexed(@items)
+
+Returns an even-sized list of number/value pairs, where each pair is formed
+of a number giving an index in the original list followed by the value at that
+position in it.  I.e. returns a list twice the size of the original, being
+equal to
+
+    (0, $items[0], 1, $items[1], 2, $items[2], ...)
+
+Note that unlike the core C<values> function, this function returns copies of
+its original arguments, not aliases to them. Any modifications of these copies
+are I<not> reflected in modifications to the original.
+
+    my @x = ...;
+    $_++ for indexed @x;  # The @x array remains unaffected
+
+This function is primarily intended to be useful combined with multi-variable
+C<foreach> loop syntax; as
+
+    foreach my ($index, $value) (indexed LIST) {
+        ...
+    }
+
+In scalar context this function returns the size of the list that it would
+otherwise have returned, and provokes a warning in the C<scalar> category.
+
+=head2 trim
+
+    $stripped = trim($string);
+
+Returns the input string with whitespace stripped from the beginning
+and end. trim() will remove these characters:
+
+" ", an ordinary space.
+
+"\t", a tab.
+
+"\n", a new line (line feed).
+
+"\r", a carriage return.
+
+and all other Unicode characters that are flagged as whitespace.
+A complete list is in L<perlrecharclass/Whitespace>.
+
+    $var = "  Hello world   ";            # "Hello world"
+    $var = "\t\t\tHello world";           # "Hello world"
+    $var = "Hello world\n";               # "Hello world"
+    $var = "\x{2028}Hello world\x{3000}"; # "Hello world"
+
+C<trim> is equivalent to:
+
+    $str =~ s/\A\s+|\s+\z//urg;
+
+For Perl versions where this feature is not available look at the
+L<String::Util> module for a comparable implementation.
+
+=head2 is_tainted
+
+    $bool = is_tainted($var);
+
+Returns true when given a tainted variable.
+
+=head2 export_lexically
+
+    export_lexically($name1, $ref1, $name2, $ref2, ...)
+
+Exports new lexical names into the scope currently being compiled. Names given
+by the first of each pair of values will refer to the corresponding item whose
+reference is given by the second. Types of item that are permitted are
+subroutines, and scalar, array, and hash variables. If the item is a
+subroutine, the name may optionally be prefixed with the C<&> sigil, but for
+convenience it doesn't have to. For items that are variables the sigil is
+required, and must match the type of the variable.
+
+    export_lexically func    => \&func,
+                     '&func' => \&func;  # same as above
+
+    export_lexically '$scalar' => \my $var;
+
+Z<>
+
+    # The following are not permitted
+    export_lexically '$var' => \@arr;   # sigil does not match
+    export_lexically name => \$scalar;  # implied '&' sigil does not match
+
+    export_lexically '*name' => \*globref;  # globrefs are not supported
+
+This must be called at compile time; which typically means during a C<BEGIN>
+block. Usually this would be used as part of an C<import> method of a module,
+when invoked as part of a C<use ...> statement.
+
 =head1 SEE ALSO
 
 L<perlop>, L<perlfunc>, L<Scalar::Util>
-
-=cut

@@ -10,9 +10,9 @@ POSIX - Perl interface to IEEE Std 1003.1
 
     printf "EINTR is %d\n", EINTR;
 
-    $sess_id = POSIX::setsid();
+    my $sess_id = POSIX::setsid();
 
-    $fd = POSIX::open($path, O_CREAT|O_EXCL|O_WRONLY, 0644);
+    my $fd = POSIX::open($path, O_CREAT|O_EXCL|O_WRONLY, 0644);
 	# note: that's a filedescriptor, *NOT* a filehandle
 
 =head1 DESCRIPTION
@@ -1624,7 +1624,7 @@ will change only the real user identifier.
 Detailed signal management.  This uses C<POSIX::SigAction> objects for
 the C<action> and C<oldaction> arguments (the oldaction can also be
 just a hash reference).  Consult your system's C<sigaction> manpage
-for details, see also C<POSIX::SigRt>.
+for details, see also L</POSIX::SigRt>.
 
 Synopsis:
 

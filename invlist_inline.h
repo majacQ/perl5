@@ -27,7 +27,7 @@
 #define FROM_INTERNAL_SIZE(x) ((x)/ sizeof(UV))
 
 PERL_STATIC_INLINE bool
-S_is_invlist(SV* const invlist)
+S_is_invlist(const SV* const invlist)
 {
     return invlist != NULL && SvTYPE(invlist) == SVt_INVLIST;
 }
@@ -161,6 +161,43 @@ S_invlist_highest(SV* const invlist)
            : array[len - 1] - 1;
 }
 
+#  if defined(PERL_IN_REGCOMP_C)
+
+PERL_STATIC_INLINE UV
+S_invlist_highest_range_start(SV* const invlist)
+{
+    /* Returns the lowest code point of the highest range in the inversion
+     * list parameter.  This API has an ambiguity: it returns 0 either when
+     * the lowest such point is actually 0 or when the list is empty.  If this
+     * distinction matters to you, check for emptiness before calling this
+     * function. */
+
+    UV len = _invlist_len(invlist);
+    UV *array;
+
+    PERL_ARGS_ASSERT_INVLIST_HIGHEST_RANGE_START;
+
+    if (len == 0) {
+        return 0;
+    }
+
+    array = invlist_array(invlist);
+
+    /* The last element in the array in the inversion list always starts a
+     * range that goes to infinity.  That range may be for code points that are
+     * matched in the inversion list, or it may be for ones that aren't
+     * matched.  In the first case, the lowest code point in the matching range
+     * is that the one that started the range.  If the other case, the final
+     * matching range begins at the next element down (which may be 0 in the
+     * edge case). */
+    return (ELEMENT_RANGE_MATCHES_INVLIST(len - 1))
+           ? array[len - 1]
+           : len == 1
+             ? 0
+             : array[len - 2];
+}
+
+#  endif
 #endif
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_OP_C)
 

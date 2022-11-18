@@ -6,7 +6,7 @@ BEGIN {
     set_up_inc('../lib');
 }
 
-plan(tests => 140);
+plan(tests => 162);
 
 eval 'pass();';
 
@@ -514,7 +514,7 @@ END_EVAL_TEST
     my $t;
     my $s = "a";
     $s =~ s/a/$t = \%^H;  qq( qq() );/ee;
-    is(Internals::SvREFCNT(%$t), $count_expected, 'RT 63110');
+    refcount_is $t, $count_expected, 'RT 63110';
 }
 
 # make sure default arg eval only adds a hints hash once to entereval
@@ -531,9 +531,9 @@ END_EVAL_TEST
     # test that the CV compiled for the eval is freed by checking that no additional 
     # reference to outside lexicals are made.
     my $x;
-    is(Internals::SvREFCNT($x), 1, "originally only 1 reference");
+    refcount_is \$x, 1+1, "originally only 1 reference"; # + 1 to account for the ref here
     eval '$x';
-    is(Internals::SvREFCNT($x), 1, "execution eval doesn't create new references");
+    refcount_is \$x, 1+1, "execution eval doesn't create new references"; # + 1 the same
 }
 
 fresh_perl_is(<<'EOP', "ok\n", undef, 'RT #70862');
@@ -696,4 +696,45 @@ pass("eval in freed package does not crash");
 
     eval q{ { 1; { 1; my $x = bless []; die $x = 0, "die in eval"; } } };
     ::like ($@, qr/die in eval/, "FREETMPS: die eval string exit");
+}
+
+{
+    local ${^MAX_NESTED_EVAL_BEGIN_BLOCKS}= 0;
+    my ($x, $ok);
+    $x = 0;
+    $ok= eval 'BEGIN { $x++ } 1';
+    ::ok(!$ok,'${^MAX_NESTED_EVAL_BEGIN_BLOCKS} = 0 blocks BEGIN blocks entirely');
+    ::like($@,qr/Too many nested BEGIN blocks, maximum of 0 allowed/,
+        'Blocked BEGIN results in expected error');
+    ::is($x,0,'BEGIN really did nothing');
+
+    ${^MAX_NESTED_EVAL_BEGIN_BLOCKS}= 2;
+    $ok= eval 'sub f { my $n= shift; eval q[BEGIN { $x++; f($n-1) if $n>0 } 1] or die $@ } f(3); 1';
+    ::ok(!$ok,'${^MAX_NESTED_EVAL_BEGIN_BLOCKS} = 2 blocked three nested BEGIN blocks');
+    ::like($@,qr/Too many nested BEGIN blocks, maximum of 2 allowed/,
+        'Blocked BEGIN results in expected error');
+    ::is($x,2,'BEGIN really did nothing');
+
+}
+
+{
+    # make sure that none of these segfault.
+    foreach my $line (
+        'eval "UNITCHECK { eval q(UNITCHECK { die; }); print q(A-) }";',
+        'eval "UNITCHECK { eval q(BEGIN     { die; }); print q(A-) }";',
+        'eval "BEGIN     { eval q(UNITCHECK { die; }); print q(A-) }";',
+        'CHECK     { eval "]" } print q"A-";',
+        'INIT      { eval "]" } print q"A-";',
+        'UNITCHECK { eval "]" } print q"A-";',
+        'BEGIN     { eval "]" } print q"A-";',
+        'INIT      { eval q(UNITCHECK { die; } print 0;); print q(A-); }',
+    ) {
+        fresh_perl_is($line . ' print "ok";', "A-ok", {}, "No segfault: $line");
+
+        # sort blocks are somewhat special and things that work in normal blocks
+        # can blow up in sort blocks, so test these constructs specially.
+        my $sort_line= 'my @x= sort { ' . $line . ' } 1,2;';
+        fresh_perl_is($sort_line . ' print "ok";', "A-ok", {},
+            "No segfault inside sort: $sort_line");
+    }
 }

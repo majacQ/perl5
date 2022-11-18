@@ -70,7 +70,7 @@ X<subroutine, parameter> X<parameter>
 
 In a subroutine that uses signatures (see L</Signatures> below),
 arguments are assigned into lexical variables introduced by the
-signature.  In the current implementation of perl they are also
+signature.  In the current implementation of Perl they are also
 accessible in the C<@_> array in the same way as for non-signature
 subroutines, but accessing them in this manner is now discouraged inside
 such a signature-using subroutine.
@@ -195,11 +195,11 @@ definition even if we fed it things like this:
 
 Do not, however, be tempted to do this:
 
-    (@a, @b)   = upcase(@list1, @list2);
+    (@x, @y)   = upcase(@list1, @list2);
 
 Like the flattened incoming parameter list, the return list is also
 flattened on return.  So all you have managed to do here is stored
-everything in C<@a> and made C<@b> empty.  See 
+everything in C<@x> and made C<@y> empty.  See 
 L</Pass by Reference> for alternatives.
 
 A subroutine may be called using an explicit C<&> prefix.  The
@@ -241,11 +241,11 @@ to cheat if you know what you're doing.  See L</Prototypes> below.
 X<&>
 
 Since Perl 5.16.0, the C<__SUB__> token is available under C<use feature
-'current_sub'> and C<use 5.16.0>.  It will evaluate to a reference to the
+'current_sub'> and C<use v5.16>.  It will evaluate to a reference to the
 currently-running sub, which allows for recursive calls without knowing
 your subroutine's name.
 
-    use 5.16.0;
+    use v5.16;
     my $factorial = sub {
       my ($x) = @_;
       return 1 if $x == 1;
@@ -294,8 +294,8 @@ C<SETLINEBUF>, C<SYSOPEN>, C<TELL>, C<UNREAD>, C<UTF8>, C<WRITE>
 
 =item documented in L<perlfunc>
 
-L<< C<import> | perlfunc/use >>, L<< C<unimport> | perlfunc/use >>,
-L<< C<INC> | perlfunc/require >>
+L<< C<import>|perlfunc/use >>, L<< C<unimport>|perlfunc/use >>,
+L<< C<INC>|perlfunc/require >>
 
 =item documented in L<UNIVERSAL>
 
@@ -335,7 +335,7 @@ block, after any name or attributes.
 
 For example,
 
-    sub foo :lvalue ($a, $b = 1, @c) { .... }
+    sub foo :lvalue ($x, $y = 1, @z) { .... }
 
 The signature declares lexical variables that are
 in scope for the block.  When the subroutine is called, the signature
@@ -483,7 +483,7 @@ statement such as:
 
     no warnings 'experimental::signatures';
 
-In the current perl implementation, when using a signature the arguments
+In the current Perl implementation, when using a signature the arguments
 are still also available in the special array variable C<@_>.  However,
 accessing them via this array is now discouraged, and should not be
 relied upon in newly-written code as this ability may change in a future
@@ -928,13 +928,13 @@ This feature allows code like this to work :
     { local $/ = undef; $slurp = <FILE>; }
 
 Note, however, that this restricts localization of some values ; for
-example, the following statement dies, as of perl 5.10.0, with an error
+example, the following statement dies, as of Perl 5.10.0, with an error
 I<Modification of a read-only value attempted>, because the $1 variable is
 magical and read-only :
 
     local $1 = 2;
 
-One exception is the default scalar variable: starting with perl 5.14
+One exception is the default scalar variable: starting with Perl 5.14
 C<local($_)> will always strip all magic from $_, to make it possible
 to safely reuse $_ in a subroutine.
 
@@ -1042,18 +1042,18 @@ also accepted.
     )
 
     {
-     my $a = delete local $hash{a};
-     # $a is [ 7, 8, 9 ]
+     my $x = delete local $hash{a};
+     # $x is [ 7, 8, 9 ]
      # %hash is (b => 1)
 
      {
-      my @nums = delete local @$a[0, 2]
+      my @nums = delete local @$x[0, 2]
       # @nums is (7, 9)
-      # $a is [ undef, 8 ]
+      # $x is [ undef, 8 ]
 
-      $a[0] = 999; # will be erased when the scope ends
+      $x[0] = 999; # will be erased when the scope ends
      }
-     # $a is back to [ 7, 8, 9 ]
+     # $x is back to [ 7, 8, 9 ]
 
     }
     # %hash is back to its original state
@@ -1105,7 +1105,7 @@ X<my sub> X<state sub> X<our sub> X<subroutine, lexical>
 
 Beginning with Perl 5.18, you can declare a private subroutine with C<my>
 or C<state>.  As with state variables, the C<state> keyword is only
-available under C<use feature 'state'> or C<use 5.010> or higher.
+available under C<use feature 'state'> or C<use v5.10> or higher.
 
 Prior to Perl 5.26, lexical subroutines were deemed experimental and were
 available only under the C<use feature 'lexical_subs'> pragma.  They also
@@ -1223,7 +1223,7 @@ mechanism is generally easier to work with.  See below.
 
 Sometimes you don't want to pass the value of an array to a subroutine
 but rather the name of it, so that the subroutine can modify the global
-copy of it rather than working with a local copy.  In perl you can
+copy of it rather than working with a local copy.  In Perl you can
 refer to all objects of a particular name by prefixing the name
 with a star: C<*foo>.  This is often known as a "typeglob", because the
 star on the front can be thought of as a wildcard match for all the
@@ -1346,7 +1346,7 @@ Here are a few simple examples.  First, let's pass in several arrays
 to a function and have it C<pop> all of then, returning a new list
 of all their former last elements:
 
-    @tailings = popmany ( \@a, \@b, \@c, \@d );
+    @tailings = popmany ( \@w, \@x, \@y, \@z );
 
     sub popmany {
 	my $aref;
@@ -1379,12 +1379,12 @@ a little expensive.
 
 Where people get into trouble is here:
 
-    (@a, @b) = func(@c, @d);
+    (@w, @x) = func(@y, @z);
 or
-    (%a, %b) = func(%c, %d);
+    (%w, %x) = func(%y, %z);
 
-That syntax simply won't work.  It sets just C<@a> or C<%a> and
-clears the C<@b> or C<%b>.  Plus the function didn't get passed
+That syntax simply won't work.  It sets just C<@w> or C<%w> and
+clears the C<@x> or C<%x>.  Plus the function didn't get passed
 into two separate arrays or hashes: it got one long list in C<@_>,
 as always.
 
@@ -1393,27 +1393,27 @@ cleaner code, although not so nice to look at.  Here's a function that
 takes two array references as arguments, returning the two array elements
 in order of how many elements they have in them:
 
-    ($aref, $bref) = func(\@c, \@d);
-    print "@$aref has more than @$bref\n";
+    ($wref, $xref) = func(\@y, \@z);
+    print "@$wref has more than @$xref\n";
     sub func {
-	my ($cref, $dref) = @_;
-	if (@$cref > @$dref) {
-	    return ($cref, $dref);
+	my ($yref, $zref) = @_;
+	if (@$yref > @$zref) {
+	    return ($yref, $zref);
 	} else {
-	    return ($dref, $cref);
+	    return ($zref, $yref);
 	}
     }
 
 It turns out that you can actually do this also:
 
-    (*a, *b) = func(\@c, \@d);
-    print "@a has more than @b\n";
+    (*w, *x) = func(\@y, \@z);
+    print "@w has more than @x\n";
     sub func {
-	local (*c, *d) = @_;
-	if (@c > @d) {
-	    return (\@c, \@d);
+	local (*y, *z) = @_;
+	if (@y > @z) {
+	    return (\@y, \@z);
 	} else {
-	    return (\@d, \@c);
+	    return (\@z, \@y);
 	}
     }
 
@@ -1491,14 +1491,14 @@ corresponding built-in.
    sub myvec ($$$)	   myvec $var, $offset, 1
    sub myindex ($$;$)	   myindex &getstring, "substr"
    sub mysyswrite ($$$;$)  mysyswrite $buf, 0, length($buf) - $off, $off
-   sub myreverse (@)	   myreverse $a, $b, $c
-   sub myjoin ($@)	   myjoin ":", $a, $b, $c
+   sub myreverse (@)	   myreverse $x, $y, $z
+   sub myjoin ($@)	   myjoin ":", $x, $y, $z
    sub mypop (\@)	   mypop @array
    sub mysplice (\@$$@)	   mysplice @array, 0, 2, @pushme
    sub mykeys (\[%@])	   mykeys $hashref->%*
    sub myopen (*;$)	   myopen HANDLE, $name
    sub mypipe (**)	   mypipe READHANDLE, WRITEHANDLE
-   sub mygrep (&@)	   mygrep { /foo/ } $a, $b, $c
+   sub mygrep (&@)	   mygrep { /foo/ } $x, $y, $z
    sub myrand (;$)	   myrand 42
    sub mytime ()	   mytime
 
@@ -1580,7 +1580,7 @@ without a prototype.  If you want to force a unary function to have the
 same precedence as a list operator, add C<;> to the end of the prototype:
 
     sub mygetprotobynumber($;);
-    mygetprotobynumber $a > $b; # parsed as mygetprotobynumber($a > $b)
+    mygetprotobynumber $x > $y; # parsed as mygetprotobynumber($x > $y)
 
 The interesting thing about C<&> is that you can generate new syntax with it,
 provided it's in the initial position:
@@ -1733,29 +1733,31 @@ has no other references.  Only the first example here will be inlined:
         *NOT_INLINED = sub () { $var };
     }
 
-A not so obvious caveat with this (see [RT #79908]) is that the
-variable will be immediately inlined, and will stop behaving like a
-normal lexical variable, e.g. this will print C<79907>, not C<79908>:
+A not so obvious caveat with this (see [RT #79908]) is what happens if the
+variable is potentially modifiable. For example:
 
     BEGIN {
-        my $x = 79907;
-        *RT_79908 = sub () { $x };
+        my $x = 10;
+        *FOO = sub () { $x };
         $x++;
     }
-    print RT_79908(); # prints 79907
+    print FOO(); # printed 10 prior to 5.32.0
 
-As of Perl 5.22, this buggy behavior, while preserved for backward
-compatibility, is detected and emits a deprecation warning.  If you want
-the subroutine to be inlined (with no warning), make sure the variable is
-not used in a context where it could be modified aside from where it is
-declared.
+From Perl 5.22 onwards this gave a deprecation warning, and from Perl 5.32
+onwards it became a run-time error. Previously the variable was
+immediately inlined, and stopped behaving like a normal lexical variable;
+so it printed C<10>, not C<11>.
+
+If you still want such a subroutine to be inlined (with no warning), make
+sure the variable is not used in a context where it could be modified
+aside from where it is declared.
 
     # Fine, no warning
     BEGIN {
         my $x = 54321;
         *INLINED = sub () { $x };
     }
-    # Warns.  Future Perl versions will stop inlining it.
+    # Error
     BEGIN {
         my $x;
         $x = 54321;
@@ -1782,11 +1784,11 @@ lexical variable you can easily force it to not be inlined by adding
 an explicit C<return>:
 
     BEGIN {
-        my $x = 79907;
-        *RT_79908 = sub () { return $x };
+        my $x = 10;
+        *FOO = sub () { return $x };
         $x++;
     }
-    print RT_79908(); # prints 79908
+    print FOO(); # prints 11
 
 The easiest way to tell if a subroutine was inlined is by using
 L<B::Deparse>.  Consider this example of two subroutines returning
@@ -1800,6 +1802,7 @@ without (with deparse output truncated for clarity):
  if (ONE ) {
      print ONE() if ONE ;
  }
+
  $ perl -MO=Deparse -le 'sub ONE () { 1 } if (ONE) { print ONE if ONE }'
  sub ONE () { 1 }
  do {
@@ -1849,8 +1852,8 @@ built-in name with the special package qualifier C<CORE::>.  For example,
 saying C<CORE::open()> always refers to the built-in C<open()>, even
 if the current package has imported some other subroutine called
 C<&open()> from elsewhere.  Even though it looks like a regular
-function call, it isn't: the CORE:: prefix in that case is part of Perl's
-syntax, and works for any keyword, regardless of what is in the CORE
+function call, it isn't: the C<CORE::> prefix in that case is part of Perl's
+syntax, and works for any keyword, regardless of what is in the C<CORE>
 package.  Taking a reference to it, that is, C<\&CORE::open>, only works
 for some keywords.  See L<CORE>.
 
@@ -1916,9 +1919,9 @@ those namespaces.  Naturally, this should be done with extreme caution--if
 it must be done at all.
 
 The C<REGlob> example above does not implement all the support needed to
-cleanly override perl's C<glob> operator.  The built-in C<glob> has
+cleanly override Perl's C<glob> operator.  The built-in C<glob> has
 different behaviors depending on whether it appears in a scalar or list
-context, but our C<REGlob> doesn't.  Indeed, many perl built-in have such
+context, but our C<REGlob> doesn't.  Indeed, many Perl built-ins have such
 context sensitive behaviors, and these must be adequately supported by
 a properly written override.  For a fully functional example of overriding
 C<glob>, study the implementation of C<File::DosGlob> in the standard

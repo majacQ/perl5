@@ -2,7 +2,6 @@
 .editorconfig			EditorConfig style file
 .lgtm.yml			LGTM.com configuration file
 .metaconf-exclusions.txt	Symbols that should ignored when generating Configure
-.travis.yml		continuous integration on github (where enabled)
 amigaos4/amigaio.c	AmigaOS4 port
 amigaos4/amigaio.h	AmigaOS4 port
 amigaos4/amigaos.c	AmigaOS4 port
@@ -148,40 +147,59 @@ cpan/AutoLoader/t/02AutoSplit.t		See if AutoSplit works
 cpan/bignum/gentest/backend.sh
 cpan/bignum/gentest/scope-nested-const.sh
 cpan/bignum/gentest/scope-nested-hex-oct.sh
+cpan/bignum/lib/bigfloat.pm
 cpan/bignum/lib/bigint.pm		bigint
 cpan/bignum/lib/bignum.pm		bignum
 cpan/bignum/lib/bigrat.pm		bigrat
 cpan/bignum/lib/Math/BigFloat/Trace.pm	bignum tracing
 cpan/bignum/lib/Math/BigInt/Trace.pm	bignum tracing
 cpan/bignum/lib/Math/BigRat/Trace.pm
+cpan/bignum/t/backend-gmp-bigfloat.t
 cpan/bignum/t/backend-gmp-bigint.t
 cpan/bignum/t/backend-gmp-bignum.t
 cpan/bignum/t/backend-gmp-bigrat.t
+cpan/bignum/t/backend-pari-bigfloat.t
 cpan/bignum/t/backend-pari-bigint.t
 cpan/bignum/t/backend-pari-bignum.t
 cpan/bignum/t/backend-pari-bigrat.t
 cpan/bignum/t/bigexp.t			See if bignum works
+cpan/bignum/t/bigfloat.t
 cpan/bignum/t/bigint.t			See if bigint works
 cpan/bignum/t/bignum.t			See if bignum works
 cpan/bignum/t/bigrat.t			See if bigrat works
+cpan/bignum/t/const-bigfloat.t
 cpan/bignum/t/const-bigint.t
 cpan/bignum/t/const-bignum.t
 cpan/bignum/t/const-bigrat.t
+cpan/bignum/t/down-mbi-up-mbf.t
+cpan/bignum/t/down-mbi-up-mbr.t
+cpan/bignum/t/down-mbi-up-undef.t
+cpan/bignum/t/down-undef-up-mbf.t
+cpan/bignum/t/e_pi-bigfloat.t
 cpan/bignum/t/e_pi-bigint.t
 cpan/bignum/t/e_pi-bignum.t
 cpan/bignum/t/e_pi-bigrat.t
+cpan/bignum/t/import-bigfloat.t
 cpan/bignum/t/import-bigint.t
 cpan/bignum/t/import-bignum.t
 cpan/bignum/t/import-bigrat.t
 cpan/bignum/t/in_effect.t		See if in_effect() works
+cpan/bignum/t/infnan-bigfloat.t
 cpan/bignum/t/infnan-bigint.t
-cpan/bignum/t/infnan-bignum.t
+cpan/bignum/t/infnan-bignum-mbf.t
+cpan/bignum/t/infnan-bignum-mbr.t
 cpan/bignum/t/infnan-bigrat.t
 cpan/bignum/t/option_a.t		See if bignum a => X works
-cpan/bignum/t/option_l.t		See if bignum l => X works
+cpan/bignum/t/option_a-bignum.t
+cpan/bignum/t/option_l-bigfloat.t
+cpan/bignum/t/option_l-bigint.t
+cpan/bignum/t/option_l-bignum.t
+cpan/bignum/t/option_l-bigrat.t
 cpan/bignum/t/option_p.t		See if bignum p => X works
+cpan/bignum/t/option_p-bignum.t
 cpan/bignum/t/overrides.t		See if global overrides behave
 cpan/bignum/t/ratopt_a.t		See if bigrat a => X works
+cpan/bignum/t/scope-bigfloat.t
 cpan/bignum/t/scope-bigint.t
 cpan/bignum/t/scope-bignum.t
 cpan/bignum/t/scope-bigrat.t
@@ -271,6 +289,10 @@ cpan/Config-Perl-V/t/35_plv52910g.t		Config::Perl::V
 cpan/Config-Perl-V/t/36_plv5300.t		Config::Perl::V
 cpan/Config-Perl-V/t/37_plv53111qm.t		Config::Perl::V
 cpan/Config-Perl-V/t/38_plv5320tld.t		Config::Perl::V
+cpan/Config-Perl-V/t/39_plv5340tqm.t		Config::Perl::V
+cpan/Config-Perl-V/t/40_plv5358dnqm.t		Config::Perl::V
+cpan/Config-Perl-V/t/41_plv5360dnqm.t		Config::Perl::V
+cpan/Config-Perl-V/t/42_plv5373tld.t		Config::Perl::V
 cpan/Config-Perl-V/V.pm				Config::Perl::V
 cpan/CPAN/lib/App/Cpan.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN.pm			Interface to Comprehensive Perl Archive Network
@@ -657,6 +679,7 @@ cpan/Encode/t/unibench.pl		benchmark script
 cpan/Encode/t/Unicode.t			test script
 cpan/Encode/t/Unicode_trailing_nul.t
 cpan/Encode/t/use-Encode-Alias.t
+cpan/Encode/t/utf32warnings.t
 cpan/Encode/t/utf8ref.t			test script
 cpan/Encode/t/utf8strict.t		test script
 cpan/Encode/t/utf8warnings.t
@@ -1154,6 +1177,7 @@ cpan/IO-Compress/t/110encode-rawdeflate.t		IO::Compress
 cpan/IO-Compress/t/110encode-zip.t			IO::Compress
 cpan/IO-Compress/t/111const-deflate.t			IO::Compress
 cpan/IO-Compress/t/112utf8-zip.t
+cpan/IO-Compress/t/113issues.t
 cpan/IO-Compress/t/999pod.t				IO::Compress
 cpan/IO-Compress/t/compress/any.pl			Compress::Zlib
 cpan/IO-Compress/t/compress/anyunc.pl			Compress::Zlib
@@ -1282,9 +1306,12 @@ cpan/JSON-PP/t/115_tie_ixhash.t
 cpan/JSON-PP/t/116_incr_parse_fixed.t
 cpan/JSON-PP/t/117_numbers.t
 cpan/JSON-PP/t/118_boolean_values.t
+cpan/JSON-PP/t/119_incr_parse_utf8.t
+cpan/JSON-PP/t/120_incr_parse_truncated.t
 cpan/JSON-PP/t/gh_28_json_test_suite.t
 cpan/JSON-PP/t/gh_29_trailing_false_value.t
 cpan/JSON-PP/t/rt_116998_wrong_character_offset.t
+cpan/JSON-PP/t/rt_122270_old_xs_boolean.t
 cpan/JSON-PP/t/rt_90071_incr_parse.t
 cpan/JSON-PP/t/zero-mojibake.t
 cpan/libnet/lib/Net/Cmd.pm
@@ -1332,24 +1359,10 @@ cpan/Math-BigInt/lib/Math/BigFloat.pm		An arbitrary precision floating-point ari
 cpan/Math-BigInt/lib/Math/BigInt.pm	An arbitrary precision integer arithmetic package
 cpan/Math-BigInt/lib/Math/BigInt/Calc.pm	Pure Perl module to support Math::BigInt
 cpan/Math-BigInt/lib/Math/BigInt/Lib.pm
-cpan/Math-BigInt/t/_bin_parts_to_lib_parts.t
-cpan/Math-BigInt/t/_bin_str_to_str_parts.t
-cpan/Math-BigInt/t/_dec_parts_to_lib_parts.t
-cpan/Math-BigInt/t/_dec_str_to_str_parts.t
-cpan/Math-BigInt/t/_e_math.t		Helper routine in BigFloat for _e math
-cpan/Math-BigInt/t/_hex_str_to_str_parts.t
-cpan/Math-BigInt/t/_oct_str_to_str_parts.t
 cpan/Math-BigInt/t/alias.inc		Support for BigInt tests
-cpan/Math-BigInt/t/backermann-mbi.t	Test Math::BigInt
 cpan/Math-BigInt/t/bare_mbf.t		Test MBF under Math::BigInt::BareCalc
 cpan/Math-BigInt/t/bare_mbi.t		Test MBI under Math::BigInt::BareCalc
 cpan/Math-BigInt/t/bare_mif.t		Rounding tests under BareCalc
-cpan/Math-BigInt/t/bdigitsum-mbi.t	Test Math::BigInt
-cpan/Math-BigInt/t/bdstr-mbf.t		Test Math::BigInt
-cpan/Math-BigInt/t/bdstr-mbi.t		Test Math::BigInt
-cpan/Math-BigInt/t/bestr-mbf.t		Test Math::BigInt
-cpan/Math-BigInt/t/bestr-mbi.t		Test Math::BigInt
-cpan/Math-BigInt/t/bfib-mbi.t
 cpan/Math-BigInt/t/big_pi_e.t		test bpi() and bexp()
 cpan/Math-BigInt/t/bigfltpm.inc		Shared tests for bigfltpm.t and sub_mbf.t
 cpan/Math-BigInt/t/bigfltpm.t		See if BigFloat.pm works
@@ -1360,46 +1373,15 @@ cpan/Math-BigInt/t/bigintpm.t		See if BigInt.pm works
 cpan/Math-BigInt/t/bigints.t		See if BigInt.pm works
 cpan/Math-BigInt/t/biglog.t		Test the log function
 cpan/Math-BigInt/t/bigroot.t		Test the broot function
-cpan/Math-BigInt/t/blucas-mbi.t
-cpan/Math-BigInt/t/bnok-mbf.t
-cpan/Math-BigInt/t/bnok-mbi.t
-cpan/Math-BigInt/t/bnstr-mbf.t		Test Math::BigInt
-cpan/Math-BigInt/t/bnstr-mbi.t		Test Math::BigInt
-cpan/Math-BigInt/t/bpi-mbf.t
-cpan/Math-BigInt/t/bpi-mbi.t
-cpan/Math-BigInt/t/bpow-mbf.t
-cpan/Math-BigInt/t/bpow-mbi.t
-cpan/Math-BigInt/t/bsstr-mbf.t		Test Math::BigInt
-cpan/Math-BigInt/t/bsstr-mbi.t		Test Math::BigInt
-cpan/Math-BigInt/t/buparrow-mbi.t	Test Math::BigInt
 cpan/Math-BigInt/t/calling-class-methods.t	Test Math::BigInt
 cpan/Math-BigInt/t/calling-constant.t
 cpan/Math-BigInt/t/calling-instance-methods.t	Test Math::BigInt
 cpan/Math-BigInt/t/calling-lib1.t
 cpan/Math-BigInt/t/calling-lib2.t
 cpan/Math-BigInt/t/config.t		Test Math::BigInt->config()
-cpan/Math-BigInt/t/const-mbf.t
-cpan/Math-BigInt/t/const-mbi.t
 cpan/Math-BigInt/t/downgrade.t		Test if use Math::BigInt(); under downgrade works
-cpan/Math-BigInt/t/dparts-mbf.t		Test Math::BigInt
-cpan/Math-BigInt/t/dparts-mbi.t		Test Math::BigInt
-cpan/Math-BigInt/t/eparts-mbf.t		Test Math::BigInt
-cpan/Math-BigInt/t/eparts-mbi.t		Test Math::BigInt
-cpan/Math-BigInt/t/fparts-mbf.t
-cpan/Math-BigInt/t/fparts-mbi.t
-cpan/Math-BigInt/t/from_base-mbi.t
-cpan/Math-BigInt/t/from_base_num-mbi.t
-cpan/Math-BigInt/t/from_bin-mbf.t	Test Math::BigInt
-cpan/Math-BigInt/t/from_bin-mbi.t
-cpan/Math-BigInt/t/from_hex-mbf.t	Test Math::BigInt
-cpan/Math-BigInt/t/from_hex-mbi.t
-cpan/Math-BigInt/t/from_ieee754-mbf.t	Test Math::BigInt
-cpan/Math-BigInt/t/from_oct-mbf.t	Test Math::BigInt
-cpan/Math-BigInt/t/from_oct-mbi.t
 cpan/Math-BigInt/t/inf_nan.t		Special tests for inf and *NaN* handling
 cpan/Math-BigInt/t/isa.t		Test for Math::BigInt inheritance
-cpan/Math-BigInt/t/lib_load-mbf-mbi.t
-cpan/Math-BigInt/t/lib_load-mbi-mbf.t
 cpan/Math-BigInt/t/Math/BigFloat/Subclass.pm	Empty subclass of BigFloat for test
 cpan/Math-BigInt/t/Math/BigInt/BareCalc.pm	Bigint's simulation of Calc
 cpan/Math-BigInt/t/Math/BigInt/Lib/Minimal.pm
@@ -1412,13 +1394,7 @@ cpan/Math-BigInt/t/mbi_rand.t		Test Math::BigInt randomly
 cpan/Math-BigInt/t/mbimbf.inc		Actual BigInt/BigFloat accuracy, precision and fallback, round_mode tests
 cpan/Math-BigInt/t/mbimbf.t		BigInt/BigFloat accuracy, precision and fallback, round_mode
 cpan/Math-BigInt/t/nan_cmp.t		overloaded comparison involving *NaN*
-cpan/Math-BigInt/t/new-mbf.t		Test Math::BigInt
-cpan/Math-BigInt/t/new-mbi.t
 cpan/Math-BigInt/t/new_overloaded.t	test overloaded numbers in BigFloat's new()
-cpan/Math-BigInt/t/nparts-mbf.t		Test Math::BigInt
-cpan/Math-BigInt/t/nparts-mbi.t		Test Math::BigInt
-cpan/Math-BigInt/t/objectify_mbf.t	Math::BigInt tests
-cpan/Math-BigInt/t/objectify_mbi.t	Math::BigInt tests
 cpan/Math-BigInt/t/req_mbf0.t		test: require Math::BigFloat; ->bzero();
 cpan/Math-BigInt/t/req_mbf1.t		test: require Math::BigFloat; ->bone();
 cpan/Math-BigInt/t/req_mbfa.t		test: require Math::BigFloat; ->bnan();
@@ -1428,15 +1404,10 @@ cpan/Math-BigInt/t/req_mbfw.t		require Math::BigFloat; import ( with => );
 cpan/Math-BigInt/t/require.t		Test if require Math::BigInt works
 cpan/Math-BigInt/t/round.t		Test rounding with non-integer A and P
 cpan/Math-BigInt/t/rt-16221.t		Tests for objectify() w/foreign objs
-cpan/Math-BigInt/t/sparts-mbf.t		Test Math::BigInt
-cpan/Math-BigInt/t/sparts-mbi.t		Test Math::BigInt
 cpan/Math-BigInt/t/sub_ali.t		Tests for aliases in BigInt subclasses
 cpan/Math-BigInt/t/sub_mbf.t		Empty subclass test of BigFloat
 cpan/Math-BigInt/t/sub_mbi.t		Empty subclass test of BigInt
 cpan/Math-BigInt/t/sub_mif.t		Test A & P with subclasses using mbimbf.inc
-cpan/Math-BigInt/t/to_base-mbi.t
-cpan/Math-BigInt/t/to_base_num-mbi.t
-cpan/Math-BigInt/t/to_ieee754-mbf.t	Test Math::BigInt
 cpan/Math-BigInt/t/trap.t		Test whether trap_nan and trap_inf work
 cpan/Math-BigInt/t/upgrade.inc		Actual tests for upgrade.t
 cpan/Math-BigInt/t/upgrade.t		Test if use Math::BigInt(); under upgrade works
@@ -1472,44 +1443,38 @@ cpan/Math-BigRat/t/binv-mbr.t
 cpan/Math-BigRat/t/bitwise.t		Math::BigRat test
 cpan/Math-BigRat/t/bnok-mbr.t
 cpan/Math-BigRat/t/const-mbr.t
+cpan/Math-BigRat/t/downgrade.t
 cpan/Math-BigRat/t/dparts-mbr.t
+cpan/Math-BigRat/t/fparts-mbr.t
 cpan/Math-BigRat/t/hang.t		Math::BigRat test for bug #34584 - hang in exp()
 cpan/Math-BigRat/t/Math/BigRat/Test.pm	Math::BigRat test helper
 cpan/Math-BigRat/t/new-mbr.t
 cpan/Math-BigRat/t/requirer.t		see if require works properly
 cpan/Math-BigRat/t/rt121139.t
 cpan/Math-BigRat/t/trap.t		see if trap_nan and trap_inf work
-cpan/Math-Complex/lib/Math/Complex.pm	A Complex package
-cpan/Math-Complex/lib/Math/Trig.pm	A simple interface to complex trigonometry
-cpan/Math-Complex/t/Complex.t		See if Math::Complex works
-cpan/Math-Complex/t/Trig.t		See if Math::Trig works
-cpan/Math-Complex/t/underbar.t		See if Math::Complex works
 cpan/Memoize/Memoize.pm			Memoize
 cpan/Memoize/Memoize/AnyDBM_File.pm	Memoize glue layer for AnyDBM_File
 cpan/Memoize/Memoize/Expire.pm		Memoize expiry manager example
-cpan/Memoize/Memoize/ExpireFile.pm	Memoize expiry manager test scaffold
-cpan/Memoize/Memoize/ExpireTest.pm	Memoize expiry manager test scaffold
 cpan/Memoize/Memoize/NDBM_File.pm	Memoize glue layer for NDBM_File
 cpan/Memoize/Memoize/SDBM_File.pm	Memoize glue layer for SDBM_File
 cpan/Memoize/Memoize/Storable.pm	Memoize glue layer for Storable
-cpan/Memoize/t/array.t			Memoize array context return tests
-cpan/Memoize/t/array_confusion.t	Memoize ambiguous array return tests
+cpan/Memoize/t/basic.t
+cpan/Memoize/t/cache.t
 cpan/Memoize/t/correctness.t		Memoize basic correctness tests
-cpan/Memoize/t/errors.t			Memoize PEBKAC detection tests
-cpan/Memoize/t/expfile.t		Memoize expiry manager tests
-cpan/Memoize/t/expire.t			Memoize expiry manager tests
-cpan/Memoize/t/expmod_n.t		Memoize expiry manager tests
+cpan/Memoize/t/expmod.t
 cpan/Memoize/t/expmod_t.t		Memoize expiry manager (timed) tests
 cpan/Memoize/t/flush.t			Memoize 'flush_cache' function tests
+cpan/Memoize/t/lib/DBMTest.pm
 cpan/Memoize/t/normalize.t		Memoize 'normalizer' feature tests
-cpan/Memoize/t/prototype.t		Memoize prototyped function handling tests
-cpan/Memoize/t/speed.t			"Makes functions faster" advertisement test
+cpan/Memoize/t/st_concurrency
+cpan/Memoize/t/threadsafe.t
 cpan/Memoize/t/tie.t			Memoize tied file test
+cpan/Memoize/t/tie_db.t
 cpan/Memoize/t/tie_gdbm.t		Memoize GDBM interface test
 cpan/Memoize/t/tie_ndbm.t		Memoize NDBM interface test
+cpan/Memoize/t/tie_odbm.t
 cpan/Memoize/t/tie_sdbm.t		Memoize SDBM interface test
 cpan/Memoize/t/tie_storable.t		Memoize Storable interface test
-cpan/Memoize/t/tiefeatures.t		Memoize FAULT / MERGE / HASH options test
 cpan/Memoize/t/unmemoize.t		Memoize 'unmemoize' function test
 cpan/MIME-Base64/Base64.xs		MIME::Base64 extension
 cpan/MIME-Base64/lib/MIME/Base64.pm
@@ -3738,11 +3703,15 @@ dist/ExtUtils-ParseXS/t/lib/PrimitiveCapture.pm			Primitive STDOUT/ERR capturing
 dist/ExtUtils-ParseXS/t/lib/TypemapTest/Foo.pm			ExtUtils::Typemaps tests
 dist/ExtUtils-ParseXS/t/pseudotypemap1				A test-typemap
 dist/ExtUtils-ParseXS/t/typemap					Standard typemap for controlled testing
+dist/ExtUtils-ParseXS/t/XSAlias.xs				Test file for ExtUtils::ParseXS ALIAS tests
 dist/ExtUtils-ParseXS/t/XSBroken.xs				Test file for ExtUtils::ParseXS tests
+dist/ExtUtils-ParseXS/t/XSFalsePositive.xs			Test file for ExtUtils::ParseXS tests
+dist/ExtUtils-ParseXS/t/XSFalsePositive2.xs			Test file for ExtUtils::ParseXS tests
 dist/ExtUtils-ParseXS/t/XSInclude.xsh				Test file for ExtUtils::ParseXS tests
 dist/ExtUtils-ParseXS/t/XSMore.xs				Test file for ExtUtils::ParseXS tests
 dist/ExtUtils-ParseXS/t/XSTest.pm				Test file for ExtUtils::ParseXS tests
 dist/ExtUtils-ParseXS/t/XSTest.xs				Test file for ExtUtils::ParseXS tests
+dist/ExtUtils-ParseXS/t/XSTightDirectives.xs			Test file for ExtUtils::ParseXS tests
 dist/ExtUtils-ParseXS/t/XSUsage.pm				ExtUtils::ParseXS tests
 dist/ExtUtils-ParseXS/t/XSUsage.xs				ExtUtils::ParseXS tests
 dist/ExtUtils-ParseXS/t/XSWarn.xs				ExtUtils::ParseXS tests
@@ -3854,6 +3823,11 @@ dist/Locale-Maketext/t/92_blacklist.t			See if Locale::Maketext works
 dist/Locale-Maketext/t/93_whitelist.t			See if Locale::Maketext works
 dist/Locale-Maketext/t/94_denylist.t			See if Locale::Maketext works
 dist/Locale-Maketext/t/95_allowlist.t			See if Locale::Maketext works
+dist/Math-Complex/lib/Math/Complex.pm	A Complex package
+dist/Math-Complex/lib/Math/Trig.pm	A simple interface to complex trigonometry
+dist/Math-Complex/t/Complex.t		See if Math::Complex works
+dist/Math-Complex/t/Trig.t		See if Math::Trig works
+dist/Math-Complex/t/underbar.t		See if Math::Complex works
 dist/Module-CoreList/Changes			Module::CoreList Changes
 dist/Module-CoreList/corelist			The corelist command-line utility
 dist/Module-CoreList/identify-dependencies	A usage example for Module::CoreList
@@ -3963,6 +3937,7 @@ dist/Storable/t/attach.t		Check STORABLE_attach doesn't create objects unnecessa
 dist/Storable/t/attach_errors.t		Trigger and test STORABLE_attach errors
 dist/Storable/t/attach_singleton.t	Test STORABLE_attach for the Singleton pattern
 dist/Storable/t/blessed.t		See if Storable works
+dist/Storable/t/boolean.t		See if Storable works
 dist/Storable/t/canonical.t		See if Storable works
 dist/Storable/t/circular_hook.t		Test thaw hook called depth-first for circular refs
 dist/Storable/t/code.t			See if Storable works
@@ -4075,7 +4050,8 @@ dist/threads/t/stress_cv.t	Test with multiple threads, coderef cv argument.
 dist/threads/t/stress_re.t	Test with multiple threads, string cv argument and regexes.
 dist/threads/t/stress_string.t	Test with multiple threads, string cv argument.
 dist/threads/t/thread.t		General ithread tests from thr5005
-dist/threads/t/unique.t			Test unique attribute with threads
+dist/threads/t/unique.t		Test unique attribute with threads
+dist/threads/t/version.t	Test that pod version matches code version.
 dist/threads/threads.xs		ithreads
 dist/threads-shared/hints/linux.pl	thread shared variables
 dist/threads-shared/lib/threads/shared.pm	thread shared variables
@@ -4225,6 +4201,7 @@ ext/B/Makefile.PL	Compiler backend makefile writer
 ext/B/O.pm		Compiler front-end module (-MO=...)
 ext/B/t/b.t		See if B works
 ext/B/t/B/success.pm	Test module for ext/B/t/o.t
+ext/B/t/bool.t		See if B works for bool
 ext/B/t/concise.t	See whether B::Concise works
 ext/B/t/concise-xs.t	See whether B::Concise recognizes XS functions
 ext/B/t/f_map			code from perldoc -f map
@@ -4293,6 +4270,7 @@ ext/File-DosGlob/DosGlob.xs		Win32 DOS-globbing module
 ext/File-DosGlob/lib/File/DosGlob.pm	Win32 DOS-globbing module
 ext/File-DosGlob/t/DosGlob.t		See if File::DosGlob works
 ext/File-Find/lib/File/Find.pm	Routines to do a find
+ext/File-Find/t/correct-absolute-path-with-follow.t
 ext/File-Find/t/find.t		See if File::Find works
 ext/File-Find/t/lib/Testing.pm		Functions used in testing File-find
 ext/File-Find/t/taint.t		See if File::Find works with taint
@@ -4384,7 +4362,6 @@ ext/ODBM_File/hints/MSWin32.pl	Hint for ODBM_File for named architecture
 ext/ODBM_File/hints/sco.pl	Hint for ODBM_File for named architecture
 ext/ODBM_File/hints/solaris.pl	Hint for ODBM_File for named architecture
 ext/ODBM_File/hints/svr4.pl	Hint for ODBM_File for named architecture
-ext/ODBM_File/hints/ultrix.pl	Hint for ODBM_File for named architecture
 ext/ODBM_File/Makefile.PL	ODBM extension makefile writer
 ext/ODBM_File/ODBM_File.pm	ODBM extension Perl module
 ext/ODBM_File/ODBM_File.xs	ODBM extension external subroutines
@@ -4586,6 +4563,7 @@ ext/XS-APItest/t/copstash.t	test alloccopstash
 ext/XS-APItest/t/copyhints.t	test hv_copy_hints_hv() API
 ext/XS-APItest/t/customop.t	XS::APItest: tests for custom ops
 ext/XS-APItest/t/cv_name.t	test cv_name
+ext/XS-APItest/t/cv_refcounted_anysv.t	test CvREFCOUNTED_ANYSV
 ext/XS-APItest/t/delimcpy.t	test delimcpy
 ext/XS-APItest/t/eval-filter.t	Simple source filter/eval test
 ext/XS-APItest/t/exception.t	XS::APItest extension
@@ -4634,6 +4612,7 @@ ext/XS-APItest/t/multicall.t	XS::APItest: test MULTICALL macros
 ext/XS-APItest/t/my_cxt.t	XS::APItest: test MY_CXT interface
 ext/XS-APItest/t/my_exit.t	XS::APItest: test my_exit
 ext/XS-APItest/t/my_strtod.t	XS::APItest: test my_strtod
+ext/XS-APItest/t/newAV.t	XS::APItest: test newAV* functions
 ext/XS-APItest/t/newCONSTSUB.t	XS::APItest: test newCONSTSUB(_flags)
 ext/XS-APItest/t/newDEFSVOP.t	XS::APItest: test newDEFSVOP
 ext/XS-APItest/t/Null.pm	Helper for ./blockhooks.t
@@ -4807,7 +4786,6 @@ hints/svr4.sh			Hints for named architecture
 hints/svr5.sh			Hints for named architecture
 hints/t001.c			Test case for gcc bug
 hints/ti1500.sh			Hints for named architecture
-hints/ultrix_4.sh		Hints for named architecture
 hints/umips.sh			Hints for named architecture
 hints/unicos.sh			Hints for named architecture
 hints/unicosmk.sh		Hints for named architecture
@@ -5016,6 +4994,7 @@ lib/Time/localtime.pm		By-name interface to Perl's builtin localtime
 lib/Time/localtime.t		Test for Time::localtime
 lib/Time/tm.pm			Internal object for Time::{gm,local}time
 lib/Unicode/README		Explanation what happened to lib/unicode.
+lib/Unicode/testnorm.t		Run official Unicode Consortium's normalization tests
 lib/Unicode/UCD.pm		Unicode character database
 lib/Unicode/UCD.t		See if Unicode character database works
 lib/unicore/ArabicShaping.txt			Unicode character database
@@ -5065,6 +5044,7 @@ lib/unicore/NamedSequences.txt			Unicode character database
 lib/unicore/NamedSqProv.txt			Unicode character database
 lib/unicore/NamesList.txt			Unicode character database
 lib/unicore/NormalizationCorrections.txt	Unicode character database
+lib/unicore/NormTest.txt			Unicode character database
 lib/unicore/PropertyAliases.txt			Unicode character database
 lib/unicore/PropList.txt			Unicode character database
 lib/unicore/PropValueAliases.txt		Unicode character database
@@ -5074,6 +5054,7 @@ lib/unicore/ScriptExtensions.txt		Unicode character database
 lib/unicore/Scripts.txt				Unicode character database
 lib/unicore/SpecialCasing.txt			Unicode character database
 lib/unicore/StandardizedVariants.txt		Unicode character database
+lib/unicore/TestNorm.pl				Unicode character database
 lib/unicore/uni_keywords.pl			Indices into array in charclass_invlists.h
 lib/unicore/UnicodeData.txt			Unicode character database
 lib/unicore/version				The version of the Unicode
@@ -5194,6 +5175,7 @@ pad.c				Scratchpad functions
 pad.h				Scratchpad headers
 parser.h			parser object header
 patchlevel.h			The current patch level of perl
+peep.c				The peephole optimizer and optree finalizer
 perl.c				main()
 perl.h				Global declarations
 perl_inc_macro.h		macro used to set \@INC using S_incpush_use_sep
@@ -5206,6 +5188,7 @@ perlio.h			PerlIO abstraction
 perlio.sym			Symbols for PerlIO abstraction
 perliol.h			PerlIO Layer definition
 perlsdio.h			Fake stdio using perlio
+perlstatic.h			Like inline.h, but functions not declared inline
 perlvars.h			Global variables
 perly.act			parser actions; derived from perly.y
 perly.c				parser code (NOT derived from perly.y)
@@ -5285,16 +5268,14 @@ pod/perl5303delta.pod		Perl changes in version 5.30.3
 pod/perl5320delta.pod		Perl changes in version 5.32.0
 pod/perl5321delta.pod		Perl changes in version 5.32.1
 pod/perl5340delta.pod		Perl changes in version 5.34.0
-pod/perl5350delta.pod		Perl changes in version 5.35.0
-pod/perl5351delta.pod		Perl changes in version 5.35.1
-pod/perl5352delta.pod		Perl changes in version 5.35.2
-pod/perl5353delta.pod		Perl changes in version 5.35.3
-pod/perl5354delta.pod		Perl changes in version 5.35.4
-pod/perl5355delta.pod		Perl changes in version 5.35.5
-pod/perl5356delta.pod		Perl changes in version 5.35.6
-pod/perl5357delta.pod		Perl changes in version 5.35.7
-pod/perl5358delta.pod		Perl changes in version 5.35.8
-pod/perl5359delta.pod		Perl changes in version 5.35.9
+pod/perl5341delta.pod		Perl changes in version 5.34.1
+pod/perl5360delta.pod		Perl changes in version 5.36.0
+pod/perl5370delta.pod		Perl changes in version 5.37.0
+pod/perl5371delta.pod		Perl changes in version 5.37.1
+pod/perl5372delta.pod		Perl changes in version 5.37.2
+pod/perl5373delta.pod		Perl changes in version 5.37.3
+pod/perl5374delta.pod		Perl changes in version 5.37.4
+pod/perl5375delta.pod		Perl changes in version 5.37.5
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5413,9 +5394,7 @@ Porting/bisect-example.sh	Example script to use with git bisect run
 Porting/bisect-runner.pl	Tool to be called by git bisect run
 Porting/bump-perl-version	bump the perl version in relevant files
 Porting/check-cpan-pollution	Check for commits that may wrongly touch CPAN distros
-Porting/check83.pl		Check whether we are 8.3-friendly
 Porting/checkansi.pl		Check source code for ANSI-C violations
-Porting/checkAUTHORS.pl		Check that the AUTHORS file is complete
 Porting/checkcfguse.pl		Check that config symbols are being used
 Porting/checkcfgvar.pl		Check that config scripts define all symbols
 Porting/checkpodencoding.pl	Check POD encoding
@@ -5434,6 +5413,7 @@ Porting/corelist-perldelta.pl	Generates data perldelta from Module::CoreList
 Porting/deparse-skips.txt	List of test files to ignore/skip for deparse tests.
 Porting/docs-team-charter.pod	Perl Documentation Team charter
 Porting/epigraphs.pod		the release epigraphs used over the years
+Porting/exclude_contrib.txt	Data about contributors that do not want to be listed in AUTHORS
 Porting/exec-bit.txt		List of files that get +x in release tarball
 Porting/exercise_makedef.pl	Brute force testing for makedef.pl
 Porting/expand-macro.pl		A tool to expand C macro definitions in the Perl source
@@ -5476,10 +5456,12 @@ Porting/rt_list_patches		A tool to help you apply patches from RT
 Porting/security_template.pod	Template for vulnerability announcements
 Porting/sort_perldiag.pl	Keep our diagnostics orderly
 Porting/sync-with-cpan		Sync with CPAN
+Porting/test-dist-modules.pl	Test dist/ modules on currently active perl (used for CI)
 Porting/timecheck.c		Test program for the 2038 fix
 Porting/timecheck2.c		Test program for the 2038 fix
 Porting/todo.pod		Perl things to do
 Porting/updateAUTHORS.pl	Tool to automatically update AUTHORS and .mailmap from git log data
+Porting/updateAUTHORS.pm	Brains of updateAUTHORS.pl
 Porting/valgrindpp.pl		Summarize valgrind reports
 Porting/vote_admin_guide.pod	Perlgov Vote Administrator guide
 pp.c				Push/Pop code
@@ -5509,7 +5491,6 @@ README.irix			Perl notes for Irix
 README.jp			Perl for Japanese (in EUC-JP)
 README.ko			Perl for Korean (in EUC-KR)
 README.linux			Perl notes for Linux
-README.macos			Perl notes for Mac OS (Classic)
 README.macosx			Perl notes for Mac OS X
 README.micro			Notes about microperl
 README.openbsd			Perl notes for OpenBSD
@@ -5555,18 +5536,21 @@ regen/regcharclass.pl		Generate regcharclass.h from inline data
 regen/regcharclass_multi_char_folds.pl	Generate input for regcharclass.pl
 regen/regcomp.pl		Builder of regnodes.h
 regen/regen_lib.pl		Common file routines for generator scripts
+regen/scope_types.pl		Regenerate scope_types.h
 regen/uconfig_h.pl		generate uconfig.h (requires /bin/sh)
 regen/unicode_constants.pl	generate unicode_constants.h
 regen/warnings.pl		Program to write warnings.h and lib/warnings.pm
 regen_perly.pl			generate perly.{act,h,tab} from perly.y
 regexec.c			Regular expression evaluator
 regexp.h			Public declarations for the above
-regnodes.h			Description of nodes of RE engine
+reginline.h			Inline subs for the RE engine.
+regnodes.h			Description of nodes of the RE engine
 run.c				The interpreter loop
 runtests.SH			A script that generates runtests
 sbox32_hash.h			SBox hash code (32 Bit SBOX based hash function)
 scope.c				Scope entry and exit code
 scope.h				Scope entry and exit header
+scope_types.h			Types used to manage the save stack
 SECURITY.md			Add Security Policy for GitHub
 sv.c				Scalar value code
 sv.h				Scalar value header
@@ -6101,7 +6085,6 @@ t/porting/known_pod_issues.dat	Data file for porting/podcheck.t
 t/porting/libperl.t		Check libperl.a sanity
 t/porting/maintainers.t		Test that Porting/Maintainers.pl is up to date
 t/porting/manifest.t		Test that this MANIFEST file is well formed
-t/porting/pending-author.t	Check if any pending commit would break tests
 t/porting/perlfunc.t		Test that Functions_pm.PL can parse perlfunc.pod
 t/porting/pod_rules.t		Check that various pod lists are consistent
 t/porting/podcheck.t		Test the POD of shipped modules is well formed
@@ -6110,6 +6093,7 @@ t/porting/readme.t		Check that all files in Porting/ are mentioned in Porting/RE
 t/porting/regen.t		Check that regen.pl doesn't need running
 t/porting/ss_dup.t		Check that sv.c:ss_dup handles everything
 t/porting/test_bootstrap.t	Test that the instructions for test bootstrapping aren't accidentally overlooked.
+t/porting/update_authors.t	Tests for Porting/updateAUTHORS.pl
 t/porting/utils.t		Check that utility scripts still compile
 t/re/alpha_assertions.t		See if things like '(*postive_lookahed:...) work properly
 t/re/anyof.t			See if bracketed char classes [...] compile properly
@@ -6203,7 +6187,8 @@ t/run/fresh_perl.t		Tests that require a fresh perl.
 t/run/locale.t		Tests related to locale handling
 t/run/noswitch.t		Test aliasing ARGV for other switch tests
 t/run/runenv.t			Test if perl honors its environment variables.
-t/run/runenv_hashseed.t	Test if perl honors PERL_HASH_SEED.
+t/run/runenv_hashseed.t		Test if perl honors PERL_HASH_SEED.
+t/run/runenv_randseed.t		Test if perl honors PERL_RAND_SEED.
 t/run/script.t			See if script invocation works
 t/run/switch0.t			Test the -0 switch
 t/run/switcha.t			Test the -a switch

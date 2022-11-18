@@ -46,9 +46,7 @@
 #include <unixio.h>
 #include <unixlib.h>
 #include <file.h>  /* it's not <sys/file.h>, so don't use I_SYS_FILE */
-#if (defined(__DECC) && defined(__DECC_VER) && __DECC_VER > 20000000) || defined(__DECCXX)
-#  include <unistd.h> /* DECC has this; gcc doesn't */
-#endif
+#include <unistd.h>
 
 #ifdef NO_PERL_TYPEDEFS /* a2p; we don't want Perl's special routines */
 #  define DONT_MASK_RTL_CALLS
@@ -309,9 +307,8 @@ struct interp_intern {
 
 #define BIT_BUCKET "/dev/null"
 #define PERL_SYS_INIT_BODY(c,v)	MALLOC_CHECK_TAINT2(*c,*v) vms_image_init((c),(v)); PERLIO_INIT; MALLOC_INIT
-#define PERL_SYS_TERM_BODY()    HINTS_REFCNT_TERM; OP_REFCNT_TERM;      \
-                                PERLIO_TERM; MALLOC_TERM; LOCALE_TERM;  \
-                                ENV_TERM;
+/* Use standard PERL_SYS_TERM_BODY */
+
 #define dXSUB_SYS dNOOP
 #define HAS_KILL
 #define HAS_WAIT

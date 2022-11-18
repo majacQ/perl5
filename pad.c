@@ -457,8 +457,11 @@ Perl_cv_undef_flags(pTHX_ CV *cv, U32 flags)
         Safefree(padlist);
         CvPADLIST_set(&cvbody, NULL);
     }
-    else if (CvISXSUB(&cvbody))
+    else if (CvISXSUB(&cvbody)) {
+        if (CvREFCOUNTED_ANYSV(&cvbody))
+            SvREFCNT_dec(CvXSUBANY(&cvbody).any_sv);
         CvHSCXT(&cvbody) = NULL;
+    }
     /* else is (!CvISXSUB(&cvbody) && !CvPADLIST(&cvbody)) {do nothing;} */
 
 
@@ -550,17 +553,17 @@ S_pad_alloc_name(pTHX_ PADNAME *name, U32 flags, HV *typestash,
     ASSERT_CURPAD_ACTIVE("pad_alloc_name");
 
     if (typestash) {
-        SvPAD_TYPED_on(name);
+        PadnameFLAGS(name) |= PADNAMEf_TYPED;
         PadnameTYPE(name) =
             MUTABLE_HV(SvREFCNT_inc_simple_NN(MUTABLE_SV(typestash)));
     }
     if (ourstash) {
-        SvPAD_OUR_on(name);
-        SvOURSTASH_set(name, ourstash);
+        PadnameFLAGS(name) |= PADNAMEf_OUR;
+        PadnameOURSTASH_set(name, ourstash);
         SvREFCNT_inc_simple_void_NN(ourstash);
     }
     else if (flags & padadd_STATE) {
-        SvPAD_STATE_on(name);
+        PadnameFLAGS(name) |= PADNAMEf_STATE;
     }
 
     padnamelist_store(PL_comppad_name, offset, name);
@@ -610,7 +613,7 @@ Perl_pad_add_name_pvn(pTHX_ const char *namepv, STRLEN namelen,
         SAVEFREEPADNAME(name); /* in case of fatal warnings */
         /* check for duplicate declaration */
         pad_check_dup(name, flags & padadd_OUR, ourstash);
-        PadnameREFCNT(name)++;
+        PadnameREFCNT_inc(name);
         LEAVE;
     }
 
@@ -875,15 +878,15 @@ S_pad_check_dup(pTHX_ PADNAME *name, U32 flags, const HV *ourstash)
     top = PadnamelistMAX(PL_comppad_name);
     /* check the current scope */
     for (off = top; off > PL_comppad_name_floor; off--) {
-        PADNAME * const sv = svp[off];
-        if (sv
-            && PadnameLEN(sv) == PadnameLEN(name)
-            && !PadnameOUTER(sv)
-            && (   COP_SEQ_RANGE_LOW(sv)  == PERL_PADSEQ_INTRO
-                || COP_SEQ_RANGE_HIGH(sv) == PERL_PADSEQ_INTRO)
-            && memEQ(PadnamePV(sv), PadnamePV(name), PadnameLEN(name)))
+        PADNAME * const pn = svp[off];
+        if (pn
+            && PadnameLEN(pn) == PadnameLEN(name)
+            && !PadnameOUTER(pn)
+            && (   COP_SEQ_RANGE_LOW(pn)  == PERL_PADSEQ_INTRO
+                || COP_SEQ_RANGE_HIGH(pn) == PERL_PADSEQ_INTRO)
+            && memEQ(PadnamePV(pn), PadnamePV(name), PadnameLEN(name)))
         {
-            if (is_our && (SvPAD_OUR(sv)))
+            if (is_our && (PadnameIsOUR(pn)))
                 break; /* "our" masking "our" */
             /* diag_listed_as: "%s" variable %s masks earlier declaration in same %s */
             Perl_warner(aTHX_ packWARN(WARN_SHADOW),
@@ -892,9 +895,9 @@ S_pad_check_dup(pTHX_ PADNAME *name, U32 flags, const HV *ourstash)
                     PL_parser->in_my == KEY_my     ? "my"    :
                     PL_parser->in_my == KEY_sigvar ? "my"    :
                                                      "state" ),
-                *PadnamePV(sv) == '&' ? "subroutine" : "variable",
-                PNfARG(sv),
-                (COP_SEQ_RANGE_HIGH(sv) == PERL_PADSEQ_INTRO
+                *PadnamePV(pn) == '&' ? "subroutine" : "variable",
+                PNfARG(pn),
+                (COP_SEQ_RANGE_HIGH(pn) == PERL_PADSEQ_INTRO
                     ? "scope" : "statement"));
             --off;
             break;
@@ -903,17 +906,17 @@ S_pad_check_dup(pTHX_ PADNAME *name, U32 flags, const HV *ourstash)
     /* check the rest of the pad */
     if (is_our) {
         while (off > 0) {
-            PADNAME * const sv = svp[off];
-            if (sv
-                && PadnameLEN(sv) == PadnameLEN(name)
-                && !PadnameOUTER(sv)
-                && (   COP_SEQ_RANGE_LOW(sv)  == PERL_PADSEQ_INTRO
-                    || COP_SEQ_RANGE_HIGH(sv) == PERL_PADSEQ_INTRO)
-                && SvOURSTASH(sv) == ourstash
-                && memEQ(PadnamePV(sv), PadnamePV(name), PadnameLEN(name)))
+            PADNAME * const pn = svp[off];
+            if (pn
+                && PadnameLEN(pn) == PadnameLEN(name)
+                && !PadnameOUTER(pn)
+                && (   COP_SEQ_RANGE_LOW(pn)  == PERL_PADSEQ_INTRO
+                    || COP_SEQ_RANGE_HIGH(pn) == PERL_PADSEQ_INTRO)
+                && PadnameOURSTASH(pn) == ourstash
+                && memEQ(PadnamePV(pn), PadnamePV(name), PadnameLEN(name)))
             {
                 Perl_warner(aTHX_ packWARN(WARN_SHADOW),
-                    "\"our\" variable %" PNf " redeclared", PNfARG(sv));
+                    "\"our\" variable %" PNf " redeclared", PNfARG(pn));
                 if (off <= PL_comppad_name_floor)
                     Perl_warner(aTHX_ packWARN(WARN_SHADOW),
                         "\t(Did you mean \"local\" instead of \"our\"?)\n");
@@ -1026,26 +1029,6 @@ Perl_pad_findmy_sv(pTHX_ SV *name, U32 flags)
 }
 
 /*
-=for apidoc find_rundefsvoffset
-
-Until the lexical C<$_> feature was removed, this function would
-find the position of the lexical C<$_> in the pad of the
-currently-executing function and return the offset in the current pad,
-or C<NOT_IN_PAD>.
-
-Now it always returns C<NOT_IN_PAD>.
-
-=cut
-*/
-
-PADOFFSET
-Perl_find_rundefsvoffset(pTHX)
-{
-    PERL_UNUSED_CONTEXT; /* Can we just remove the pTHX from the sig? */
-    return NOT_IN_PAD;
-}
-
-/*
 =for apidoc find_rundefsv
 
 Returns the global variable C<$_>.
@@ -1110,7 +1093,7 @@ S_pad_findlex(pTHX_ const char *namepv, STRLEN namelen, U32 flags, const CV* cv,
     SV *new_capture;
     SV **new_capturep;
     const PADLIST * const padlist = CvPADLIST(cv);
-    const bool staleok = !!(flags & padadd_STALEOK);
+    const bool staleok = cBOOL(flags & padadd_STALEOK);
 
     PERL_ARGS_ASSERT_PAD_FINDLEX;
 
@@ -1986,7 +1969,7 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, HV *cloned,
                 /* formats may have an inactive, or even undefined, parent;
                    but state vars are always available. */
                 if (!outpad || !(sv = outpad[PARENT_PAD_INDEX(namesv)])
-                 || (  SvPADSTALE(sv) && !SvPAD_STATE(namesv)
+                 || (  SvPADSTALE(sv) && !PadnameIsSTATE(namesv)
                     && (!outside || !CvDEPTH(outside)))  ) {
                     S_unavailable(aTHX_ namesv);
                     sv = NULL;
@@ -2004,7 +1987,7 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, HV *cloned,
                        ing over other state subs’ entries, so we have
                        to put a stub here and then clone into it on the
                        second pass. */
-                    if (SvPAD_STATE(namesv) && !CvCLONED(ppad[ix])) {
+                    if (PadnameIsSTATE(namesv) && !CvCLONED(ppad[ix])) {
                         assert(SvTYPE(ppad[ix]) == SVt_PVCV);
                         subclones ++;
                         if (CvOUTSIDE(ppad[ix]) != proto)
@@ -2037,7 +2020,7 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, HV *cloned,
                 else
                     sv = newSV_type(SVt_NULL);
                 /* reset the 'assign only once' flag on each state var */
-                if (sigil != '&' && SvPAD_STATE(namesv))
+                if (sigil != '&' && PadnameIsSTATE(namesv))
                     SvPADSTALE_on(sv);
             }
           }
@@ -2138,7 +2121,7 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, HV *cloned,
         /* the candidate should have 1 ref from this pad and 1 ref
          * from the parent */
         if (const_sv && SvREFCNT(const_sv) == 2) {
-            const bool was_method = cBOOL(CvMETHOD(cv));
+            const bool was_method = cBOOL(CvNOWARN_AMBIGUOUS(cv));
             if (outside) {
                 PADNAME * const pn =
                     PadlistNAMESARRAY(CvPADLIST(outside))
@@ -2184,7 +2167,7 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, HV *cloned,
             SvREFCNT_dec_NN(cv);
             cv = newCONSTSUB(CvSTASH(proto), NULL, const_sv);
             if (was_method)
-                CvMETHOD_on(cv);
+                CvNOWARN_AMBIGUOUS_on(cv);
         }
         else {
           constoff:
@@ -2221,6 +2204,8 @@ S_cv_clone(pTHX_ CV *proto, CV *cv, CV *outside, HV *cloned)
     if (UNLIKELY(CvISXSUB(proto))) {
         CvXSUB(cv)    = CvXSUB(proto);
         CvXSUBANY(cv) = CvXSUBANY(proto);
+        if (CvREFCOUNTED_ANYSV(cv))
+            SvREFCNT_inc(CvXSUBANY(cv).any_sv);
     }
     else {
         OP_REFCNT_LOCK;
@@ -2729,7 +2714,7 @@ Perl_padnamelist_dup(pTHX_ PADNAMELIST *srcpad, CLONE_PARAMS *param)
       if (PadnamelistARRAY(srcpad)[max]) {
         PadnamelistARRAY(dstpad)[max] =
             padname_dup(PadnamelistARRAY(srcpad)[max], param);
-        PadnameREFCNT(PadnamelistARRAY(dstpad)[max])++;
+        PadnameREFCNT_inc(PadnamelistARRAY(dstpad)[max]);
       }
 
     return dstpad;
@@ -2773,9 +2758,9 @@ Perl_newPADNAMEpvn(const char *s, STRLEN len)
 Constructs and returns a new pad name.  Only use this function for names
 that refer to outer lexicals.  (See also L</newPADNAMEpvn>.)  C<outer> is
 the outer pad name that this one mirrors.  The returned pad name has the
-C<PADNAMEt_OUTER> flag already set.
+C<PADNAMEf_OUTER> flag already set.
 
-=for apidoc Amnh||PADNAMEt_OUTER
+=for apidoc Amnh||PADNAMEf_OUTER
 
 =cut
 */
@@ -2790,8 +2775,8 @@ Perl_newPADNAMEouter(PADNAME *outer)
     PadnamePV(pn) = PadnamePV(outer);
     /* Not PadnameREFCNT(outer), because ‘outer’ may itself close over
        another entry.  The original pad name owns the buffer.  */
-    PadnameREFCNT(PADNAME_FROM_PV(PadnamePV(outer)))++;
-    PadnameFLAGS(pn) = PADNAMEt_OUTER;
+    PadnameREFCNT_inc(PADNAME_FROM_PV(PadnamePV(outer)));
+    PadnameFLAGS(pn) = PADNAMEf_OUTER;
     PadnameLEN(pn) = PadnameLEN(outer);
     return pn;
 }

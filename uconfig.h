@@ -1229,8 +1229,8 @@
  *	This symbol contains the ~name expanded version of ARCHLIB, to be used
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
-/*#define ARCHLIB "/usr/local/lib/perl5/5.35/unknown"		/ **/
-/*#define ARCHLIB_EXP "/usr/local/lib/perl5/5.35/unknown"		/ **/
+/*#define ARCHLIB "/usr/local/lib/perl5/5.37/unknown"		/ **/
+/*#define ARCHLIB_EXP "/usr/local/lib/perl5/5.37/unknown"		/ **/
 
 /* BIN:
  *	This symbol holds the path of the bin directory where the package will
@@ -1283,8 +1283,8 @@
  *	This symbol contains the ~name expanded version of PRIVLIB, to be used
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
-#define PRIVLIB "/usr/local/lib/perl5/5.35"		/**/
-#define PRIVLIB_EXP "/usr/local/lib/perl5/5.35"		/**/
+#define PRIVLIB "/usr/local/lib/perl5/5.37"		/**/
+#define PRIVLIB_EXP "/usr/local/lib/perl5/5.37"		/**/
 
 /* SITEARCH:
  *	This symbol contains the name of the private library for this package.
@@ -1301,8 +1301,8 @@
  *	This symbol contains the ~name expanded version of SITEARCH, to be used
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
-/*#define SITEARCH "/usr/local/lib/perl5/5.35/unknown"		/ **/
-/*#define SITEARCH_EXP "/usr/local/lib/perl5/5.35/unknown"		/ **/
+/*#define SITEARCH "/usr/local/lib/perl5/5.37/unknown"		/ **/
+/*#define SITEARCH_EXP "/usr/local/lib/perl5/5.37/unknown"		/ **/
 
 /* SITELIB:
  *	This symbol contains the name of the private library for this package.
@@ -1324,8 +1324,8 @@
  *	removed.  The elements in inc_version_list (inc_version_list.U) can
  *	be tacked onto this variable to generate a list of directories to search.
  */
-#define SITELIB "/usr/local/lib/perl5/5.35"		/**/
-#define SITELIB_EXP "/usr/local/lib/perl5/5.35"		/**/
+#define SITELIB "/usr/local/lib/perl5/5.37"		/**/
+#define SITELIB_EXP "/usr/local/lib/perl5/5.37"		/**/
 #define SITELIB_STEM "/usr/local/lib/perl5"		/**/
 
 /* PERL_VENDORARCH:
@@ -1460,6 +1460,10 @@
  *	Can we handle GCC attribute for functions that should always be
  *	inlined.
  */
+/* HASATTRIBUTE_VISIBILITY:
+ *	Can we handle GCC attribute for functions that should have a
+ *	different visibility.
+ */
 /*#define HASATTRIBUTE_DEPRECATED	/ **/
 /*#define HASATTRIBUTE_FORMAT	/ **/
 /*#define PRINTF_FORMAT_NULL_OK	/ **/
@@ -1470,6 +1474,7 @@
 /*#define HASATTRIBUTE_UNUSED	/ **/
 /*#define HASATTRIBUTE_WARN_UNUSED_RESULT	/ **/
 /*#define HASATTRIBUTE_ALWAYS_INLINE	/ **/
+/*#define HASATTRIBUTE_VISIBILITY	/ **/
 
 /* HAS_BACKTRACE:
  *	This symbol, if defined, indicates that the backtrace() routine is
@@ -3259,6 +3264,12 @@
  */
 /*#define HAS_SENDMSG		/ **/
 
+/* HAS_SETENV:
+ *	This symbol, if defined, indicates that the setenv routine is
+ *	available for use.
+ */
+/*#define HAS_SETENV		/ **/
+
 /* HAS_SETITIMER:
  *	This symbol, if defined, indicates that the setitimer routine is
  *	available to set interval timers.
@@ -3365,9 +3376,9 @@
  *	does have the f_flags member containing the mount flags of
  *	the filesystem containing the file.
  *	This kind of struct statfs is coming from <sys/mount.h> (BSD 4.3),
- *	not from <sys/statfs.h> (SYSV).  Older BSDs (like Ultrix) do not
- *	have statfs() and struct statfs, they have ustat() and getmnt()
- *	with struct ustat and struct fs_data.
+ *	not from <sys/statfs.h> (SYSV).  Older BSDs do not have statfs() and
+ *	struct statfs, they have ustat() and getmnt() with struct ustat and
+ *	struct fs_data.
  */
 /*#define HAS_STRUCT_STATFS_F_FLAGS		/ **/
 
@@ -4145,6 +4156,26 @@
  *	This symbol defines the format string used for printing a Perl NV
  *	using %g-ish floating point format.
  */
+/* I32df:
+ *	This symbol defines the format string used for printing a Perl I32
+ *	as a signed decimal integer.
+ */
+/* U32uf:
+ *	This symbol defines the format string used for printing a Perl U32
+ *	as an unsigned decimal integer.
+ */
+/* U32of:
+ *	This symbol defines the format string used for printing a Perl U32
+ *	as an unsigned octal integer.
+ */
+/* U32xf:
+ *	This symbol defines the format string used for printing a Perl U32
+ *	as an unsigned hexadecimal integer in lowercase abcdef.
+ */
+/* U32Xf:
+ *	This symbol defines the format string used for printing a Perl U32
+ *	as an unsigned hexadecimal integer in uppercase ABCDEF.
+ */
 #define	IVdf		"ld"		/**/
 #define	UVuf		"lu"		/**/
 #define	UVof		"lo"		/**/
@@ -4153,6 +4184,11 @@
 #define	NVef		"e"		/**/
 #define	NVff		"f"		/**/
 #define	NVgf		"g"		/**/
+#define	I32df		"ld"		/**/
+#define	U32uf		"lu"		/**/
+#define	U32of		"lo"		/**/
+#define	U32xf		"lx"		/**/
+#define	U32Xf		"lX"		/**/
 
 /* SELECT_MIN_BITS:
  *	This symbol holds the minimum number of bits operated by select.
@@ -5340,6 +5376,6 @@
 #endif
 
 /* Generated from:
- * 87e5998978daf803d19866c43bca24d7c01dc74119650db16f8d18d83f355da9 config_h.SH
- * 192cfd7d6b90e7961582dadbf7e6ae6de3e4fa6ffde19a0f7148a8572ec635f9 uconfig.sh
+ * 87bdd73bd78f6ebe0bf3b7bc0897da3ed460fceee0bc2e61363ef5e24db55bb2 config_h.SH
+ * 9c5779a38fbba64b0a5dcf7ce548120a29ea5039350102827f500c812bda10b2 uconfig.sh
  * ex: set ro: */

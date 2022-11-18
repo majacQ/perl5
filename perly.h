@@ -4,14 +4,14 @@
    Any changes made here will be lost!
  */
 
-#define PERL_BISON_VERSION  30003
+#define PERL_BISON_VERSION  30005
 
 #ifdef PERL_CORE
-/* A Bison parser, made by GNU Bison 3.3.  */
+/* A Bison parser, made by GNU Bison 3.5.1.  */
 
 /* Bison interface for Yacc-like parsers in C
 
-   Copyright (C) 1984, 1989-1990, 2000-2015, 2018-2019 Free Software Foundation,
+   Copyright (C) 1984, 1989-1990, 2000-2015, 2018-2020 Free Software Foundation,
    Inc.
 
    This program is free software: you can redistribute it and/or modify
@@ -79,64 +79,64 @@ extern int yydebug;
     PERLY_SLASH = 278,
     PERLY_SNAIL = 279,
     PERLY_STAR = 280,
-    BAREWORD = 281,
-    METHOD = 282,
-    FUNCMETH = 283,
-    THING = 284,
-    PMFUNC = 285,
-    PRIVATEREF = 286,
-    QWLIST = 287,
-    FUNC0OP = 288,
-    FUNC0SUB = 289,
-    UNIOPSUB = 290,
-    LSTOPSUB = 291,
-    PLUGEXPR = 292,
-    PLUGSTMT = 293,
-    LABEL = 294,
-    FORMAT = 295,
-    SUB = 296,
-    SIGSUB = 297,
-    ANONSUB = 298,
-    ANON_SIGSUB = 299,
-    PACKAGE = 300,
-    USE = 301,
-    WHILE = 302,
-    UNTIL = 303,
-    IF = 304,
-    UNLESS = 305,
-    ELSE = 306,
-    ELSIF = 307,
-    CONTINUE = 308,
-    FOR = 309,
-    GIVEN = 310,
-    WHEN = 311,
-    DEFAULT = 312,
-    TRY = 313,
-    CATCH = 314,
-    FINALLY = 315,
-    LOOPEX = 316,
-    DOTDOT = 317,
-    YADAYADA = 318,
-    FUNC0 = 319,
-    FUNC1 = 320,
-    FUNC = 321,
-    UNIOP = 322,
-    LSTOP = 323,
-    MULOP = 324,
-    ADDOP = 325,
-    DOLSHARP = 326,
-    DO = 327,
-    HASHBRACK = 328,
-    NOAMP = 329,
-    LOCAL = 330,
-    MY = 331,
-    REQUIRE = 332,
-    COLONATTR = 333,
-    FORMLBRACK = 334,
-    FORMRBRACK = 335,
-    SUBLEXSTART = 336,
-    SUBLEXEND = 337,
-    DEFER = 338,
+    KW_FORMAT = 281,
+    KW_PACKAGE = 282,
+    KW_LOCAL = 283,
+    KW_MY = 284,
+    KW_IF = 285,
+    KW_ELSE = 286,
+    KW_ELSIF = 287,
+    KW_UNLESS = 288,
+    KW_FOR = 289,
+    KW_UNTIL = 290,
+    KW_WHILE = 291,
+    KW_CONTINUE = 292,
+    KW_GIVEN = 293,
+    KW_WHEN = 294,
+    KW_DEFAULT = 295,
+    KW_TRY = 296,
+    KW_CATCH = 297,
+    KW_FINALLY = 298,
+    KW_DEFER = 299,
+    KW_REQUIRE = 300,
+    KW_DO = 301,
+    KW_USE_or_NO = 302,
+    KW_SUB_named = 303,
+    KW_SUB_named_sig = 304,
+    KW_SUB_anon = 305,
+    KW_SUB_anon_sig = 306,
+    BAREWORD = 307,
+    METHCALL0 = 308,
+    METHCALL = 309,
+    THING = 310,
+    PMFUNC = 311,
+    PRIVATEREF = 312,
+    QWLIST = 313,
+    FUNC0OP = 314,
+    FUNC0SUB = 315,
+    UNIOPSUB = 316,
+    LSTOPSUB = 317,
+    PLUGEXPR = 318,
+    PLUGSTMT = 319,
+    LABEL = 320,
+    LOOPEX = 321,
+    DOTDOT = 322,
+    YADAYADA = 323,
+    FUNC0 = 324,
+    FUNC1 = 325,
+    FUNC = 326,
+    UNIOP = 327,
+    LSTOP = 328,
+    MULOP = 329,
+    ADDOP = 330,
+    DOLSHARP = 331,
+    HASHBRACK = 332,
+    NOAMP = 333,
+    COLONATTR = 334,
+    FORMLBRACK = 335,
+    FORMRBRACK = 336,
+    SUBLEXSTART = 337,
+    SUBLEXEND = 338,
     PREC_LOW = 339,
     OROP = 340,
     ANDOP = 341,
@@ -179,10 +179,10 @@ S_is_opval_token(int type) {
     case BAREWORD:
     case FUNC0OP:
     case FUNC0SUB:
-    case FUNCMETH:
     case LABEL:
     case LSTOPSUB:
-    case METHOD:
+    case METHCALL:
+    case METHCALL0:
     case PLUGEXPR:
     case PLUGSTMT:
     case PMFUNC:
@@ -197,7 +197,6 @@ S_is_opval_token(int type) {
 #endif /* PERL_IN_TOKE_C */
 #endif /* PERL_CORE */
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
-
 union YYSTYPE
 {
 
@@ -207,8 +206,8 @@ union YYSTYPE
     OP *opval;
     GV *gvval;
 
-};
 
+};
 typedef union YYSTYPE YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define YYSTYPE_IS_DECLARED 1
@@ -220,6 +219,6 @@ int yyparse (void);
 
 
 /* Generated from:
- * 979ab61527f6e4f14a05dffe99d51369abd1074d798becee74bedc780e3b519a perly.y
+ * b4fc8c1d307bdc8f64eba56825513a87509f0ed05acf77fb0e96c7e5a1d41802 perly.y
  * acf1cbfd2545faeaaa58b1cf0cf9d7f98b5be0752eb7a54528ef904a9e2e1ca7 regen_perly.pl
  * ex: set ro: */

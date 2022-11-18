@@ -1469,34 +1469,101 @@ win32_kill(int pid, int sig)
 PERL_STATIC_INLINE
 time_t
 translate_ft_to_time_t(FILETIME ft) {
-    SYSTEMTIME st, local_st;
+    SYSTEMTIME st;
     struct tm pt;
+    time_t retval;
+    dTHX;
 
-    if (!FileTimeToSystemTime(&ft, &st) ||
-        !SystemTimeToTzSpecificLocalTime(NULL, &st, &local_st)) {
+    if (!FileTimeToSystemTime(&ft, &st))
         return -1;
-    }
 
     Zero(&pt, 1, struct tm);
-    pt.tm_year = local_st.wYear - 1900;
-    pt.tm_mon = local_st.wMonth - 1;
-    pt.tm_mday = local_st.wDay;
-    pt.tm_hour = local_st.wHour;
-    pt.tm_min = local_st.wMinute;
-    pt.tm_sec = local_st.wSecond;
-    pt.tm_isdst = -1;
+    pt.tm_year = st.wYear - 1900;
+    pt.tm_mon = st.wMonth - 1;
+    pt.tm_mday = st.wDay;
+    pt.tm_hour = st.wHour;
+    pt.tm_min = st.wMinute;
+    pt.tm_sec = st.wSecond;
 
-    return mktime(&pt);
+    MKTIME_LOCK;
+    retval = _mkgmtime(&pt);
+    MKTIME_UNLOCK;
+
+    return retval;
 }
 
 typedef DWORD (__stdcall *pGetFinalPathNameByHandleA_t)(HANDLE, LPSTR, DWORD, DWORD);
 
+/* Adapted from:
+
+https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_reparse_data_buffer
+
+Renamed to avoid conflicts, apparently some SDKs define this
+structure.
+
+Hoisted the symlink and mount point data into a new type to allow us
+to make a pointer to it, and to avoid C++ scoping issues.
+
+*/
+
+typedef struct {
+    USHORT SubstituteNameOffset;
+    USHORT SubstituteNameLength;
+    USHORT PrintNameOffset;
+    USHORT PrintNameLength;
+    ULONG  Flags;
+    WCHAR  PathBuffer[MAX_PATH*3];
+} MY_SYMLINK_REPARSE_BUFFER, *PMY_SYMLINK_REPARSE_BUFFER;
+
+typedef struct {
+    USHORT SubstituteNameOffset;
+    USHORT SubstituteNameLength;
+    USHORT PrintNameOffset;
+    USHORT PrintNameLength;
+    WCHAR  PathBuffer[MAX_PATH*3];
+} MY_MOUNT_POINT_REPARSE_BUFFER;
+
+typedef struct {
+  ULONG  ReparseTag;
+  USHORT ReparseDataLength;
+  USHORT Reserved;
+  union {
+    MY_SYMLINK_REPARSE_BUFFER SymbolicLinkReparseBuffer;
+    MY_MOUNT_POINT_REPARSE_BUFFER MountPointReparseBuffer;
+    struct {
+      UCHAR DataBuffer[1];
+    } GenericReparseBuffer;
+  } Data;
+} MY_REPARSE_DATA_BUFFER, *PMY_REPARSE_DATA_BUFFER;
+
+#ifndef IO_REPARSE_TAG_SYMLINK
+#  define IO_REPARSE_TAG_SYMLINK                  (0xA000000CL)
+#endif
+#ifndef IO_REPARSE_TAG_AF_UNIX
+#  define IO_REPARSE_TAG_AF_UNIX 0x80000023
+#endif
+#ifndef IO_REPARSE_TAG_LX_FIFO
+#  define IO_REPARSE_TAG_LX_FIFO 0x80000024
+#endif
+#ifndef IO_REPARSE_TAG_LX_CHR
+#  define IO_REPARSE_TAG_LX_CHR  0x80000025
+#endif
+#ifndef IO_REPARSE_TAG_LX_BLK
+#  define IO_REPARSE_TAG_LX_BLK  0x80000026
+#endif
+
 static int
-win32_stat_low(HANDLE handle, const char *path, STRLEN len, Stat_t *sbuf) {
+win32_stat_low(HANDLE handle, const char *path, STRLEN len, Stat_t *sbuf,
+               DWORD reparse_type) {
     DWORD type = GetFileType(handle);
     BY_HANDLE_FILE_INFORMATION bhi;
 
     Zero(sbuf, 1, Stat_t);
+
+    if (reparse_type) {
+        /* Lie to get to the right place */
+        type = FILE_TYPE_DISK;
+    }
 
     type &= ~FILE_TYPE_REMOTE;
 
@@ -1521,7 +1588,35 @@ win32_stat_low(HANDLE handle, const char *path, STRLEN len, Stat_t *sbuf) {
             sbuf->st_mtime = translate_ft_to_time_t(bhi.ftLastWriteTime);
             sbuf->st_ctime = translate_ft_to_time_t(bhi.ftCreationTime);
 
-            if (bhi.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            if (reparse_type) {
+                /* https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/c8e77b37-3909-4fe6-a4ea-2b9d423b1ee4
+                   describes all of these as WSL only, but the AF_UNIX tag
+                   is known to be used for AF_UNIX sockets without WSL.
+                */
+                switch (reparse_type) {
+                case IO_REPARSE_TAG_AF_UNIX:
+                    sbuf->st_mode = _S_IFSOCK;
+                    break;
+
+                case IO_REPARSE_TAG_LX_FIFO:
+                    sbuf->st_mode = _S_IFIFO;
+                    break;
+
+                case IO_REPARSE_TAG_LX_CHR:
+                    sbuf->st_mode = _S_IFCHR;
+                    break;
+
+                case IO_REPARSE_TAG_LX_BLK:
+                    sbuf->st_mode = _S_IFBLK;
+                    break;
+
+                default:
+                    /* Is there anything else we can do here? */
+                    errno = EINVAL;
+                    return -1;
+                }
+            }
+            else if (bhi.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
                 sbuf->st_mode = _S_IFDIR | _S_IREAD | _S_IEXEC;
                 /* duplicate the logic from the end of the old win32_stat() */
                 if (!(bhi.dwFileAttributes & FILE_ATTRIBUTE_READONLY)) {
@@ -1588,6 +1683,120 @@ win32_stat_low(HANDLE handle, const char *path, STRLEN len, Stat_t *sbuf) {
     return 0;
 }
 
+/* https://docs.microsoft.com/en-us/windows/win32/fileio/reparse-points */
+#define SYMLINK_FOLLOW_LIMIT 63
+
+/*
+
+Given a pathname, required to be a symlink, follow it until we find a
+non-symlink path.
+
+This should only be called when the symlink() chain doesn't lead to a
+normal file, which should have been caught earlier.
+
+On success, returns a HANDLE to the target and sets *reparse_type to
+the ReparseTag of the target.
+
+Returns INVALID_HANDLE_VALUE on error, which might be that the symlink
+chain is broken, or requires too many links to resolve.
+
+*/
+
+static HANDLE
+S_follow_symlinks_to(pTHX_ const char *pathname, DWORD *reparse_type) {
+    char link_target[MAX_PATH];
+    SV *work_path = newSVpvn(pathname, strlen(pathname));
+    int link_count = 0;
+    int link_len;
+    HANDLE handle;
+
+    *reparse_type = 0;
+
+    while ((link_len = win32_readlink(SvPVX(work_path), link_target,
+                                      sizeof(link_target))) > 0) {
+        if (link_count++ >= SYMLINK_FOLLOW_LIMIT) {
+            /* Windows doesn't appear to ever return ELOOP,
+               let's do better ourselves
+            */
+            SvREFCNT_dec(work_path);
+            errno = ELOOP;
+            return INVALID_HANDLE_VALUE;
+        }
+        /* Adjust the linktarget based on the link source or current
+           directory as needed.
+        */
+        if (link_target[0] == '\\'
+            || link_target[0] == '/'
+            || (link_len >=2 && link_target[1] == ':')) {
+            /* link is absolute */
+            sv_setpvn(work_path, link_target, link_len);
+        }
+        else {
+            STRLEN work_len;
+            const char *workp = SvPV(work_path, work_len);
+            const char *final_bslash = my_memrchr(workp, '\\', work_len);
+            const char *final_slash = my_memrchr(workp, '/', work_len);
+            const char *path_sep = NULL;
+            if (final_bslash && final_slash)
+                path_sep = final_bslash > final_slash ? final_bslash : final_slash;
+            else if (final_bslash)
+                path_sep = final_bslash;
+            else if (final_slash)
+                path_sep = final_slash;
+
+            if (path_sep) {
+                SV *new_path = newSVpv(workp, path_sep - workp + 1);
+                sv_catpvn(new_path, link_target, link_len);
+                SvREFCNT_dec(work_path);
+                work_path = new_path;
+            }
+            else {
+                /* should only get here the first time around */
+                assert(link_count == 1);
+                char path_temp[MAX_PATH];
+                DWORD path_len = GetCurrentDirectoryA(sizeof(path_temp), path_temp);
+                if (!path_len || path_len > sizeof(path_temp)) {
+                    SvREFCNT_dec(work_path);
+                    errno = EINVAL;
+                    return INVALID_HANDLE_VALUE;
+                }
+
+                SV *new_path = newSVpvn(path_temp, path_len);
+                if (path_temp[path_len-1] != '\\') {
+                    sv_catpvs(new_path, "\\");
+                }
+                sv_catpvn(new_path, link_target, link_len);
+                SvREFCNT_dec(work_path);
+                work_path = new_path;
+            }
+        }
+    }
+
+    handle =
+        CreateFileA(SvPVX(work_path), GENERIC_READ, 0, NULL, OPEN_EXISTING,
+                    FILE_FLAG_OPEN_REPARSE_POINT|FILE_FLAG_BACKUP_SEMANTICS, 0);
+    SvREFCNT_dec(work_path);
+    if (handle != INVALID_HANDLE_VALUE) {
+        MY_REPARSE_DATA_BUFFER linkdata;
+        DWORD linkdata_returned;
+
+        if (!DeviceIoControl(handle, FSCTL_GET_REPARSE_POINT, NULL, 0,
+                             &linkdata, sizeof(linkdata),
+                             &linkdata_returned, NULL)) {
+            translate_to_errno();
+            CloseHandle(handle);
+            return INVALID_HANDLE_VALUE;
+        }
+        *reparse_type = linkdata.ReparseTag;
+        return handle;
+    }
+    else {
+        translate_to_errno();
+    }
+
+    return handle;
+}
+
 DllExport int
 win32_stat(const char *path, Stat_t *sbuf)
 {
@@ -1595,6 +1804,7 @@ win32_stat(const char *path, Stat_t *sbuf)
     BOOL        expect_dir = FALSE;
     int result;
     HANDLE handle;
+    DWORD reparse_type = 0;
 
     path = PerlDir_mapA(path);
 
@@ -1602,8 +1812,21 @@ win32_stat(const char *path, Stat_t *sbuf)
         CreateFileA(path, FILE_READ_ATTRIBUTES,
                     FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE,
                     NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    if (handle == INVALID_HANDLE_VALUE) {
+        /* AF_UNIX sockets need to be opened as a reparse point, but
+           that will also open symlinks rather than following them.
+
+           There may be other reparse points that need similar
+           treatment.
+        */
+        handle = S_follow_symlinks_to(aTHX_ path, &reparse_type);
+        if (handle == INVALID_HANDLE_VALUE) {
+            /* S_follow_symlinks_to() will set errno */
+            return -1;
+        }
+    }
     if (handle != INVALID_HANDLE_VALUE) {
-        result = win32_stat_low(handle, path, strlen(path), sbuf);
+        result = win32_stat_low(handle, path, strlen(path), sbuf, reparse_type);
         CloseHandle(handle);
     }
     else {
@@ -1656,51 +1879,6 @@ translate_to_errno(void)
     }
 }
 
-/* Adapted from:
-
-https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_reparse_data_buffer
-
-Renamed to avoid conflicts, apparently some SDKs define this
-structure.
-
-Hoisted the symlink and mount point data into a new type to allow us
-to make a pointer to it, and to avoid C++ scoping issues.
-
-*/
-
-typedef struct {
-    USHORT SubstituteNameOffset;
-    USHORT SubstituteNameLength;
-    USHORT PrintNameOffset;
-    USHORT PrintNameLength;
-    ULONG  Flags;
-    WCHAR  PathBuffer[MAX_PATH*3];
-} MY_SYMLINK_REPARSE_BUFFER, *PMY_SYMLINK_REPARSE_BUFFER;
-
-typedef struct {
-    USHORT SubstituteNameOffset;
-    USHORT SubstituteNameLength;
-    USHORT PrintNameOffset;
-    USHORT PrintNameLength;
-    WCHAR  PathBuffer[MAX_PATH*3];
-} MY_MOUNT_POINT_REPARSE_BUFFER;
-
-typedef struct {
-  ULONG  ReparseTag;
-  USHORT ReparseDataLength;
-  USHORT Reserved;
-  union {
-    MY_SYMLINK_REPARSE_BUFFER SymbolicLinkReparseBuffer;
-    MY_MOUNT_POINT_REPARSE_BUFFER MountPointReparseBuffer;
-    struct {
-      UCHAR DataBuffer[1];
-    } GenericReparseBuffer;
-  } Data;
-} MY_REPARSE_DATA_BUFFER, *PMY_REPARSE_DATA_BUFFER;
-
-#ifndef IO_REPARSE_TAG_SYMLINK
-#  define IO_REPARSE_TAG_SYMLINK                  (0xA000000CL)
-#endif
 
 static BOOL
 is_symlink(HANDLE h) {
@@ -1784,8 +1962,8 @@ win32_readlink(const char *pathname, char *buf, size_t bufsiz) {
             }
             bytes_out =
                 WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS,
-                                    sd->PathBuffer + sd->SubstituteNameOffset/2,
-                                    sd->SubstituteNameLength/2,
+                                    sd->PathBuffer + sd->PrintNameOffset/2,
+                                    sd->PrintNameLength/2,
                                     buf, (int)bufsiz, NULL, &used_default);
         }
         break;
@@ -1799,8 +1977,8 @@ win32_readlink(const char *pathname, char *buf, size_t bufsiz) {
             }
             bytes_out =
                 WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS,
-                                    rd->PathBuffer + rd->SubstituteNameOffset/2,
-                                    rd->SubstituteNameLength/2,
+                                    rd->PathBuffer + rd->PrintNameOffset/2,
+                                    rd->PrintNameLength/2,
                                     buf, (int)bufsiz, NULL, &used_default);
         }
         break;
@@ -1851,7 +2029,7 @@ win32_lstat(const char *path, Stat_t *sbuf)
         return win32_stat(path, sbuf);
     }
 
-    result = win32_stat_low(f, NULL, 0, sbuf);
+    result = win32_stat_low(f, NULL, 0, sbuf, 0);
     CloseHandle(f);
 
     if (result != -1){
@@ -2218,12 +2396,14 @@ filetime_from_time(PFILETIME pFileTime, time_t Time)
 {
     struct tm *pt;
     SYSTEMTIME st;
+    dTHX;
 
+    GMTIME_LOCK;
     pt = gmtime(&Time);
     if (!pt) {
+        GMTIME_UNLOCK;
         pFileTime->dwLowDateTime = 0;
         pFileTime->dwHighDateTime = 0;
-        fprintf(stderr, "fail bad gmtime\n");
         return FALSE;
     }
 
@@ -2234,6 +2414,8 @@ filetime_from_time(PFILETIME pFileTime, time_t Time)
     st.wMinute = pt->tm_min;
     st.wSecond = pt->tm_sec;
     st.wMilliseconds = 0;
+
+    GMTIME_UNLOCK;
 
     if (!SystemTimeToFileTime(&st, pFileTime)) {
         pFileTime->dwLowDateTime = 0;
@@ -3256,7 +3438,7 @@ win32_fstat(int fd, Stat_t *sbufptr)
 {
     HANDLE handle = (HANDLE)win32_get_osfhandle(fd);
 
-    return win32_stat_low(handle, NULL, 0, sbufptr);
+    return win32_stat_low(handle, NULL, 0, sbufptr, 0);
 }
 
 DllExport int
