@@ -978,7 +978,7 @@ say 'foo';
 use feature ':5.10';
 say 'foo';
 >>>>
-use feature 'say', 'state';
+use feature 'say', 'state', 'switch';
 say 'foo';
 ####
 # SKIP ?$] < 5.010 && "say not implemented on this Perl version"
@@ -1023,7 +1023,7 @@ __SUB__;
 use feature ':5.15';
 __SUB__;
 >>>>
-use feature 'current_sub', 'evalbytes', 'fc', 'say', 'state', 'unicode_strings', 'unicode_eval';
+use feature 'current_sub', 'evalbytes', 'fc', 'say', 'state', 'switch', 'unicode_strings', 'unicode_eval';
 __SUB__;
 ####
 # SKIP ?$] < 5.015 && "__SUB__ not implemented on this Perl version"

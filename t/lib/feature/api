@@ -20,7 +20,7 @@ EXPECT
 default: apostrophe_as_package_separator bareword_filehandles indirect multidimensional
 unicode_strings is not enabled
 bundle: default
-5.12: apostrophe_as_package_separator bareword_filehandles indirect multidimensional say state unicode_strings
+5.12: apostrophe_as_package_separator bareword_filehandles indirect multidimensional say state switch unicode_strings
 unicode_strings is enabled
 bundle: 5.11
 ########

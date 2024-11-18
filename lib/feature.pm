@@ -4,7 +4,7 @@
 # Any changes made here will be lost!
 
 package feature;
-our $VERSION = '1.93';
+our $VERSION = '1.94';
 
 our %feature = (
     fc                              => 'feature_fc',
@@ -16,6 +16,7 @@ our %feature = (
     class                           => 'feature_class',
     defer                           => 'feature_defer',
     state                           => 'feature_state',
+    switch                          => 'feature_switch',
     bitwise                         => 'feature_bitwise',
     indirect                        => 'feature_indirect',
     evalbytes                       => 'feature_evalbytes',
@@ -34,16 +35,16 @@ our %feature = (
 );
 
 our %feature_bundle = (
-    "5.10"    => [qw(apostrophe_as_package_separator bareword_filehandles indirect multidimensional say state)],
-    "5.11"    => [qw(apostrophe_as_package_separator bareword_filehandles indirect multidimensional say state unicode_strings)],
-    "5.15"    => [qw(apostrophe_as_package_separator bareword_filehandles current_sub evalbytes fc indirect multidimensional say state unicode_eval unicode_strings)],
-    "5.23"    => [qw(apostrophe_as_package_separator bareword_filehandles current_sub evalbytes fc indirect multidimensional postderef_qq say state unicode_eval unicode_strings)],
-    "5.27"    => [qw(apostrophe_as_package_separator bareword_filehandles bitwise current_sub evalbytes fc indirect multidimensional postderef_qq say state unicode_eval unicode_strings)],
+    "5.10"    => [qw(apostrophe_as_package_separator bareword_filehandles indirect multidimensional say state switch)],
+    "5.11"    => [qw(apostrophe_as_package_separator bareword_filehandles indirect multidimensional say state switch unicode_strings)],
+    "5.15"    => [qw(apostrophe_as_package_separator bareword_filehandles current_sub evalbytes fc indirect multidimensional say state switch unicode_eval unicode_strings)],
+    "5.23"    => [qw(apostrophe_as_package_separator bareword_filehandles current_sub evalbytes fc indirect multidimensional postderef_qq say state switch unicode_eval unicode_strings)],
+    "5.27"    => [qw(apostrophe_as_package_separator bareword_filehandles bitwise current_sub evalbytes fc indirect multidimensional postderef_qq say state switch unicode_eval unicode_strings)],
     "5.35"    => [qw(apostrophe_as_package_separator bareword_filehandles bitwise current_sub evalbytes fc isa postderef_qq say signatures state unicode_eval unicode_strings)],
     "5.37"    => [qw(apostrophe_as_package_separator bitwise current_sub evalbytes fc isa module_true postderef_qq say signatures state unicode_eval unicode_strings)],
     "5.39"    => [qw(apostrophe_as_package_separator bitwise current_sub evalbytes fc isa module_true postderef_qq say signatures state try unicode_eval unicode_strings)],
     "5.41"    => [qw(bitwise current_sub evalbytes fc isa module_true postderef_qq say signatures state try unicode_eval unicode_strings)],
-    "all"     => [qw(all any apostrophe_as_package_separator bareword_filehandles bitwise class current_sub declared_refs defer evalbytes extra_paired_delimiters fc indirect isa module_true multidimensional postderef_qq refaliasing say signatures state try unicode_eval unicode_strings)],
+    "all"     => [qw(all any apostrophe_as_package_separator bareword_filehandles bitwise class current_sub declared_refs defer evalbytes extra_paired_delimiters fc indirect isa module_true multidimensional postderef_qq refaliasing say signatures state switch try unicode_eval unicode_strings)],
     "default" => [qw(apostrophe_as_package_separator bareword_filehandles indirect multidimensional)],
 );
 
@@ -78,7 +79,6 @@ my %noops = (
 );
 my %removed = (
     array_base => 1,
-    switch => 1,
 );
 
 our $hint_shift   = 26;
@@ -178,10 +178,21 @@ This feature is available starting with Perl 5.10.
 
 =head2 The 'switch' feature
 
-C<use feature 'switch'> told the compiler to enable the Raku
+B<WARNING>: This feature is still experimental and the implementation may
+change or be removed in future versions of Perl.  For this reason, Perl will
+warn when you use the feature, unless you have explicitly disabled the warning:
+
+    no warnings "experimental::smartmatch";
+
+C<use feature 'switch'> tells the compiler to enable the Raku
 given/when construct.
 
-This feature was removed in Perl 5.42.
+See L<perlsyn/"Switch Statements"> for details.
+
+This feature is available starting with Perl 5.10.
+It is deprecated starting with Perl 5.38, and using
+C<given>, C<when> or smartmatch will throw a warning.
+It will be removed in Perl 5.42.
 
 =head2 The 'unicode_strings' feature
 
@@ -568,68 +579,72 @@ The following feature bundles are available:
 
   :5.10     apostrophe_as_package_separator
             bareword_filehandles indirect
-            multidimensional say state
+            multidimensional say state switch
 
   :5.12     apostrophe_as_package_separator
             bareword_filehandles indirect
-            multidimensional say state unicode_strings
+            multidimensional say state switch
+            unicode_strings
 
   :5.14     apostrophe_as_package_separator
             bareword_filehandles indirect
-            multidimensional say state unicode_strings
+            multidimensional say state switch
+            unicode_strings
 
   :5.16     apostrophe_as_package_separator
             bareword_filehandles current_sub evalbytes
             fc indirect multidimensional say state
-            unicode_eval unicode_strings
+            switch unicode_eval unicode_strings
 
   :5.18     apostrophe_as_package_separator
             bareword_filehandles current_sub evalbytes
             fc indirect multidimensional say state
-            unicode_eval unicode_strings
+            switch unicode_eval unicode_strings
 
   :5.20     apostrophe_as_package_separator
             bareword_filehandles current_sub evalbytes
             fc indirect multidimensional say state
-            unicode_eval unicode_strings
+            switch unicode_eval unicode_strings
 
   :5.22     apostrophe_as_package_separator
             bareword_filehandles current_sub evalbytes
             fc indirect multidimensional say state
-            unicode_eval unicode_strings
+            switch unicode_eval unicode_strings
 
   :5.24     apostrophe_as_package_separator
             bareword_filehandles current_sub evalbytes
             fc indirect multidimensional postderef_qq
-            say state unicode_eval unicode_strings
+            say state switch unicode_eval
+            unicode_strings
 
   :5.26     apostrophe_as_package_separator
             bareword_filehandles current_sub evalbytes
             fc indirect multidimensional postderef_qq
-            say state unicode_eval unicode_strings
+            say state switch unicode_eval
+            unicode_strings
 
   :5.28     apostrophe_as_package_separator
             bareword_filehandles bitwise current_sub
             evalbytes fc indirect multidimensional
-            postderef_qq say state unicode_eval
+            postderef_qq say state switch unicode_eval
             unicode_strings
 
   :5.30     apostrophe_as_package_separator
             bareword_filehandles bitwise current_sub
             evalbytes fc indirect multidimensional
-            postderef_qq say state unicode_eval
+            postderef_qq say state switch unicode_eval
             unicode_strings
 
   :5.32     apostrophe_as_package_separator
             bareword_filehandles bitwise current_sub
             evalbytes fc indirect multidimensional
-            postderef_qq say state unicode_eval
+            postderef_qq say state switch unicode_eval
             unicode_strings
 
   :5.34     apostrophe_as_package_separator
             bareword_filehandles bitwise current_sub
             evalbytes fc indirect multidimensional
-            postderef_qq say state unicode_eval
+            postderef_qq say state switch unicode_eval
             unicode_strings
 
   :5.36     apostrophe_as_package_separator
