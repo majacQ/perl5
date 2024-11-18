@@ -256,6 +256,7 @@ EXTCONST char* const PL_op_name[] INIT({
 	"complement",
 	"ncomplement",
 	"scomplement",
+	"smartmatch",
 	"atan2",
 	"sin",
 	"cos",
@@ -679,6 +680,7 @@ EXTCONST char* const PL_op_desc[] INIT({
 	"1's complement (~)",
 	"numeric 1's complement (~)",
 	"string 1's complement (~)",
+	"smart match",
 	"atan2",
 	"sin",
 	"cos",
@@ -1107,6 +1109,7 @@ INIT({
 	Perl_pp_complement,
 	Perl_pp_ncomplement,
 	Perl_pp_scomplement,
+	Perl_pp_smartmatch,
 	Perl_pp_atan2,
 	Perl_pp_sin,
 	Perl_pp_cos,	/* implemented by Perl_pp_sin */
@@ -1530,6 +1533,7 @@ INIT({
 	Perl_ck_bitop,		/* complement */
 	Perl_ck_bitop,		/* ncomplement */
 	Perl_ck_null,		/* scomplement */
+	Perl_ck_smartmatch,	/* smartmatch */
 	Perl_ck_fun,		/* atan2 */
 	Perl_ck_fun,		/* sin */
 	Perl_ck_fun,		/* cos */
@@ -1952,6 +1956,7 @@ EXTCONST U32 PL_opargs[] INIT({
 	0x0000110e,	/* complement */
 	0x0000111e,	/* ncomplement */
 	0x0000111e,	/* scomplement */
+	0x00000204,	/* smartmatch */
 	0x0001141e,	/* atan2 */
 	0x00009b9e,	/* sin */
 	0x00009b9e,	/* cos */
@@ -2676,6 +2681,7 @@ EXTCONST I16  PL_op_private_bitdef_ix[] = {
      105, /* complement */
      103, /* ncomplement */
       78, /* scomplement */
+      13, /* smartmatch */
      101, /* atan2 */
       78, /* sin */
       78, /* cos */
@@ -3011,7 +3017,7 @@ EXTCONST U16  PL_op_private_bitdefs[] = {
     0x077e, 0x0554, 0x1b70, 0x542c, 0x4fc8, 0x4225, /* const */
     0x3cfc, 0x47f9, /* gvsv */
     0x19d5, /* gv */
-    0x0067, /* gelem, lt, i_lt, gt, i_gt, le, i_le, ge, i_ge, eq, i_eq, ne, i_ne, ncmp, i_ncmp, slt, sgt, sle, sge, seq, sne, scmp, lslice, xor, isa */
+    0x0067, /* gelem, lt, i_lt, gt, i_gt, le, i_le, ge, i_ge, eq, i_eq, ne, i_ne, ncmp, i_ncmp, slt, sgt, sle, sge, seq, sne, scmp, smartmatch, lslice, xor, isa */
     0x3cfc, 0x5378, 0x04f7, /* padsv */
     0x3cfc, 0x5378, 0x0003, /* padsv_store, lvavref */
     0x3cfc, 0x5378, 0x06d4, 0x3dec, 0x5149, /* padav */
@@ -3204,6 +3210,7 @@ EXTCONST U8 PL_op_private_valid[] = {
     /* COMPLEMENT */ (OPpUSEINT),
     /* NCOMPLEMENT */ (OPpUSEINT|OPpTARGET_MY),
     /* SCOMPLEMENT */ (OPpARG1_MASK|OPpTARGET_MY),
+    /* SMARTMATCH */ (OPpARG2_MASK),
     /* ATAN2      */ (OPpARG4_MASK|OPpTARGET_MY),
     /* SIN        */ (OPpARG1_MASK|OPpTARGET_MY),
     /* COS        */ (OPpARG1_MASK|OPpTARGET_MY),

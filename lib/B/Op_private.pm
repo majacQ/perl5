@@ -566,6 +566,7 @@ $bits{sin}{0} = $bf[0];
 @{$bits{sle}}{1,0} = ($bf[1], $bf[1]);
 @{$bits{sleep}}{3,2,1,0} = ($bf[5], $bf[5], $bf[5], $bf[5]);
 @{$bits{slt}}{1,0} = ($bf[1], $bf[1]);
+@{$bits{smartmatch}}{1,0} = ($bf[1], $bf[1]);
 @{$bits{sne}}{1,0} = ($bf[1], $bf[1]);
 $bits{snetent}{0} = $bf[0];
 @{$bits{socket}}{3,2,1,0} = ($bf[5], $bf[5], $bf[5], $bf[5]);
