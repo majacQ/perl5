@@ -33,11 +33,12 @@
 #define FEATURE_REFALIASING_BIT                     0x00020000
 #define FEATURE_SAY_BIT                             0x00040000
 #define FEATURE_SIGNATURES_BIT                      0x00080000
-#define FEATURE_STATE_BIT                           0x00100000
-#define FEATURE_SWITCH_BIT                          0x00200000
-#define FEATURE_TRY_BIT                             0x00400000
-#define FEATURE_UNIEVAL_BIT                         0x00800000
-#define FEATURE_UNICODE_BIT                         0x01000000
+#define FEATURE_SMARTMATCH_BIT                      0x00100000
+#define FEATURE_STATE_BIT                           0x00200000
+#define FEATURE_SWITCH_BIT                          0x00400000
+#define FEATURE_TRY_BIT                             0x00800000
+#define FEATURE_UNIEVAL_BIT                         0x01000000
+#define FEATURE_UNICODE_BIT                         0x02000000
 
 #define FEATURE_ALL_INDEX                             0
 #define FEATURE_ANY_INDEX                             0
@@ -59,6 +60,7 @@
 #define FEATURE_REFALIASING_INDEX                     0
 #define FEATURE_SAY_INDEX                             0
 #define FEATURE_SIGNATURES_INDEX                      0
+#define FEATURE_SMARTMATCH_INDEX                      0
 #define FEATURE_STATE_INDEX                           0
 #define FEATURE_SWITCH_INDEX                          0
 #define FEATURE_TRY_INDEX                             0
@@ -202,6 +204,13 @@
 	 CURRENT_FEATURE_BUNDLE <= FEATURE_BUNDLE_541) \
      || (CURRENT_FEATURE_BUNDLE == FEATURE_BUNDLE_CUSTOM && \
 	 FEATURE_IS_ENABLED_MASK(FEATURE_SIGNATURES_INDEX, FEATURE_SIGNATURES_BIT)) \
+    )
+
+#define FEATURE_SMARTMATCH_IS_ENABLED \
+    ( \
+	CURRENT_FEATURE_BUNDLE <= FEATURE_BUNDLE_539 \
+     || (CURRENT_FEATURE_BUNDLE == FEATURE_BUNDLE_CUSTOM && \
+	 FEATURE_IS_ENABLED_MASK(FEATURE_SMARTMATCH_INDEX, FEATURE_SMARTMATCH_BIT)) \
     )
 
 #define FEATURE___SUB___IS_ENABLED \
@@ -508,6 +517,12 @@ S_magic_sethint_feature(pTHX_ SV *keysv, const char *keypv, STRLEN keylen,
                 index = FEATURE_SIGNATURES_INDEX;
                 break;
             }
+            else if (keylen == sizeof("feature_smartmatch")-1
+                 && memcmp(subf+1, "martmatch", keylen - sizeof("feature_")) == 0) {
+                mask = FEATURE_SMARTMATCH_BIT;
+                index = FEATURE_SMARTMATCH_INDEX;
+                break;
+            }
             else if (keylen == sizeof("feature_state")-1
                  && memcmp(subf+1, "tate", keylen - sizeof("feature_")) == 0) {
                 mask = FEATURE_STATE_BIT;
@@ -708,6 +723,13 @@ PL_feature_bits[] = {
         STRLENs("feature_signatures"),
         FEATURE_SIGNATURES_BIT,
         FEATURE_SIGNATURES_INDEX
+    },
+    {
+        /* feature smartmatch */
+        "feature_smartmatch",
+        STRLENs("feature_smartmatch"),
+        FEATURE_SMARTMATCH_BIT,
+        FEATURE_SMARTMATCH_INDEX
     },
     {
         /* feature state */

@@ -49,6 +49,7 @@ my %feature = (
     apostrophe_as_package_separator => 'apos_as_name_sep',
     any                     => 'any',
     all                     => 'all',
+    smartmatch              => 'smartmatch',
 );
 
 # NOTE: If a feature is ever enabled in a non-contiguous range of Perl
@@ -58,7 +59,7 @@ my %feature = (
 # 5.odd implies the next 5.even, but an explicit 5.even can override it.
 
 # features bundles
-use constant V5_9_5 => sort qw{say state switch indirect multidimensional bareword_filehandles apostrophe_as_package_separator};
+use constant V5_9_5 => sort qw{say state switch indirect multidimensional bareword_filehandles apostrophe_as_package_separator smartmatch};
 use constant V5_11  => sort ( +V5_9_5, qw{unicode_strings} );
 use constant V5_15  => sort ( +V5_11, qw{unicode_eval evalbytes current_sub fc} );
 use constant V5_23  => sort ( +V5_15, qw{postderef_qq} );
@@ -72,7 +73,8 @@ use constant V5_37  => sort grep {; $_ ne 'bareword_filehandles' } +V5_35, qw{mo
 
 use constant V5_39  => sort ( +V5_37, qw{try} );
 use constant V5_41  => sort
-  grep {; $_ ne 'apostrophe_as_package_separator' }
+  grep {; $_ ne 'apostrophe_as_package_separator'
+       && $_ ne 'smartmatch' }
   ( +V5_39 );
 
 #
@@ -81,7 +83,7 @@ use constant V5_41  => sort
 my %feature_bundle = (
     all     => [ sort keys %feature ],
     default => [ qw{indirect multidimensional bareword_filehandles
-                    apostrophe_as_package_separator} ],
+                    apostrophe_as_package_separator smartmatch} ],
     # using 5.9.5 features bundle
     "5.9.5" => [ +V5_9_5 ],
     "5.10"  => [ +V5_9_5 ],
@@ -700,6 +702,23 @@ variables.
 See L<perlsub/"Persistent Private Variables"> for details.
 
 This feature is available starting with Perl 5.10.
+
+=head2 The 'smartmatch' feature
+
+C<use feature 'smartmatch'> tells the compiler to enable the
+smartmatch operator C<~~>.  It is enabled by default, but can be
+turned off to disallow the C<~~> operator.
+
+This feature is disabled by default in the 5.42 feature bundle
+onwards:
+
+  $x ~~ $y; # fine
+  use v5.42;
+  $x ~~ $y; # error
+
+This has no effect on the implicit smartmatches done by C<when>.
+
+See L<perlop/"Smartmatch Operator"> for details.
 
 =head2 The 'switch' feature
 
