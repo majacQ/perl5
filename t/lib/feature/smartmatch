@@ -1,0 +1,49 @@
+Test no feature smartmatch
+
+__END__
+# NAME default
+my @x = qw(a b c);
+my $y = "b" ~~ @x;
+EXPECT
+Smartmatch is deprecated at - line 2.
+########
+# NAME explicit disable
+no feature "smartmatch";
+my @x = qw(a b c);
+my $y = "b" ~~ @x;
+EXPECT
+OPTION fatal
+syntax error at - line 3, near ""b" ~"
+Execution of - aborted due to compilation errors.
+########
+# NAME explicit enable
+use feature "smartmatch";
+my @x = qw(a b c);
+my $y = "b" ~~ @x;
+EXPECT
+Smartmatch is deprecated at - line 3.
+########
+# NAME explicit disable then enable
+no feature "smartmatch";
+use feature "smartmatch";
+my @x = qw(a b c);
+my $y = "b" ~~ @x;
+EXPECT
+Smartmatch is deprecated at - line 4.
+########
+# NAME implicit disable
+use v5.41;
+my @x = qw(a b c);
+my $y = "b" ~~ @x;
+EXPECT
+OPTION fatal
+syntax error at - line 3, near ""b" ~"
+Execution of - aborted due to compilation errors.
+########
+# NAME implicit disable then enable
+use v5.41;
+use feature "smartmatch";
+my @x = qw(a b c);
+my $y = "b" ~~ @x;
+EXPECT
+Smartmatch is deprecated at - line 4.

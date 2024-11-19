@@ -6775,7 +6775,8 @@ static int
 yyl_tilde(pTHX_ char *s)
 {
     bool bof;
-    if (s[1] == '~' && (PL_expect == XOPERATOR || PL_expect == XTERMORDORDOR)) {
+    if (FEATURE_SMARTMATCH_IS_ENABLED &&
+        s[1] == '~' && (PL_expect == XOPERATOR || PL_expect == XTERMORDORDOR)) {
         if (!PL_lex_allbrackets && PL_lex_fakeeof >= LEX_FAKEEOF_COMPARE)
             TOKEN(0);
         s += 2;
