@@ -6780,9 +6780,6 @@ yyl_tilde(pTHX_ char *s)
         if (!PL_lex_allbrackets && PL_lex_fakeeof >= LEX_FAKEEOF_COMPARE)
             TOKEN(0);
         s += 2;
-        Perl_ck_warner_d(aTHX_
-            packWARN(WARN_DEPRECATED__SMARTMATCH),
-            "Smartmatch is deprecated");
         NCEop(OP_SMARTMATCH);
     }
     s++;
@@ -8311,8 +8308,6 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
 
     case KEY_given:
         pl_yylval.ival = CopLINE(PL_curcop);
-        Perl_ck_warner_d(aTHX_ packWARN(WARN_DEPRECATED__SMARTMATCH),
-                         "given is deprecated");
         OPERATOR(KW_GIVEN);
 
     case KEY_glob:
@@ -8822,9 +8817,6 @@ yyl_word_or_keyword(pTHX_ char *s, STRLEN len, I32 key, I32 orig_keyword, struct
         if (!PL_lex_allbrackets && PL_lex_fakeeof >= LEX_FAKEEOF_NONEXPR)
             return REPORT(0);
         pl_yylval.ival = CopLINE(PL_curcop);
-        Perl_ck_warner_d(aTHX_
-            packWARN(WARN_DEPRECATED__SMARTMATCH),
-            "when is deprecated");
         OPERATOR(KW_WHEN);
 
     case KEY_while:

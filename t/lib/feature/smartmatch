@@ -5,7 +5,6 @@ __END__
 my @x = qw(a b c);
 my $y = "b" ~~ @x;
 EXPECT
-Smartmatch is deprecated at - line 2.
 ########
 # NAME explicit disable
 no feature "smartmatch";
@@ -21,7 +20,6 @@ use feature "smartmatch";
 my @x = qw(a b c);
 my $y = "b" ~~ @x;
 EXPECT
-Smartmatch is deprecated at - line 3.
 ########
 # NAME explicit disable then enable
 no feature "smartmatch";
@@ -29,7 +27,6 @@ use feature "smartmatch";
 my @x = qw(a b c);
 my $y = "b" ~~ @x;
 EXPECT
-Smartmatch is deprecated at - line 4.
 ########
 # NAME implicit disable
 use v5.41;
@@ -46,4 +43,3 @@ use feature "smartmatch";
 my @x = qw(a b c);
 my $y = "b" ~~ @x;
 EXPECT
-Smartmatch is deprecated at - line 4.
