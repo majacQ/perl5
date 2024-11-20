@@ -43,3 +43,54 @@ use feature "smartmatch";
 my @x = qw(a b c);
 my $y = "b" ~~ @x;
 EXPECT
+########
+# NAME smartmatch and switch features independent
+no feature "switch";
+use feature "smartmatch";
+BEGIN {
+    print STDERR "switch ",
+        feature::feature_enabled("switch") ? "is" : "is not",
+        " enabled\n";
+    print STDERR "smartmatch ",
+        feature::feature_enabled("smartmatch") ? "is" : "is not",
+        " enabled\n";
+}
+my @x = qw(a b c);
+my $y = "b" ~~ @x;
+given ($y) {
+    when (1) {
+        print "fail!";
+    }
+}
+EXPECT
+OPTION fatal
+switch is not enabled
+smartmatch is enabled
+syntax error at - line 13, near ") {"
+Execution of - aborted due to compilation errors.
+########
+# NAME smartmatch and switch features independent
+use feature "switch";
+no feature "smartmatch";
+BEGIN {
+    print STDERR "switch ",
+        feature::feature_enabled("switch") ? "is" : "is not",
+        " enabled\n";
+    print STDERR "smartmatch ",
+        feature::feature_enabled("smartmatch") ? "is" : "is not",
+        " enabled\n";
+}
+my $z;
+given ($z) {
+    when (1) {
+      print "fail!";
+    }
+}
+my @x = qw(a b c);
+my $y = "b" ~~ @x;
+EXPECT
+OPTION fatal
+switch is enabled
+smartmatch is not enabled
+syntax error at - line 18, near ""b" ~"
+Execution of - aborted due to compilation errors.
