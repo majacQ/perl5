@@ -3654,7 +3654,7 @@ EXop	|bool	|try_amagic_bin |int method				\
 				|int flags
 EXop	|bool	|try_amagic_un	|int method				\
 				|int flags
-ARTp	|char * |uiv_2buf	|NN char * const buf			\
+ARTdp	|char * |uiv_2buf	|NN char * const buf			\
 				|const IV iv				\
 				|UV uv					\
 				|const int is_uv			\
