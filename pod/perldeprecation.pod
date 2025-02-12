@@ -71,15 +71,6 @@ Category: "deprecated::subsequent_use_version"
 
 =head2 Perl 5.42
 
-=head3 Smartmatch
-
-Smartmatch is now seen as a failed experiment and was marked as deprecated
-in Perl 5.37.10. This includes the C<when> and C<given> keywords, as well
-as the smartmatch operator C<~~>. The feature has been removed entirely for
-the Perl 5.42.0 production release.
-
-Category: "deprecated::smartmatch"
-
 =head3 Goto Block Construct
 
 C<goto LABEL;> will produce a deprecated warning when jumping into the body
