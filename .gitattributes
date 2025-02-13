@@ -8,6 +8,9 @@ lib/feature.pm linguist-generated
 lib/unicore/uni_keywords.pl linguist-generated
 lib/warnings.pm linguist-generated
 feature.h linguist-generated
+mg_names.inc linguist-generated
+mg_raw.h linguist-generated
+mg_vtable.h linguist-generated
 opcode.h linguist-generated
 opnames.h linguist-generated
 perly.act linguist-generated
