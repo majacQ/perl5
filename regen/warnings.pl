@@ -5,18 +5,18 @@
 #    lib/warnings.pm
 #    warnings.h
 #
-# from information hardcoded into this script (the $TREE hash), plus the
+# from information hardcoded into this script (the $WARNING_TREE hash), plus the
 # template for warnings.pm in the DATA section.
 #
 # When changing the number of warnings, t/op/caller.t should change to
 # correspond with the value of $BYTES in lib/warnings.pm
 #
-# With an argument of 'tree', just dump the contents of $TREE and exits.
+# With an argument of 'tree', just dump the contents of $WARNING_TREE and exits.
 # Also accepts the standard regen_lib -q and -v args.
 #
 # This script is normally invoked from regen.pl.
 
-$VERSION = '1.61';
+$VERSION = '1.73';
 
 BEGIN {
     require './regen/regen_lib.pl';
@@ -44,7 +44,7 @@ sub DEFAULT_OFF () { 2 }
 # created. But the warnings category 'io' WILL include all the mask bits
 # necessary to turn on 'pipe', 'unopened' etc.
 
-my $TREE = {
+our $WARNING_TREE = {
 'all' => [ 5.008, {
         'io'            => [ 5.008, {
                                 'pipe'          => [ 5.008, DEFAULT_OFF],
@@ -74,7 +74,16 @@ my $TREE = {
                                 'debugging'     => [ 5.008, DEFAULT_ON],
                                 'malloc'        => [ 5.008, DEFAULT_ON],
                            }],
-        'deprecated'    => [ 5.008, DEFAULT_ON],
+        'deprecated'    => [ 5.008, DEFAULT_ON, {
+                                'deprecated::goto_construct'           => [ 5.011003, DEFAULT_ON],
+                                'deprecated::unicode_property_name'    => [ 5.011003, DEFAULT_ON],
+                                'deprecated::dot_in_inc'               => [ 5.025011, DEFAULT_ON],
+                                'deprecated::version_downgrade'        => [ 5.035009, DEFAULT_ON],
+                                'deprecated::delimiter_will_be_paired' => [ 5.035010, DEFAULT_ON],
+                                'deprecated::missing_import_called_with_args'   
+                                                                       => [ 5.039002, DEFAULT_ON],
+                                'deprecated::subsequent_use_version'   => [ 5.039008, DEFAULT_ON],
+                        }],
         'void'          => [ 5.008, DEFAULT_OFF],
         'recursion'     => [ 5.008, DEFAULT_OFF],
         'redefine'      => [ 5.008, DEFAULT_OFF],
@@ -146,6 +155,12 @@ my $TREE = {
                                     [ 5.035, DEFAULT_ON],
                                 'experimental::extra_paired_delimiters' =>
                                     [ 5.035, DEFAULT_ON],
+                                'experimental::class' =>
+                                    [ 5.037, DEFAULT_ON ],
+                                'experimental::any' =>
+                                    [ 5.041, DEFAULT_ON ],
+                                'experimental::all' =>
+                                    [ 5.041, DEFAULT_ON ],
                         }],
 
         'missing'       => [ 5.021, DEFAULT_OFF],
@@ -169,9 +184,10 @@ my %VALUE_TO_NAME; # (index_number => [ 'NAME', version ], ...);
 
 my %NAME_TO_VALUE; # ('NAME'       => index_number,       ....);
 
-# the experiments were successful,
+# the experiments were successful (or abandonned),
 # so no warning bit is needed anymore
 my %NO_BIT_FOR = map { ( uc $_ => 1, $_ => 1 ) } qw(
+  deprecated::smartmatch
   experimental::lexical_subs
   experimental::postderef
   experimental::signatures
@@ -179,6 +195,9 @@ my %NO_BIT_FOR = map { ( uc $_ => 1, $_ => 1 ) } qw(
   experimental::alpha_assertions
   experimental::script_run
   experimental::isa
+  experimental::smartmatch
+  experimental::const_attr
+  experimental::for_list
 );
 
 ###########################################################################
@@ -201,12 +220,12 @@ sub valueWalk
         die "Value associated with key '$k' is not an ARRAY reference"
             if !ref $v || ref $v ne 'ARRAY' ;
 
-        my ($ver, $rest) = @{ $v } ;
+        my ($ver, $rest, $rest2) = @{ $v } ;
+        my $ref = ref $rest ? $rest : $rest2;
         push @{ $v_list->{$ver} }, $k;
 
-        if (ref $rest)
-          { valueWalk ($rest, $v_list) }
-
+        if (ref $ref)
+          { valueWalk ($ref, $v_list) }
     }
 }
 
@@ -262,11 +281,12 @@ sub walk
         die "Value associated with key '$k' is not an ARRAY reference"
             if !ref $v || ref $v ne 'ARRAY' ;
 
-        my ($ver, $rest) = @{ $v } ;
-        if (ref $rest)
-          { push (@{ $CATEGORIES{$k} }, walk ($rest)) }
-        elsif ($rest == DEFAULT_ON)
+        my ($ver, $rest, $rest2) = @{ $v } ;
+        my $ref = ref $rest ? $rest : $rest2;
+        if (!ref $rest and $rest == DEFAULT_ON)
           { push @DEFAULTS, $NAME_TO_VALUE{uc $k} }
+        if (ref $ref)
+          { push (@{ $CATEGORIES{$k} }, walk ($ref)) }
 
         push @list, @{ $CATEGORIES{$k} } ;
     }
@@ -321,7 +341,7 @@ sub warningsTree
             if !ref $v || ref $v ne 'ARRAY' ;
 
         my $offset ;
-        if ($tree ne $TREE) {
+        if ($tree ne $WARNING_TREE) {
             $rv .= $prefix . "|\n" ;
             $rv .= $prefix . "+- $k" ;
             $offset = ' ' x ($max + 4) ;
@@ -331,12 +351,13 @@ sub warningsTree
             $offset = ' ' x ($max + 1) ;
         }
 
-        my ($ver, $rest) = @{ $v } ;
-        if (ref $rest)
+        my ($ver, $rest, $rest2) = @{ $v } ;
+        my $ref = ref $rest ? $rest : $rest2;
+        if (ref $ref)
         {
             my $bar = @keys ? "|" : " ";
             $rv .= " -" . "-" x ($max - length $k ) . "+\n" ;
-            $rv .= warningsTree ($rest, $prefix . $bar . $offset )
+            $rv .= warningsTree ($ref, $prefix . $bar . $offset )
         }
         else
           { $rv .= "\n" }
@@ -390,149 +411,151 @@ sub mkOct
 
 
 ###########################################################################
+sub main {
 
-if (@ARGV && $ARGV[0] eq "tree")
-{
-    print warningsTree($TREE, "    ") ;
-    exit ;
-}
-
-my ($warn_h, $warn_pm) = map {
-    open_new($_, '>', { by => 'regen/warnings.pl' });
-} 'warnings.h', 'lib/warnings.pm';
-
-my ($index, $warn_size);
-
-# generate warnings.h
-
-print $warn_h warnings_h_boilerplate_1();
-
-$index = orderValues($TREE);
-
-die <<EOM if $index > 255 ;
-Too many warnings categories -- max is 255
-rewrite packWARN* & unpackWARN* macros
-EOM
-
-walk ($TREE) ;
-for (my $i = $index; $i & 3; $i++) {
-    push @{$CATEGORIES{all}}, $i;
-}
-
-$index *= 2 ;
-$warn_size = int($index / 8) + ($index % 8 != 0) ;
-
-my $k ;
-my $last_ver = 0;
-my @names;
-foreach $k (sort { $a <=> $b } keys %VALUE_TO_NAME) {
-    my ($name, $version) = @{ $VALUE_TO_NAME{$k} };
-    print $warn_h "\n/* Warnings Categories added in Perl $version */\n\n"
-        if $last_ver != $version ;
-    $name =~ y/:/_/;
-    $name = "WARN_$name";
-    print $warn_h tab(6, "#define $name"), " $k\n" ;
-    push @names, $name;
-    $last_ver = $version ;
-}
-
-print $warn_h tab(6, '#define WARNsize'),	" $warn_size\n" ;
-print $warn_h tab(6, '#define WARN_ALLstring'), ' "', ('\125' x $warn_size) , "\"\n" ;
-print $warn_h tab(6, '#define WARN_NONEstring'), ' "', ('\0' x $warn_size) , "\"\n" ;
-
-print $warn_h warnings_h_boilerplate_2();
-
-print $warn_h "\n\n/*\n" ;
-print $warn_h map { "=for apidoc Amnh||$_\n" } @names;
-print $warn_h "\n=cut\n*/\n\n" ;
-print $warn_h "/* end of file warnings.h */\n";
-
-read_only_bottom_close_and_rename($warn_h);
-
-
-# generate warnings.pm
-
-while (<DATA>) {
-    last if /^VERSION$/ ;
-    print $warn_pm $_ ;
-}
-
-print $warn_pm qq(our \$VERSION = "$::VERSION";\n);
-
-while (<DATA>) {
-    last if /^KEYWORDS$/ ;
-    print $warn_pm $_ ;
-}
-
-$last_ver = 0;
-print $warn_pm "our %Offsets = (" ;
-foreach my $k (sort { $a <=> $b } keys %VALUE_TO_NAME) {
-    my ($name, $version) = @{ $VALUE_TO_NAME{$k} };
-    $name = lc $name;
-    $k *= 2 ;
-    if ( $last_ver != $version ) {
-        print $warn_pm "\n";
-        print $warn_pm tab(6, "    # Warnings Categories added in Perl $version");
-        print $warn_pm "\n";
+    if (@ARGV && $ARGV[0] eq "tree")
+    {
+        print warningsTree($WARNING_TREE, "    ") ;
+        exit ;
     }
-    print $warn_pm tab(6, "    '$name'"), "=> $k,\n" ;
-    $last_ver = $version;
-}
 
-print $warn_pm ");\n\n" ;
+    my ($warn_h, $warn_pm) = map {
+        open_new($_, '>', { by => 'regen/warnings.pl' });
+    } 'warnings.h', 'lib/warnings.pm';
 
-print $warn_pm "our %Bits = (\n" ;
-foreach my $k (sort keys  %CATEGORIES) {
+    my ($index, $warn_size);
 
-    my $v = $CATEGORIES{$k} ;
-    my @list = sort { $a <=> $b } @$v ;
+    # generate warnings.h
 
-    print $warn_pm tab(6, "    '$k'"), '=> "',
-                mkHex($warn_size, map $_ * 2 , @list),
-                '", # [', mkRange(@list), "]\n" ;
-}
+    print $warn_h warnings_h_boilerplate_1();
 
-print $warn_pm ");\n\n" ;
+    $index = orderValues($WARNING_TREE);
 
-print $warn_pm "our %DeadBits = (\n" ;
-foreach my $k (sort keys  %CATEGORIES) {
+    die <<~EOM if $index > 255 ;
+    Too many warnings categories -- max is 255
+    rewrite packWARN* & unpackWARN* macros
+    EOM
 
-    my $v = $CATEGORIES{$k} ;
-    my @list = sort { $a <=> $b } @$v ;
-
-    print $warn_pm tab(6, "    '$k'"), '=> "',
-                mkHex($warn_size, map $_ * 2 + 1 , @list),
-                '", # [', mkRange(@list), "]\n" ;
-}
-
-print $warn_pm ");\n\n" ;
-
-print $warn_pm "our %NoOp = (\n" ;
-foreach my $k ( grep /\A[a-z:_]+\z/, sort keys %NO_BIT_FOR ) {
-    print $warn_pm tab(6, "    '$k'"), "=> 1,\n";
-}
-
-print $warn_pm ");\n\n" ;
-print $warn_pm "# These are used by various things, including our own tests\n";
-print $warn_pm tab(6, 'our $NONE'), '=  "', ('\0' x $warn_size) , "\";\n" ;
-print $warn_pm tab(6, 'our $DEFAULT'), '=  "',
-                    mkHex($warn_size, map $_ * 2, @DEFAULTS),
-                    '"; # [', mkRange(sort { $a <=> $b } @DEFAULTS), "]\n" ;
-print $warn_pm tab(6, 'our $LAST_BIT'), '=  ' . "$index ;\n" ;
-print $warn_pm tab(6, 'our $BYTES'),    '=  ' . "$warn_size ;\n" ;
-while (<DATA>) {
-    if ($_ eq "=for warnings.pl tree-goes-here\n") {
-      print $warn_pm warningsTree($TREE, "    ");
-      next;
+    walk ($WARNING_TREE) ;
+    for (my $i = $index; $i & 3; $i++) {
+        push @{$CATEGORIES{all}}, $i;
     }
-    print $warn_pm $_ ;
+
+    $index *= 2 ;
+    $warn_size = int($index / 8) + ($index % 8 != 0) ;
+
+    my $k ;
+    my $last_ver = 0;
+    my @names;
+    foreach $k (sort { $a <=> $b } keys %VALUE_TO_NAME) {
+        my ($name, $version) = @{ $VALUE_TO_NAME{$k} };
+        print $warn_h "\n/* Warnings Categories added in Perl $version */\n\n"
+            if $last_ver != $version ;
+        $name =~ y/:/_/;
+        $name = "WARN_$name";
+        print $warn_h tab(6, "#define $name"), " $k\n" ;
+        push @names, $name;
+        $last_ver = $version ;
+    }
+
+    print $warn_h tab(6, '#define WARNsize'),   " $warn_size\n" ;
+    print $warn_h tab(6, '#define WARN_ALLstring'), ' "', ('\125' x $warn_size) , "\"\n" ;
+    print $warn_h tab(6, '#define WARN_NONEstring'), ' "', ('\0' x $warn_size) , "\"\n" ;
+
+    print $warn_h warnings_h_boilerplate_2();
+
+    print $warn_h "\n\n/*\n" ;
+    print $warn_h map { "=for apidoc Amnh||$_\n" } @names;
+    print $warn_h "\n=cut\n*/\n\n" ;
+    print $warn_h "/* end of file warnings.h */\n";
+
+    read_only_bottom_close_and_rename($warn_h);
+
+
+    # generate warnings.pm
+
+    while (<DATA>) {
+        last if /^VERSION$/ ;
+        print $warn_pm $_ ;
+    }
+
+    print $warn_pm qq(our \$VERSION = "$::VERSION";\n);
+
+    while (<DATA>) {
+        last if /^KEYWORDS$/ ;
+        print $warn_pm $_ ;
+    }
+
+    $last_ver = 0;
+    print $warn_pm "our %Offsets = (" ;
+    foreach my $k (sort { $a <=> $b } keys %VALUE_TO_NAME) {
+        my ($name, $version) = @{ $VALUE_TO_NAME{$k} };
+        $name = lc $name;
+        $k *= 2 ;
+        if ( $last_ver != $version ) {
+            print $warn_pm "\n";
+            print $warn_pm tab(6, "    # Warnings Categories added in Perl $version");
+            print $warn_pm "\n";
+        }
+        print $warn_pm tab(6, "    '$name'"), "=> $k,\n" ;
+        $last_ver = $version;
+    }
+
+    print $warn_pm ");\n\n" ;
+
+    print $warn_pm "our %Bits = (\n" ;
+    foreach my $k (sort keys  %CATEGORIES) {
+
+        my $v = $CATEGORIES{$k} ;
+        my @list = sort { $a <=> $b } @$v ;
+
+        print $warn_pm tab(6, "    '$k'"), '=> "',
+                    mkHex($warn_size, map $_ * 2 , @list),
+                    '", # [', mkRange(@list), "]\n" ;
+    }
+
+    print $warn_pm ");\n\n" ;
+
+    print $warn_pm "our %DeadBits = (\n" ;
+    foreach my $k (sort keys  %CATEGORIES) {
+
+        my $v = $CATEGORIES{$k} ;
+        my @list = sort { $a <=> $b } @$v ;
+
+        print $warn_pm tab(6, "    '$k'"), '=> "',
+                    mkHex($warn_size, map $_ * 2 + 1 , @list),
+                    '", # [', mkRange(@list), "]\n" ;
+    }
+
+    print $warn_pm ");\n\n" ;
+
+    print $warn_pm "our %NoOp = (\n" ;
+    foreach my $k ( grep /\A[a-z:_]+\z/, sort keys %NO_BIT_FOR ) {
+        print $warn_pm tab(6, "    '$k'"), "=> 1,\n";
+    }
+
+    print $warn_pm ");\n\n" ;
+    print $warn_pm "# These are used by various things, including our own tests\n";
+    print $warn_pm tab(6, 'our $NONE'), '=  "', ('\0' x $warn_size) , "\";\n" ;
+    print $warn_pm tab(6, 'our $DEFAULT'), '=  "',
+                        mkHex($warn_size, map $_ * 2, @DEFAULTS),
+                        '"; # [', mkRange(sort { $a <=> $b } @DEFAULTS), "]\n" ;
+    print $warn_pm tab(6, 'our $LAST_BIT'), '=  ' . "$index ;\n" ;
+    print $warn_pm tab(6, 'our $BYTES'),    '=  ' . "$warn_size ;\n" ;
+    while (<DATA>) {
+        if ($_ eq "=for warnings.pl tree-goes-here\n") {
+          print $warn_pm warningsTree($WARNING_TREE, "    ");
+          next;
+        }
+        print $warn_pm $_ ;
+    }
+
+    read_only_bottom_close_and_rename($warn_pm);
+
+    exit(0);
 }
 
-read_only_bottom_close_and_rename($warn_pm);
-
-exit(0);
-
-
+main() unless caller();
 # -----------------------------------------------------------------
 
 sub warnings_h_boilerplate_1 { return <<'EOM'; }
@@ -847,7 +870,7 @@ sub __chk
             unless defined $offset;
     }
     else {
-        $category = (caller(1))[0] ;
+        $category = caller(1);
         $offset = $Offsets{$category};
         Croaker("package '$category' not registered for warnings")
             unless defined $offset ;
@@ -1422,7 +1445,7 @@ X<warning, reporting> X<warning, registering>
 
 The C<warnings> pragma provides a number of functions that are useful for
 module authors.  These are used when you want to report a module-specific
-warning to a calling module has enabled warnings via the C<warnings>
+warning to a calling module that has enabled warnings via the C<warnings>
 pragma.
 
 Consider the module C<MyMod::Abc> below.
@@ -1445,12 +1468,23 @@ Consider the module C<MyMod::Abc> below.
 The call to C<warnings::register> will create a new warnings category
 called "MyMod::Abc", i.e. the new category name matches the current
 package name.  The C<open> function in the module will display a warning
-message if it gets given a relative path as a parameter.  This warnings
+message if it gets given a relative path as a parameter.  This warning
 will only be displayed if the code that uses C<MyMod::Abc> has actually
-enabled them with the C<warnings> pragma like below.
+enabled them with the C<warnings> pragma as below - note that a plain
+C<use warnings> enables even warnings that have not yet been registered.
 
+    use warnings;
     use MyMod::Abc;
-    use warnings 'MyMod::Abc';
+    ...
+    abc::open("../fred.txt");
+
+The specific warning can be enabled or disabled, but only after the module
+has been imported:
+
+    # no warnings 'MyMod::Abc';     # error, unknown category before
+                                    # the module is loaded
+    use MyMod::Abc;
+    no warnings 'MyMod::Abc';       # ok after the module is loaded
     ...
     abc::open("../fred.txt");
 
@@ -1460,26 +1494,26 @@ this snippet of code:
 
     package MyMod::Abc;
 
-    sub open {
+    sub open2 {
         if (warnings::enabled("deprecated")) {
             warnings::warn("deprecated",
-                           "open is deprecated, use new instead");
+                           "open2 is deprecated, use open instead");
         }
-        new(@_);
+        open(@_);
     }
 
-    sub new
+    sub open
     ...
     1;
 
-The function C<open> has been deprecated, so code has been included to
+The function C<open2> has been deprecated, so code has been included to
 display a warning message whenever the calling module has (at least) the
 "deprecated" warnings category enabled.  Something like this, say.
 
     use warnings 'deprecated';
     use MyMod::Abc;
     ...
-    MyMod::Abc::open($filename);
+    MyMod::Abc::open2($filename);
 
 Either the C<warnings::warn> or C<warnings::warnif> function should be
 used to actually display the warnings message.  This is because they can

@@ -18,7 +18,7 @@ BEGIN {
     chdir 't' if -d 't';
     require './test.pl';
     set_up_inc('../lib', '.', '../ext/re');
-    require Config; import Config;
+    require Config; Config->import;
     require './charset_tools.pl';
     require './loc_tools.pl';
 }
@@ -26,8 +26,9 @@ BEGIN {
 skip_all_without_unicode_tables();
 
 my $has_locales = locales_enabled('LC_CTYPE');
+my $utf8_locale = find_utf8_ctype_locale();
 
-plan tests => 1214;  # Update this when adding/deleting tests.
+plan tests => 1295;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -350,7 +351,7 @@ sub run_tests {
 
 	#  Defaults assumed if this fails
 	eval { require Config; };
-        $::reg_infty   = $Config::Config{reg_infty} // 65535;
+        $::reg_infty   = $Config::Config{reg_infty} // ((1<<31)-1);
         $::reg_infty_m = $::reg_infty - 1;
         $::reg_infty_p = $::reg_infty + 1;
         $::reg_infty_m = $::reg_infty_m;   # Suppress warning.
@@ -358,23 +359,28 @@ sub run_tests {
         # As well as failing if the pattern matches do unexpected things, the
         # next three tests will fail if you should have picked up a lower-than-
         # default value for $reg_infty from Config.pm, but have not.
+        SKIP: {
+            skip "REG_INFTY too big to test ($::reg_infty)", 7
+                if $::reg_infty > (1<<16);
 
-        is(eval q{('aaa' =~ /(a{1,$::reg_infty_m})/)[0]}, 'aaa', $message);
-        is($@, '', $message);
-        is(eval q{('a' x $::reg_infty_m) =~ /a{$::reg_infty_m}/}, 1, $message);
-        is($@, '', $message);
-        isnt(q{('a' x ($::reg_infty_m - 1)) !~ /a{$::reg_infty_m}/}, 1, $message);
-        is($@, '', $message);
+            is(eval q{('aaa' =~ /(a{1,$::reg_infty_m})/)[0]}, 'aaa', $message);
+            is($@, '', $message);
+            is(eval q{('a' x $::reg_infty_m) =~ /a{$::reg_infty_m}/}, 1, $message);
+            is($@, '', $message);
+            isnt(q{('a' x ($::reg_infty_m - 1)) !~ /a{$::reg_infty_m}/}, 1, $message);
+            is($@, '', $message);
+
+            # It should be 'a' x 2147483647, but that exhausts memory on
+            # reasonably sized modern machines
+            like('a' x $::reg_infty_m, qr/a{1,}/,
+                 "{1,} matches more times than REG_INFTY");
+        }
 
         eval "'aaa' =~ /a{1,$::reg_infty}/";
         like($@, qr/^\QQuantifier in {,} bigger than/, $message);
         eval "'aaa' =~ /a{1,$::reg_infty_p}/";
         like($@, qr/^\QQuantifier in {,} bigger than/, $message);
 
-        # It should be 'a' x 2147483647, but that exhausts memory on
-        # reasonably sized modern machines
-        like('a' x $::reg_infty_p, qr/a{1,}/,
-             "{1,} matches more times than REG_INFTY");
     }
 
     {
@@ -393,12 +399,17 @@ sub run_tests {
 
         for my $l (@trials) { # Ordered to free memory
             my $a = 'a' x $l;
-	    my $message = "Long monster, length = $l";
-	    like("ba$a=", qr/a$a=/, $message);
-            unlike("b$a=", qr/a$a=/, $message);
-            like("b$a=", qr/ba+=/, $message);
-
-	    like("ba$a=", qr/b(?:a|b)+=/, $message);
+            # we do not use like() or unlike() here as the string
+            # is very long and is not useful if the match fails,
+            # the useful part
+	    ok("ba$a=" =~ m/a$a=/, sprintf
+                'Long monster: ("ba".("a" x %d)."=") =~ m/aa...a=/', $l);
+            ok("b$a="  !~ m/a$a=/, sprintf
+                'Long monster: ("b" .("a" x %d)."=") !~ m/aa...a=/', $l);
+            ok("b$a="  =~ m/ba+=/, sprintf
+                'Long monster: ("b" .("a" x %d)."=") =~ m/ba+=/', $l);
+	    ok("ba$a=" =~ m/b(?:a|b)+=/, sprintf
+                'Long monster: ("ba".("a" x %d)."=") =~ m/b(?:a|b)+=/', $l);
         }
     }
 
@@ -1500,11 +1511,10 @@ EOP
         ok("\x{017F}\x{017F}" =~ qr/^[$sharp_s]?$/i, "[] to EXACTish optimization");
     }
 
-    {   # Test that it avoids spllitting a multi-char fold across nodes.
+    {   # Test that it avoids splitting a multi-char fold across nodes.
         # These all fold to things that are like 'ss', which, if split across
         # nodes could fail to match a single character that folds to the
         # combination.  1F0 byte expands when folded;
-        my $utf8_locale = find_utf8_ctype_locale();
         for my $char('F', $sharp_s, "\x{1F0}", "\x{FB00}") {
             my $length = 260;    # Long enough to overflow an EXACTFish regnode
             my $p = $char x $length;
@@ -2305,7 +2315,6 @@ x{0c!}\;\;îçÿ  /0f/! F  /;îçÿù\Q   xÿÿÿÿ   ù   `x{0c!};   ù\Q
 
 SKIP:
     {   # [perl #134334], Assertion failure
-        my $utf8_locale = find_utf8_ctype_locale();
         skip "no UTF-8 locale available" unless $utf8_locale;
         fresh_perl_like("use POSIX; POSIX::setlocale(&LC_CTYPE, '$utf8_locale'); 'ssss' =~ /\xDF+?sX/il;",
                         qr/^$/,
@@ -2373,6 +2382,267 @@ SKIP:
         }, 'ok', {}, 'gh17743: test regexp corruption (2)');
     }
 
+    {
+        # Test branch reset (?|...|...) in list context. This was reported
+        # in GH Issue #20710, in relation to breaking App::pl. See
+        # https://github.com/Perl/perl5/issues/20710#issuecomment-1404549785
+        my $ok = 0;
+        my ($w,$x,$y,$z);
+        $ok = ($x,$y) = "ab"=~/(?|(p)(q)|(x)(y)|(a)(b))/;
+        ok($ok,"Branch reset pattern 1 matched as expected");
+        is($x,"a","Branch reset in list context check 1 (a)");
+        is($y,"b","Branch reset in list context check 2 (b)");
+
+        $ok = ($x,$y,$z) = "xyz"=~/(?|(p)(q)|(x)(y)|(a)(b))(z)/;
+        ok($ok,"Branch reset pattern 2 matched as expected");
+        is($x,"x","Branch reset in list context check 3 (x)");
+        is($y,"y","Branch reset in list context check 4 (y)");
+        is($z,"z","Branch reset in list context check 5 (z)");
+
+        $ok = ($w,$x,$y) = "wpq"=~/(w)(?|(p)(q)|(x)(y)|(a)(b))/;
+        ok($ok,"Branch reset pattern 3 matched as expected");
+        is($w,"w","Branch reset in list context check 6 (w)");
+        is($x,"p","Branch reset in list context check 7 (p)");
+        is($y,"q","Branch reset in list context check 8 (q)");
+
+        $ok = ($w,$x,$y,$z) = "wabz"=~/(w)(?|(p)(q)|(x)(y)|(a)(b))(z)/;
+        ok($ok,"Branch reset pattern 4 matched as expected");
+        is($w,"w","Branch reset in list context check 9  (w)");
+        is($x,"a","Branch reset in list context check 10 (a)");
+        is($y,"b","Branch reset in list context check 11 (b)");
+        is($z,"z","Branch reset in list context check 12 (z)");
+    }
+    {
+        # Test for GH Issue #20826. Save stack overflow introduced in
+        # 92373dea9d7bcc0a017f20cb37192c1d8400767f PR #20530.
+        # Note this test depends on an assert so it will only fail
+        # under DEBUGGING.
+        fresh_perl_is(q{
+            $_ = "x" x 1000;
+            my $pat = '(.)' x 200;
+            $pat = qr/($pat)+/;
+            m/$pat/;
+            print "ok";
+        }, 'ok', {}, 'gh20826: test regex save stack overflow');
+    }
+    {
+        my ($x, $y);
+        ok( "aaa" =~ /(?:(a)?\1)+/,
+            "GH Issue #18865 'aaa' - pattern matches");
+        $x = "($-[0],$+[0])";
+        ok( "aaa" =~ /(?:((?{})a)?\1)+/,
+            "GH Issue #18865 'aaa' - deoptimized pattern matches");
+        $y = "($-[0],$+[0])";
+        {
+            local $::TODO = "Not Yet Implemented";
+            is( $y, $x,
+                "GH Issue #18865 'aaa' - test optimization");
+        }
+        ok( "ababab" =~ /(?:(?:(ab))?\1)+/,
+            "GH Issue #18865 'ababab' - pattern matches");
+        $x = "($-[0],$+[0])";
+        ok( "ababab" =~ /(?:(?:((?{})ab))?\1)+/,
+            "GH Issue #18865 'ababab' - deoptimized pattern matches");
+        $y = "($-[0],$+[0])";
+        {
+            local $::TODO = "Not Yet Implemented";
+            is( $y, $x,
+                "GH Issue #18865 'ababab' - test optimization");
+        }
+        ok( "XaaXbbXb" =~ /(?:X([ab])?\1)+/,
+            "GH Issue #18865 'XaaXbbXb' - pattern matches");
+        $x = "($-[0],$+[0])";
+        ok( "XaaXbbXb" =~ /(?:X((?{})[ab])?\1)+/,
+            "GH Issue #18865 'XaaXbbXb' - deoptimized pattern matches");
+        $y = "($-[0],$+[0])";
+        {
+            local $::TODO = "Not Yet Implemented";
+            is( $y, $x,
+                "GH Issue #18865 'XaaXbbXb' - test optimization");
+        }
+    }
+    {
+        # Test that ${^LAST_SUCCESSFUL_PATTERN} works as expected.
+        # It should match like the empty pattern does, and it should be dynamic
+        # in the same was as $1 is dynamic.
+        my ($str,$pat);
+        $str = "ABCD";
+        $str =~/(D)/;
+        is("$1", "D", '$1 is "D"');
+        $pat = "${^LAST_SUCCESSFUL_PATTERN}";
+        is($pat, "(?^:(D))", 'Outer ${^LAST_SUCCESSFUL_PATTERN} is as expected');
+        {
+            if ($str=~/BX/ || $str=~/(BC)/) {
+                is("$1", "BC",'$1 is now "BC"');
+                $pat = "${^LAST_SUCCESSFUL_PATTERN}";
+                ok($str =~ s//ZZ/, "Empty pattern matched as expected");
+                is($str, "AZZD", "Empty pattern in s/// has result we expected");
+            }
+        }
+        is("$1", "D", '$1 should now be "D" again');
+        is($pat, "(?^:(BC))", 'inner ${^LAST_SUCCESSFUL_PATTERN} is as expected');
+        ok($str=~s//Q/, 'Empty pattern to "Q" was successful');
+        is($str, "AZZQ", "Empty pattern in s/// has result we expected (try2)");
+        $pat = "${^LAST_SUCCESSFUL_PATTERN}";
+        is($pat, "(?^:(D))", 'Outer ${^LAST_SUCCESSFUL_PATTERN} restored to its previous value as expected');
+
+        $str = "ABCD";
+        {
+            if ($str=~/BX/ || $str=~/(BC)/) {
+                is("$1", "BC",'$1 is now "BC"');
+                $pat = "${^LAST_SUCCESSFUL_PATTERN}";
+                ok($str=~s/${^LAST_SUCCESSFUL_PATTERN}/ZZ/, '${^LAST_SUCCESSFUL_PATTERN} matched as expected');
+                is($str, "AZZD", '${^LAST_SUCCESSFUL_PATTERN} in s/// has result we expected');
+            }
+        }
+        is("$1", "D", '$1 should now be "D" again');
+        is($pat, "(?^:(BC))", 'inner ${^LAST_SUCCESSFUL_PATTERN} is as expected');
+        is($str, "AZZD", 'Using ${^LAST_SUCCESSFUL_PATTERN} as a pattern has same result as empty pattern');
+        ok($str=~s/${^LAST_SUCCESSFUL_PATTERN}/Q/, '${^LAST_SUCCESSFUL_PATTERN} to "Q" was successful');
+        is($str, "AZZQ", '${^LAST_SUCCESSFUL_PATTERN} in s/// has result we expected');
+        ok($str=~/ZQ/, "/ZQ/ matched as expected");
+        $pat = "${^LAST_SUCCESSFUL_PATTERN}";
+        is($pat, "(?^:ZQ)", '${^LAST_SUCCESSFUL_PATTERN} changed as expected');
+
+        $str = "foobarfoo";
+        ok($str =~ s/foo//, "matched foo");
+        my $copy= ${^LAST_SUCCESSFUL_PATTERN};
+        ok(defined($copy), '$copy is defined');
+        ok($str =~ s/bar//,"matched bar");
+        ok($str =~ s/$copy/PQR/, 'replaced $copy with PQR');
+        is($str, "PQR", 'final string should be PQR');
+    }
+
+
+    # Various tests for regexes with code blocks interpolated from an
+    # array, related to fixing GH #16627.
+    #
+    # Prior to the fix, some of these tests would wrongly need 'use re
+    # "eval"', or would assert fail, or crash, or produce unpredictable
+    # results.
+
+    {
+        local $" = '-'; # separator when interpolating arrays
+
+        my $pat;
+
+        my $A = 'A';
+        my $B = 'B';
+        my $C = 'C';
+        my $D = 'D';
+        my $E = 'E';
+
+        my $a = 'aa';
+        my $b = 'bb';
+        my $c = 'cc';
+        my $d = 'dd';
+        my $e = 'ee';
+
+        my @r = (qr/(??{$B})/);
+
+        # array with single element, usually following a literal code block
+
+        like "B",   qr/^@r$/,                   "code in array 1";
+        like "AB" , qr/^(??{$A})@r$/,           "code in array 2";
+        like "XAB", qr/^X(??{$A})@r$/,          "code in array 3";
+        $pat =   qr/^X(??{$A})@r(??{$C})$/;
+        like "XABC",    $pat,                    "code in array 4";
+        unlike "",      $pat,                    "code in array 4 not 1";
+        unlike "XAC",   $pat,                    "code in array 4 not 2";
+        unlike "XAbbC", $pat,                    "code in array 4 not 3";
+
+        {
+            my $B = 'Q';
+            push  @r, qr/(??{$B})/;
+        }
+
+        # array with two elements, usually following a literal code block
+        #
+        like "B-Q",    qr/^@r$/,                  "code in array 5";
+        like "AB-Q",   qr/^(??{$A})@r$/,          "code in array 6";
+        like "XAB-Q",  qr/^X(??{$A})@r$/,         "code in array 7";
+        $pat =   qr/^X(??{$A})@r(??{$C})$/;
+        like "XAB-QC",   $pat,                    "code in array 8";
+        unlike "",       $pat,                    "code in array 8 not 1";
+        unlike "XAC",    $pat,                    "code in array 8 not 2";
+        unlike "XAB-BC", $pat,                    "code in array 8 not 3";
+
+        # Simple overload package which returns a lower-cased version
+        # of a concatenated string, with a '=' used to join
+
+        package LcConcat {
+            use overload
+                '""' => sub { ${$_[0]} },
+                '.' =>  sub {
+                                my ($x, $y) = @_[ $_[2] ? (1,0) : (0,1) ];
+                                my ($xx, $yy) = ("$x", "$y");
+                                lc("$xx=$yy");
+                            }
+                ;
+        }
+
+        my $r = qr/(??{$E})/;
+        bless $r, 'LcConcat';
+
+        # Overloading concatenation converts literal compile-time code
+        # blocks into run-time recompiled affairs, so need to enable eval
+        use re 'eval';
+
+        # First, use an overloaded *scalar* to establish baseline
+        # behaviour (i.e. not yet using an array of scalars).
+        # Note that the overloaded concatenation converts everything in
+        # the pattern to its left to lowercase, so (??{$B}) becomes
+        # (??{$b}) etc.
+
+        like "=ee",     qr/^$r$/,                  "code in array 9";
+        {
+            no re 'eval';
+            eval q{my $x = qr/^$r$/; 1};
+            like $@, qr/Eval-group not allowed/,   "code in array 9 - err";
+        }
+        like "aa=ee",   qr/^(??{$A})$r$/,          "code in array 10";
+        like "xaa=ee",  qr/^X(??{$A})$r$/,         "code in array 11";
+        $pat = qr/^X(??{$A})$r(??{$C})$/;
+        like "xaa=eeC",  $pat,                     "code in array 12";
+        unlike "",       $pat,                     "code in array 12 not 1";
+        unlike "XA=EC",  $pat,                     "code in array 12 not 2";
+
+        # Then add an overloaded scalar to an *array* to see if it's
+        # still handled ok by the array interpolation code
+
+        push @r, $r;
+
+        like "bb-bb-=ee",     qr/^@r$/,            "code in array 13";
+        {
+            no re 'eval';
+            eval q{my $x = qr/^@r$/; 1};
+            like $@, qr/Eval-group not allowed/,   "code in array 13 - err";
+        }
+        like "aabb-bb-=ee",   qr/^(??{$A})@r$/,    "code in array 14";
+        like "xaabb-bb-=ee",  qr/^X(??{$A})@r$/,   "code in array 15";
+        $pat = qr/^X(??{$A})@r(??{$C})$/;
+        like "xaabb-bb-=eeC",  $pat,               "code in array 16";
+        unlike "",             $pat,               "code in array 16 not 1";
+        unlike "XAB-B-=EC",    $pat,               "code in array 16 not 2";
+
+    }
+
+    {
+        # github #21661
+        fresh_perl_is(<<'PROG', <<'EXPECT', {}, "double-free on fatal warn with existing error");
+use warnings FATAL => qw(all);
+/() {}/X;
+PROG
+Unknown regexp modifier "/X" at - line 2, at end of line
+Unescaped left brace in regex is passed through in regex; marked by <-- HERE in m/() { <-- HERE }/ at - line 2.
+Execution of - aborted due to compilation errors.
+EXPECT
+        fresh_perl_is(<<'PROG', "", {}, "leak if __WARN__ handler dies");
+use warnings;
+local $SIG{__WARN__} = sub { die; };
+eval "qr/()x{/;" for 1..10;
+PROG
+    }
 } # End of sub run_tests
 
 1;

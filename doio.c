@@ -66,6 +66,8 @@ Perl_setfd_cloexec(int fd)
     assert(fd >= 0);
 #if defined(HAS_FCNTL) && defined(F_SETFD) && defined(FD_CLOEXEC)
     (void) fcntl(fd, F_SETFD, FD_CLOEXEC);
+#elif !defined(DEBUGGING)
+    PERL_UNUSED_ARG(fd);
 #endif
 }
 
@@ -75,6 +77,8 @@ Perl_setfd_inhexec(int fd)
     assert(fd >= 0);
 #if defined(HAS_FCNTL) && defined(F_SETFD) && defined(FD_CLOEXEC)
     (void) fcntl(fd, F_SETFD, 0);
+#elif !defined(DEBUGGING)
+    PERL_UNUSED_ARG(fd);
 #endif
 }
 
@@ -845,6 +849,9 @@ Perl_do_open6(pTHX_ GV *gv, const char *oname, STRLEN len,
                 }
                 else {
                     if (num_svs) {
+                        if (*svp == &PL_sv_undef && PL_op && !(PL_op->op_flags & OPf_SPECIAL)) {
+                            *svp = sv_newmortal();
+                        }
                         fp = PerlIO_openn(aTHX_ type,mode,-1,0,0,NULL,num_svs,svp);
                     }
                     else {
@@ -880,6 +887,9 @@ Perl_do_open6(pTHX_ GV *gv, const char *oname, STRLEN len,
             }
             else {
                 if (num_svs) {
+                    if (*svp == &PL_sv_undef && PL_op && !(PL_op->op_flags & OPf_SPECIAL)) {
+                        *svp = sv_newmortal();
+                    }
                     fp = PerlIO_openn(aTHX_ type,mode,-1,0,0,NULL,num_svs,svp);
                 }
                 else {
@@ -961,14 +971,9 @@ Perl_do_open6(pTHX_ GV *gv, const char *oname, STRLEN len,
                 IoTYPE(io) = IoTYPE_STD;
             }
             else {
-                if (num_svs) {
-                    fp = PerlIO_openn(aTHX_ type,mode,-1,0,0,NULL,num_svs,svp);
-                }
-                else {
-                    SV *namesv = newSVpvn_flags(type, tend - type, SVs_TEMP);
-                    type = NULL;
-                    fp = PerlIO_openn(aTHX_ type,mode,-1,0,0,NULL,1,&namesv);
-                }
+                SV *namesv = newSVpvn_flags(type, tend - type, SVs_TEMP);
+                type = NULL;
+                fp = PerlIO_openn(aTHX_ type,mode,-1,0,0,NULL,1,&namesv);
             }
         }
     }
@@ -1033,7 +1038,6 @@ S_openn_cleanup(pTHX_ GV *gv, IO *io, PerlIO *fp, char *mode, const char *oname,
             (void) PerlIO_close(fp);
             goto say_false;
         }
-#ifndef PERL_MICRO
         if (S_ISSOCK(statbuf.st_mode))
             IoTYPE(io) = IoTYPE_SOCKET;	/* in case a socket was passed in to us */
 #ifdef HAS_SOCKET
@@ -1050,7 +1054,6 @@ S_openn_cleanup(pTHX_ GV *gv, IO *io, PerlIO *fp, char *mode, const char *oname,
                                                 /* but some return 0 for streams too, sigh */
         }
 #endif /* HAS_SOCKET */
-#endif /* !PERL_MICRO */
     }
 
     /* Eeek - FIXME !!!
@@ -1358,6 +1361,36 @@ static const MGVTBL argvout_vtbl =
         NULL /* svt_local */
     };
 
+static bool
+S_is_fork_open(const char *name) {
+    /* return true if name matches /^\A\s*(\|\s+-|\-\s+|)\s*\z/ */
+    while (isSPACE(*name))
+        name++;
+    if (*name == '|') {
+        ++name;
+        while (isSPACE(*name))
+            name++;
+        if (*name != '-')
+            return false;
+        ++name;
+    }
+    else if (*name == '-') {
+        ++name;
+        while (isSPACE(*name))
+            name++;
+        if (*name != '|')
+            return false;
+        ++name;
+    }
+    else
+        return false;
+
+    while (isSPACE(*name))
+        name++;
+
+    return *name == 0;
+}
+
 PerlIO *
 Perl_nextargv(pTHX_ GV *gv, bool nomagicopen)
 {
@@ -1400,11 +1433,22 @@ Perl_nextargv(pTHX_ GV *gv, bool nomagicopen)
         SvSETMAGIC(GvSV(gv));
         PL_oldname = SvPVx(GvSV(gv), oldlen);
         if (LIKELY(!PL_inplace)) {
-            if (nomagicopen
-                    ? do_open6(gv, "<", 1, NULL, &GvSV(gv), 1)
-                    : do_open6(gv, PL_oldname, oldlen, NULL, NULL, 0)
-               ) {
-                return IoIFP(GvIOp(gv));
+            if (nomagicopen) {
+                if (do_open6(gv, "<", 1, NULL, &GvSV(gv), 1)) {
+                    return IoIFP(GvIOp(gv));
+                }
+            }
+            else {
+                if (is_fork_open(PL_oldname)) {
+                    Perl_ck_warner_d(aTHX_ packWARN(WARN_INPLACE),
+                                     "Forked open '%s' not meaningful in <>",
+                                     PL_oldname);
+                    continue;
+                }
+
+                if ( do_open6(gv, PL_oldname, oldlen, NULL, NULL, 0) ) {
+                    return IoIFP(GvIOp(gv));
+                }
             }
         }
         else {
@@ -2161,45 +2205,50 @@ Perl_do_print(pTHX_ SV *sv, PerlIO *fp)
         return TRUE;
     if (SvTYPE(sv) == SVt_IV && SvIOK(sv)) {
         assert(!SvGMAGICAL(sv));
-        if (SvIsUV(sv))
-            PerlIO_printf(fp, "%" UVuf, (UV)SvUVX(sv));
-        else
-            PerlIO_printf(fp, "%" IVdf, (IV)SvIVX(sv));
-        return !PerlIO_error(fp);
+
+        /* Adapted from Perl_sv_2pv_flags */
+        const U32 isUIOK = SvIsUV(sv);
+        /* The purpose of this union is to ensure that arr is aligned on
+           a 2 byte boundary, because that is what uiv_2buf() requires */
+        union {
+            char arr[TYPE_CHARS(UV)];
+            U16 dummy;
+        } buf;
+        char *ebuf, *ptr;
+        STRLEN len;
+        UV tempuv = SvUVX(sv);
+        ptr = uiv_2buf(buf.arr, SvIVX(sv), tempuv, isUIOK, &ebuf);
+        len = ebuf - ptr;
+
+        bool happy = !(len && (PerlIO_write(fp,ptr,len) == 0));
+        return happy && !PerlIO_error(fp);
     }
     else {
         STRLEN len;
         /* Do this first to trigger any overloading.  */
-        const char *tmps = SvPV_const(sv, len);
-        U8 *tmpbuf = NULL;
-        bool happy = TRUE;
+        const U8 *tmps = (const U8 *) SvPV_const(sv, len);
+
+        /* If 'tmps' doesn't need converting, this will remain NULL and
+         * Safefree(free_me) will do nothing;  Otherwise it points to the newly
+         * allocated memory that tmps will also be changed to point to, so
+         * Safefree(free_me) will free it.  This saves having to have extra
+         * logic. */
+        void *free_me = NULL;
 
         if (PerlIO_isutf8(fp)) { /* If the stream is utf8 ... */
             if (!SvUTF8(sv)) {	/* Convert to utf8 if necessary */
-                /* We don't modify the original scalar.  */
-                tmpbuf = bytes_to_utf8((const U8*) tmps, &len);
-                tmps = (char *) tmpbuf;
+                /* This doesn't modify the original scalar.  */
+                tmps = bytes_to_utf8_free_me(tmps, &len, &free_me);
             }
             else if (ckWARN4_d(WARN_UTF8, WARN_SURROGATE, WARN_NON_UNICODE, WARN_NONCHAR)) {
-                (void) check_utf8_print((const U8*) tmps, len);
+                (void) check_utf8_print(tmps, len);
             }
         } /* else stream isn't utf8 */
         else if (DO_UTF8(sv)) { /* But if is utf8 internally, attempt to
                                    convert to bytes */
-            STRLEN tmplen = len;
-            bool utf8 = TRUE;
-            U8 * const result = bytes_from_utf8((const U8*) tmps, &tmplen, &utf8);
-            if (!utf8) {
-
-                /* Here, succeeded in downgrading from utf8.  Set up to below
-                 * output the converted value */
-                tmpbuf = result;
-                tmps = (char *) tmpbuf;
-                len = tmplen;
-            }
-            else {  /* Non-utf8 output stream, but string only representable in
-                       utf8 */
-                assert((char *)result == tmps);
+            if (! utf8_to_bytes_new_pv(&tmps, &len, &free_me)) {
+                /* Non-utf8 output stream, but string only representable in
+                   utf8 */
                 Perl_ck_warner_d(aTHX_ packWARN(WARN_UTF8),
                                  "Wide character in %s",
                                    PL_op ? OP_DESC(PL_op) : "print"
@@ -2215,17 +2264,15 @@ Perl_do_print(pTHX_ SV *sv, PerlIO *fp)
          * but only until the system hard limit/the filesystem limit,
          * at which we would get EPERM.  Note that when using buffered
          * io the write failure can be delayed until the flush/close. --jhi */
-        if (len && (PerlIO_write(fp,tmps,len) == 0))
-            happy = FALSE;
-        Safefree(tmpbuf);
-        return happy ? !PerlIO_error(fp) : FALSE;
+        bool happy = !(len && (PerlIO_write(fp,tmps,len) == 0));
+        Safefree(free_me);
+        return happy && !PerlIO_error(fp);
     }
 }
 
 I32
 Perl_my_stat_flags(pTHX_ const U32 flags)
 {
-    dSP;
     IO *io;
     GV* gv;
 
@@ -2265,7 +2312,7 @@ Perl_my_stat_flags(pTHX_ const U32 flags)
              == OPpFT_STACKED)
         return PL_laststatval;
     else {
-        SV* const sv = TOPs;
+        SV* const sv = *PL_stack_sp;
         const char *s, *d;
         STRLEN len;
         if ((gv = MAYBE_DEREF_GV_flags(sv,flags))) {
@@ -2302,10 +2349,9 @@ I32
 Perl_my_lstat_flags(pTHX_ const U32 flags)
 {
     static const char* const no_prev_lstat = "The stat preceding -l _ wasn't an lstat";
-    dSP;
     const char *file;
     STRLEN len;
-    SV* const sv = TOPs;
+    SV* const sv = *PL_stack_sp;
     bool isio = FALSE;
     if (PL_op->op_flags & OPf_REF) {
         if (cGVOP_gv == PL_defgv) {
@@ -2566,11 +2612,11 @@ leave:
 
 #endif /* OS2 || WIN32 */
 
-I32
+SSize_t
 Perl_apply(pTHX_ I32 type, SV **mark, SV **sp)
 {
     I32 val;
-    I32 tot = 0;
+    SSize_t tot = 0;
     const char *const what = PL_op_name[type];
     const char *s;
     STRLEN len;
@@ -2794,7 +2840,7 @@ nothing in the core.
                         {
                                 /* Under AmigaOS4 unlink only 'fails' if the filename is invalid */
                                 /* It may not remove the file if it's Locked, so check if it's still */
-                                /* arround */
+                                /* around */
                                 if((access(s,F_OK) != -1))
                                 {
                                         tot--;
@@ -2835,9 +2881,9 @@ nothing in the core.
            else {
                 Zero(&utbuf, sizeof utbuf, char);
 #ifdef HAS_FUTIMES
-                utbuf[0].tv_sec = (long)SvIV(accessed);  /* time accessed */
+                utbuf[0].tv_sec = (time_t)SvIV(accessed);  /* time accessed */
                 utbuf[0].tv_usec = 0;
-                utbuf[1].tv_sec = (long)SvIV(modified);  /* time modified */
+                utbuf[1].tv_sec = (time_t)SvIV(modified);  /* time modified */
                 utbuf[1].tv_usec = 0;
 #elif defined(BIG_TIME)
                 utbuf.actime = (Time_t)SvNV(accessed);  /* time accessed */
@@ -2930,6 +2976,7 @@ Perl_cando(pTHX_ Mode_t mode, bool effective, const Stat_t *statbufp)
      /* Atari stat() does pretty much the same thing. we set x_bit_set_in_stat
       * too so it will actually look into the files for magic numbers
       */
+    PERL_UNUSED_ARG(effective);
     return cBOOL(mode & statbufp->st_mode);
 
 #else /* ! DOSISH */
@@ -2961,16 +3008,17 @@ Perl_cando(pTHX_ Mode_t mode, bool effective, const Stat_t *statbufp)
 }
 #endif /* ! VMS */
 
+#ifndef DOSISH
 static bool
 S_ingroup(pTHX_ Gid_t testgid, bool effective)
 {
-#ifndef PERL_IMPLICIT_SYS
+# ifndef PERL_IMPLICIT_SYS
     /* PERL_IMPLICIT_SYS like Win32: getegid() etc. require the context. */
     PERL_UNUSED_CONTEXT;
-#endif
+# endif
     if (testgid == (effective ? PerlProc_getegid() : PerlProc_getgid()))
         return TRUE;
-#ifdef HAS_GETGROUPS
+# ifdef HAS_GETGROUPS
     {
         Groups_t *gary = NULL;
         I32 anum;
@@ -2990,10 +3038,11 @@ S_ingroup(pTHX_ Gid_t testgid, bool effective)
         }
         return rc;
     }
-#else
+# else
     return FALSE;
-#endif
+# endif
 }
+#endif /* ! DOSISH */
 
 #if defined(HAS_MSG) || defined(HAS_SEM) || defined(HAS_SHM)
 
@@ -3183,18 +3232,20 @@ I32
 Perl_do_msgsnd(pTHX_ SV **mark, SV **sp)
 {
 #ifdef HAS_MSG
+    PERL_ARGS_ASSERT_DO_MSGSND;
+    PERL_UNUSED_ARG(sp);
+
     STRLEN len;
     const I32 id = SvIVx(*++mark);
     SV * const mstr = *++mark;
     const I32 flags = SvIVx(*++mark);
     const char * const mbuf = SvPVbyte(mstr, len);
-    const I32 msize = len - sizeof(long);
 
-    PERL_ARGS_ASSERT_DO_MSGSND;
-    PERL_UNUSED_ARG(sp);
-
-    if (msize < 0)
+    if (len < sizeof(long))
         Perl_croak(aTHX_ "Arg too short for msgsnd");
+
+    const STRLEN msize = len - sizeof(long);
+
     SETERRNO(0,0);
     if (id >= 0 && flags >= 0) {
       return msgsnd(id, (struct msgbuf *)mbuf, msize, flags);
@@ -3211,13 +3262,13 @@ Perl_do_msgsnd(pTHX_ SV **mark, SV **sp)
 #endif
 }
 
-I32
+SSize_t
 Perl_do_msgrcv(pTHX_ SV **mark, SV **sp)
 {
 #ifdef HAS_MSG
     char *mbuf;
     long mtype;
-    I32 msize, flags, ret;
+    I32 flags;
     const I32 id = SvIVx(*++mark);
     SV * const mstr = *++mark;
 
@@ -3227,14 +3278,15 @@ Perl_do_msgrcv(pTHX_ SV **mark, SV **sp)
     /* suppress warning when reading into undef var --jhi */
     if (! SvOK(mstr))
         SvPVCLEAR(mstr);
-    msize = SvIVx(*++mark);
+    SSize_t msize = SvIVx(*++mark);
     mtype = (long)SvIVx(*++mark);
     flags = SvIVx(*++mark);
-    SvPV_force_nolen(mstr);
-    mbuf = SvGROW(mstr, sizeof(long)+msize+1);
+    SvPV_force_nomg_nolen(mstr);
 
     SETERRNO(0,0);
+    SSize_t ret;
     if (id >= 0 && msize >= 0 && flags >= 0) {
+        mbuf = SvGROW(mstr, sizeof(long)+msize+1);
         ret = msgrcv(id, (struct msgbuf *)mbuf, msize, mtype, flags);
     } else {
         SETERRNO(EINVAL,LIB_INVARG);
@@ -3244,9 +3296,11 @@ Perl_do_msgrcv(pTHX_ SV **mark, SV **sp)
         SvCUR_set(mstr, sizeof(long)+ret);
         SvPOK_only(mstr);
         *SvEND(mstr) = '\0';
+        SvSETMAGIC(mstr);
         /* who knows who has been playing with this message? */
         SvTAINTED_on(mstr);
     }
+
     return ret;
 #else
     PERL_UNUSED_ARG(sp);
@@ -3306,54 +3360,83 @@ I32
 Perl_do_shmio(pTHX_ I32 optype, SV **mark, SV **sp)
 {
 #ifdef HAS_SHM
-    char *shm;
-    struct shmid_ds shmds;
-    const I32 id = SvIVx(*++mark);
-    SV * const mstr = *++mark;
-    const I32 mpos = SvIVx(*++mark);
-    const I32 msize = SvIVx(*++mark);
-
     PERL_ARGS_ASSERT_DO_SHMIO;
     PERL_UNUSED_ARG(sp);
 
-    SETERRNO(0,0);
-    if (shmctl(id, IPC_STAT, &shmds) == -1)
-        return -1;
-    if (mpos < 0 || msize < 0
-        || (size_t)mpos + msize > (size_t)shmds.shm_segsz) {
-        SETERRNO(EFAULT,SS_ACCVIO);		/* can't do as caller requested */
-        return -1;
-    }
-    if (id >= 0) {
-        shm = (char *)shmat(id, NULL, (optype == OP_SHMREAD) ? SHM_RDONLY : 0);
-    } else {
+    const IV iv_id = SvIVx(*++mark);
+    SV *const mstr = *++mark;
+    const IV iv_mpos = SvIVx(*++mark);
+    const IV iv_msize = SvIVx(*++mark);
+
+    /* must fit in int */
+    if (
+        iv_id < 0
+        || (sizeof (IV) > sizeof (int) && iv_id > PERL_INT_MAX)
+    ) {
         SETERRNO(EINVAL,LIB_INVARG);
         return -1;
     }
-    if (shm == (char *)-1)	/* I hate System V IPC, I really do */
-        return -1;
-    if (optype == OP_SHMREAD) {
-        char *mbuf;
-        /* suppress warning when reading into undef var (tchrist 3/Mar/00) */
-        SvGETMAGIC(mstr);
-        SvUPGRADE(mstr, SVt_PV);
-        if (! SvOK(mstr))
-            SvPVCLEAR(mstr);
-        SvPOK_only(mstr);
-        mbuf = SvGROW(mstr, (STRLEN)msize+1);
+    const int id = iv_id;
 
-        Copy(shm + mpos, mbuf, msize, char);
-        SvCUR_set(mstr, msize);
-        *SvEND(mstr) = '\0';
+    /* must fit in both size_t and STRLEN (a.k.a Size_t) */
+    if (
+        iv_mpos < 0
+        || (sizeof (IV) > sizeof (size_t) && iv_mpos > (IV)SIZE_MAX)
+        || (sizeof (IV) > sizeof (STRLEN) && iv_mpos > (IV)(STRLEN)-1)
+    ) {
+        SETERRNO(EFAULT,SS_ACCVIO);
+        return -1;
+    }
+    const size_t mpos = iv_mpos;
+
+    /* must fit in both size_t and STRLEN (a.k.a Size_t) */
+    if (
+        iv_msize < 0
+        || (sizeof (IV) > sizeof (size_t) && iv_msize > (IV)SIZE_MAX)
+        || (sizeof (IV) > sizeof (STRLEN) && iv_msize > (IV)(STRLEN)-1)
+        /* for shmread(), we need one extra byte for the NUL terminator */
+        || (optype == OP_SHMREAD && (STRLEN)iv_msize > (STRLEN)-1 - 1)
+    ) {
+        SETERRNO(EFAULT,SS_ACCVIO);
+        return -1;
+    }
+    const size_t msize = iv_msize;
+
+    if (SIZE_MAX - mpos < msize) {
+        /* overflow */
+        SETERRNO(EFAULT,SS_ACCVIO);
+        return -1;
+    }
+    const size_t mpos_end = mpos + msize;
+
+    SETERRNO(0,0);
+
+    struct shmid_ds shmds;
+    if (shmctl(id, IPC_STAT, &shmds) == -1)
+        return -1;
+
+    if (mpos_end > (size_t)shmds.shm_segsz) {
+        SETERRNO(EFAULT,SS_ACCVIO);
+        return -1;
+    }
+
+    char *const shm = (char *)shmat(id, NULL, (optype == OP_SHMREAD) ? SHM_RDONLY : 0);
+    if (shm == (char *)-1)      /* I hate System V IPC, I really do */
+        return -1;
+
+    if (optype == OP_SHMREAD) {
+        sv_setpvn(mstr, shm + mpos, msize);
+        SvUTF8_off(mstr);
         SvSETMAGIC(mstr);
         /* who knows who has been playing with this shared memory? */
         SvTAINTED_on(mstr);
     }
     else {
-        STRLEN len;
+        assert(optype == OP_SHMWRITE);
 
-        const char *mbuf = SvPVbyte(mstr, len);
-        const I32 n = ((I32)len > msize) ? msize : (I32)len;
+        STRLEN len;
+        const char *const mbuf = SvPVbyte(mstr, len);
+        const STRLEN n = (len > msize) ? msize : len;
         Copy(mbuf, shm + mpos, n, char);
         if (n < msize)
             memzero(shm + mpos + n, msize - n);
@@ -3361,7 +3444,7 @@ Perl_do_shmio(pTHX_ I32 optype, SV **mark, SV **sp)
     return shmdt(shm);
 #else
     /* diag_listed_as: shm%s not implemented */
-    Perl_croak(aTHX_ "shm I/O not implemented");
+    Perl_croak_nocontext("shm I/O not implemented");
     return -1;
 #endif
 }

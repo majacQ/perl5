@@ -638,15 +638,15 @@ Perl_magic_regdata_cnt(pTHX_ SV *sv, MAGIC *mg)
             const SSize_t n = (SSize_t)mg->mg_obj;
             if (n == '+') {          /* @+ */
                 /* return the number possible */
-                return RX_NPARENS(rx);
+                return RX_LOGICAL_NPARENS(rx) ? RX_LOGICAL_NPARENS(rx) : RX_NPARENS(rx);
             } else {   /* @- @^CAPTURE  @{^CAPTURE} */
                 I32 paren = RX_LASTPAREN(rx);
 
                 /* return the last filled */
-                while ( paren >= 0
-                        && (RX_OFFS(rx)[paren].start == -1
-                            || RX_OFFS(rx)[paren].end == -1) )
+                while ( paren >= 0 && !RX_OFFS_VALID(rx,paren) )
                     paren--;
+                if (paren && RX_PARNO_TO_LOGICAL(rx))
+                    paren = RX_PARNO_TO_LOGICAL(rx)[paren];
                 if (n == '-') {
                     /* @- */
                     return (U32)paren;
@@ -667,32 +667,42 @@ int
 Perl_magic_regdatum_get(pTHX_ SV *sv, MAGIC *mg)
 {
     PERL_ARGS_ASSERT_MAGIC_REGDATUM_GET;
+    REGEXP * const rx = PL_curpm ? PM_GETRE(PL_curpm) : NULL;
 
-    if (PL_curpm) {
-        REGEXP * const rx = PM_GETRE(PL_curpm);
-        if (rx) {
-            const SSize_t n = (SSize_t)mg->mg_obj;
-            /* @{^CAPTURE} does not contain $&, so we need to increment by 1 */
-            const I32 paren = mg->mg_len
-                            + (n == '\003' ? 1 : 0);
-            SSize_t s;
-            SSize_t t;
-            if (paren < 0)
-                return 0;
-            if (paren <= (I32)RX_NPARENS(rx) &&
-                (s = RX_OFFS(rx)[paren].start) != -1 &&
-                (t = RX_OFFS(rx)[paren].end) != -1)
+    if (rx) {
+        const SSize_t n = (SSize_t)mg->mg_obj;
+        /* @{^CAPTURE} does not contain $&, so we need to increment by 1 */
+        const I32 paren = mg->mg_len
+                        + (n == '\003' ? 1 : 0);
+        
+        if (paren < 0)
+            return 0;
+
+        SSize_t s;
+        SSize_t t;
+        I32 logical_nparens = (I32)RX_LOGICAL_NPARENS(rx);
+
+        if (!logical_nparens) 
+            logical_nparens = (I32)RX_NPARENS(rx);
+
+        if (n != '+' && n != '-') {
+            CALLREG_NUMBUF_FETCH(rx,paren,sv);
+            return 0;
+        }
+        if (paren <= (I32)logical_nparens) {
+            I32 true_paren = RX_LOGICAL_TO_PARNO(rx)
+                             ? RX_LOGICAL_TO_PARNO(rx)[paren]
+                             : paren;
+            do {
+                if (((s = RX_OFFS_START(rx,true_paren)) != -1) &&
+                    ((t = RX_OFFS_END(rx,true_paren)) != -1))
                 {
                     SSize_t i;
 
-                    if (n == '+')                /* @+ */
+                    if (n == '+')               /* @+ */
                         i = t;
-                    else if (n == '-')           /* @- */
+                    else                        /* @- */
                         i = s;
-                    else {                        /* @^CAPTURE @{^CAPTURE} */
-                        CALLREG_NUMBUF_FETCH(rx,paren,sv);
-                        return 0;
-                    }
 
                     if (RX_MATCH_UTF8(rx)) {
                         const char * const b = RX_SUBBEG(rx);
@@ -705,6 +715,11 @@ Perl_magic_regdatum_get(pTHX_ SV *sv, MAGIC *mg)
                     sv_setuv(sv, i);
                     return 0;
                 }
+                if (RX_PARNO_TO_LOGICAL_NEXT(rx))
+                    true_paren = RX_PARNO_TO_LOGICAL_NEXT(rx)[true_paren];
+                else
+                    break;
+            } while (true_paren);
         }
     }
     sv_set_undef(sv);
@@ -758,6 +773,39 @@ Perl_emulate_cop_io(pTHX_ const COP *const c, SV *const sv)
             sv_catsv(sv, value);
         }
     }
+}
+
+int
+Perl_get_extended_os_errno(void)
+{
+
+#if defined(VMS)
+
+    return (int) vaxc$errno;
+
+#elif defined(OS2)
+
+    if (! (_emx_env & 0x200)) {	/* Under DOS */
+        return (int) errno;
+    }
+
+    if (errno != errno_isOS2) {
+        const int tmp = _syserrno();
+        if (tmp)	/* 2nd call to _syserrno() makes it 0 */
+            Perl_rc = tmp;
+    }
+    return (int) Perl_rc;
+
+#elif defined(WIN32)
+
+    return (int) GetLastError();
+
+#else
+
+    return (int) errno;
+
+#endif
+
 }
 
 STATIC void
@@ -879,55 +927,58 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
         sv_setiv(sv, (IV)(PL_debug & DEBUG_MASK));
         break;
     case '\005':  /* ^E */
-         if (nextchar != '\0') {
-            if (strEQ(remaining, "NCODING"))
-                sv_set_undef(sv);
-            break;
-        }
+        {
+            if (nextchar != '\0') {
+                if (strEQ(remaining, "NCODING"))
+                    sv_set_undef(sv);
+                break;
+            }
 
 #if defined(VMS) || defined(OS2) || defined(WIN32)
+
+            int extended_errno = get_extended_os_errno();
+
 #   if defined(VMS)
-        {
             char msg[255];
             $DESCRIPTOR(msgdsc,msg);
-            sv_setnv(sv,(NV) vaxc$errno);
-            if (sys$getmsg(vaxc$errno,&msgdsc.dsc$w_length,&msgdsc,0,0) & 1)
+
+            sv_setnv(sv, (NV) extended_errno);
+            if (sys$getmsg(extended_errno,
+                           &msgdsc.dsc$w_length,
+                           &msgdsc,
+                           0, 0)
+                & 1)
                 sv_setpvn(sv,msgdsc.dsc$a_pointer,msgdsc.dsc$w_length);
             else
                 SvPVCLEAR(sv);
-        }
+
 #elif defined(OS2)
-        if (!(_emx_env & 0x200)) {	/* Under DOS */
-            sv_setnv(sv, (NV)errno);
-            if (errno) {
-                utf8ness_t utf8ness;
-                const char * errstr = my_strerror(errnum, &utf8ness);
+            if (!(_emx_env & 0x200)) {	/* Under DOS */
+                sv_setnv(sv, (NV) extended_errno);
+                if (extended_errno) {
+                    utf8ness_t utf8ness;
+                    const char * errstr = my_strerror(extended_errno, &utf8ness);
 
-                sv_setpv(sv, errstr);
+                    sv_setpv(sv, errstr);
 
-                if (utf8ness == UTF8NESS_YES) {
-                    SvUTF8_on(sv);
+                    if (utf8ness == UTF8NESS_YES) {
+                        SvUTF8_on(sv);
+                    }
                 }
+                else {
+                    SvPVCLEAR(sv);
+                }
+            } else {
+                sv_setnv(sv, (NV) extended_errno);
+                sv_setpv(sv, os2error(extended_errno));
             }
-            else {
-                SvPVCLEAR(sv);
+            if (SvOK(sv) && strNE(SvPVX(sv), "")) {
+                fixup_errno_string(sv);
             }
-        } else {
-            if (errno != errno_isOS2) {
-                const int tmp = _syserrno();
-                if (tmp)	/* 2nd call to _syserrno() makes it 0 */
-                    Perl_rc = tmp;
-            }
-            sv_setnv(sv, (NV)Perl_rc);
-            sv_setpv(sv, os2error(Perl_rc));
-        }
-        if (SvOK(sv) && strNE(SvPVX(sv), "")) {
-            fixup_errno_string(sv);
-        }
+
 #   elif defined(WIN32)
-        {
-            const DWORD dwErr = GetLastError();
-            sv_setnv(sv, (NV)dwErr);
+            const DWORD dwErr = (DWORD) extended_errno;
+            sv_setnv(sv, (NV) dwErr);
             if (dwErr) {
                 PerlProc_GetOSError(sv, dwErr);
                 fixup_errno_string(sv);
@@ -943,7 +994,6 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
             else
                 SvPVCLEAR(sv);
             SetLastError(dwErr);
-        }
 #   else
 #   error Missing code for platform
 #   endif
@@ -952,6 +1002,7 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
         break;
 #endif  /* End of platforms with special handling for $^E; others just fall
            through to $! */
+        }
     /* FALLTHROUGH */
 
     case '!':
@@ -1007,6 +1058,14 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
             if (PL_last_in_gv && (SV*)PL_last_in_gv != &PL_sv_undef) {
                 assert(isGV_with_GP(PL_last_in_gv));
                 sv_setrv_inc(sv, MUTABLE_SV(PL_last_in_gv));
+                sv_rvweaken(sv);
+            }
+            else
+                sv_set_undef(sv);
+        }
+        else if (strEQ(remaining, "AST_SUCCESSFUL_PATTERN")) {
+            if (PL_curpm && (rx = PM_GETRE(PL_curpm))) {
+                sv_setrv_inc(sv, MUTABLE_SV(rx));
                 sv_rvweaken(sv);
             }
             else
@@ -1087,18 +1146,26 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
             }
         }
         break;
-    case '+':
+    case '+':                   /* $+ */
         if (PL_curpm && (rx = PM_GETRE(PL_curpm))) {
             paren = RX_LASTPAREN(rx);
-            if (paren)
+            if (paren) {
+                I32 *parno_to_logical = RX_PARNO_TO_LOGICAL(rx);
+                if (parno_to_logical)
+                    paren = parno_to_logical[paren];
                 goto do_numbuf_fetch;
+            }
         }
         goto set_undef;
-    case '\016':		/* ^N */
+    case '\016':		/* $^N */
         if (PL_curpm && (rx = PM_GETRE(PL_curpm))) {
             paren = RX_LASTCLOSEPAREN(rx);
-            if (paren)
+            if (paren) {
+                I32 *parno_to_logical = RX_PARNO_TO_LOGICAL(rx);
+                if (parno_to_logical)
+                    paren = parno_to_logical[paren];
                 goto do_numbuf_fetch;
+            }
         }
         goto set_undef;
     case '.':
@@ -1403,7 +1470,6 @@ Perl_magic_clear_all_env(pTHX_ SV *sv, MAGIC *mg)
     return 0;
 }
 
-#ifndef PERL_MICRO
 #ifdef HAS_SIGPROCMASK
 static void
 restore_sigmask(pTHX_ SV *save_sv)
@@ -1460,6 +1526,7 @@ Perl_magic_clearsig(pTHX_ SV *sv, MAGIC *mg)
 }
 
 
+PERL_STACK_REALIGN
 #ifdef PERL_USE_3ARG_SIGHANDLER
 Signal_t
 Perl_csighandler(int sig, Siginfo_t *sip, void *uap)
@@ -1495,6 +1562,17 @@ Perl_csighandler3(int sig, Siginfo_t *sip PERL_UNUSED_DECL, void *uap PERL_UNUSE
     dTHXa(PERL_GET_SIG_CONTEXT);
 #else
     dTHX;
+#endif
+
+#if defined(USE_ITHREADS) && !defined(WIN32)
+    if (!aTHX) {
+        /* presumably ths signal is being delivered to a non-perl
+         * thread, presumably created by a library, redirect it to the
+         * main thread.
+         */
+        pthread_kill(PL_main_thread, sig);
+        return;
+    }
 #endif
 
 #ifdef PERL_USE_3ARG_SIGHANDLER
@@ -1678,7 +1756,8 @@ Perl_magic_setsig(pTHX_ SV *sv, MAGIC *mg)
                For magic_clearsig, we don't change the warnings handler if it's
                set to the &PL_warnhook.  */
             svp = &PL_warnhook;
-        } else if (sv) {
+        }
+        else if (sv) {
             SV *tmp = sv_newmortal();
             Perl_croak(aTHX_ "No such hook: %s",
                                 pv_pretty(tmp, s, len, 0, NULL, NULL, 0));
@@ -1750,8 +1829,9 @@ Perl_magic_setsig(pTHX_ SV *sv, MAGIC *mg)
         if (i) {
             (void)rsignal(i, PL_csighandlerp);
         }
-        else
+        else {
             *svp = SvREFCNT_inc_simple_NN(sv);
+        }
     } else {
         if (sv && SvOK(sv)) {
             s = SvPV_force(sv, len);
@@ -1801,7 +1881,6 @@ Perl_magic_setsig(pTHX_ SV *sv, MAGIC *mg)
     SvREFCNT_dec(to_dec);
     return 0;
 }
-#endif /* !PERL_MICRO */
 
 int
 Perl_magic_setsigall(pTHX_ SV* sv, MAGIC* mg)
@@ -1820,6 +1899,92 @@ Perl_magic_setsigall(pTHX_ SV* sv, MAGIC* mg)
     }
     return 0;
 }
+
+int
+Perl_magic_clearhook(pTHX_ SV *sv, MAGIC *mg)
+{
+    PERL_ARGS_ASSERT_MAGIC_CLEARHOOK;
+
+    magic_sethook(NULL, mg);
+    return sv_unmagic(sv, mg->mg_type);
+}
+
+/* sv of NULL signifies that we're acting as magic_clearhook.  */
+int
+Perl_magic_sethook(pTHX_ SV *sv, MAGIC *mg)
+{
+    SV** svp = NULL;
+    STRLEN len;
+    const char *s = MgPV_const(mg,len);
+
+    PERL_ARGS_ASSERT_MAGIC_SETHOOK;
+
+    if (memEQs(s, len, "require__before")) {
+        svp = &PL_hook__require__before;
+    }
+    else if (memEQs(s, len, "require__after")) {
+        svp = &PL_hook__require__after;
+    }
+    else {
+        SV *tmp = sv_newmortal();
+        Perl_croak(aTHX_ "Attempt to set unknown hook '%s' in %%{^HOOK}",
+                            pv_pretty(tmp, s, len, 0, NULL, NULL, 0));
+    }
+    if (sv && SvOK(sv) && (!SvROK(sv) || SvTYPE(SvRV(sv))!= SVt_PVCV))
+        croak("${^HOOK}{%.*s} may only be a CODE reference or undef", (int)len, s);
+
+    if (svp) {
+        if (*svp)
+            SvREFCNT_dec(*svp);
+
+        if (sv)
+            *svp = SvREFCNT_inc_simple_NN(sv);
+        else
+            *svp = NULL;
+    }
+
+    return 0;
+}
+
+int
+Perl_magic_sethookall(pTHX_ SV* sv, MAGIC* mg)
+{
+    PERL_ARGS_ASSERT_MAGIC_SETHOOKALL;
+    PERL_UNUSED_ARG(mg);
+
+    if (PL_localizing == 1) {
+        SAVEGENERICSV(PL_hook__require__before);
+        PL_hook__require__before = NULL;
+        SAVEGENERICSV(PL_hook__require__after);
+        PL_hook__require__after = NULL;
+    }
+    else
+    if (PL_localizing == 2) {
+        HV* hv = (HV*)sv;
+        HE* current;
+        hv_iterinit(hv);
+        while ((current = hv_iternext(hv))) {
+            SV* hookelem = hv_iterval(hv, current);
+            mg_set(hookelem);
+        }
+    }
+    return 0;
+}
+
+int
+Perl_magic_clearhookall(pTHX_ SV* sv, MAGIC* mg)
+{
+    PERL_ARGS_ASSERT_MAGIC_CLEARHOOKALL;
+    PERL_UNUSED_ARG(mg);
+    PERL_UNUSED_ARG(sv);
+
+    SvREFCNT_dec_set_NULL(PL_hook__require__before);
+
+    SvREFCNT_dec_set_NULL(PL_hook__require__after);
+
+    return 0;
+}
+
 
 int
 Perl_magic_setisa(pTHX_ SV *sv, MAGIC *mg)
@@ -2407,9 +2572,10 @@ Perl_magic_setsubstr(pTHX_ SV *sv, MAGIC *mg)
         const char *utf8;
         lvoff = sv_pos_u2b_flags(lsv, lvoff, &lvlen, SV_CONST_RETURN);
         newtarglen = len;
-        utf8 = (char*)bytes_to_utf8((U8*)tmps, &len);
+        void * free_me = NULL;
+        utf8 = (char*)bytes_to_utf8_free_me((U8*)tmps, &len, &free_me);
         sv_insert_flags(lsv, lvoff, lvlen, utf8, len, 0);
-        Safefree(utf8);
+        Safefree(free_me);
     }
     else {
         sv_insert_flags(lsv, lvoff, lvlen, tmps, len, 0);
@@ -2937,9 +3103,10 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
             U32 save_hints = PL_hints;
             PL_hints = SvUV(sv);
 
-            /* If wasn't UTF-8, and now is, notify the parser */
-            if ((PL_hints & HINT_UTF8) && ! (save_hints & HINT_UTF8)) {
-                notify_parser_that_changed_to_utf8();
+            if (   (PL_hints   & (HINT_UTF8|HINT_ASCII_ENCODING))
+                != (save_hints & (HINT_UTF8|HINT_ASCII_ENCODING)))
+            {
+                notify_parser_that_encoding_changed();
             }
         }
         break;
@@ -3055,25 +3222,55 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
             IoLINES(GvIOp(PL_last_in_gv)) = SvIV(sv);
         break;
     case '^':
-        Safefree(IoTOP_NAME(GvIOp(PL_defoutgv)));
-        IoTOP_NAME(GvIOp(PL_defoutgv)) = savesvpv(sv);
-        IoTOP_GV(GvIOp(PL_defoutgv)) =  gv_fetchsv(sv, GV_ADD, SVt_PVIO);
+        {
+            IO * const io = GvIO(PL_defoutgv);
+            if (!io)
+                break;
+
+            Safefree(IoTOP_NAME(io));
+            IoTOP_NAME(io) = savesvpv(sv);
+            IoTOP_GV(io) =  gv_fetchsv(sv, GV_ADD, SVt_PVIO);
+        }
         break;
     case '~':
-        Safefree(IoFMT_NAME(GvIOp(PL_defoutgv)));
-        IoFMT_NAME(GvIOp(PL_defoutgv)) = savesvpv(sv);
-        IoFMT_GV(GvIOp(PL_defoutgv)) =  gv_fetchsv(sv, GV_ADD, SVt_PVIO);
+        {
+            IO * const io = GvIO(PL_defoutgv);
+            if (!io)
+                break;
+
+            Safefree(IoFMT_NAME(io));
+            IoFMT_NAME(io) = savesvpv(sv);
+            IoFMT_GV(io) =  gv_fetchsv(sv, GV_ADD, SVt_PVIO);
+        }
         break;
     case '=':
-        IoPAGE_LEN(GvIOp(PL_defoutgv)) = (SvIV(sv));
+        {
+            IO * const io = GvIO(PL_defoutgv);
+            if (!io)
+                break;
+
+            IoPAGE_LEN(io) = (SvIV(sv));
+        }
         break;
     case '-':
-        IoLINES_LEFT(GvIOp(PL_defoutgv)) = (SvIV(sv));
-        if (IoLINES_LEFT(GvIOp(PL_defoutgv)) < 0L)
-                IoLINES_LEFT(GvIOp(PL_defoutgv)) = 0L;
+        {
+            IO * const io = GvIO(PL_defoutgv);
+            if (!io)
+                break;
+
+            IoLINES_LEFT(io) = (SvIV(sv));
+            if (IoLINES_LEFT(io) < 0L)
+                IoLINES_LEFT(io) = 0L;
+        }
         break;
     case '%':
-        IoPAGE(GvIOp(PL_defoutgv)) = (SvIV(sv));
+        {
+            IO * const io = GvIO(PL_defoutgv);
+            if (!io)
+                break;
+
+            IoPAGE(io) = (SvIV(sv));
+        }
         break;
     case '|':
         {
@@ -3491,7 +3688,6 @@ Perl_perly_sighandler(int sig, Siginfo_t *sip PERL_UNUSED_DECL,
     CV *cv = NULL;
     OP *myop = PL_op;
     U32 flags = 0;
-    XPV * const tXpv = PL_Xpv;
     I32 old_ss_ix = PL_savestack_ix;
     SV *errsv_save = NULL;
 
@@ -3512,7 +3708,7 @@ Perl_perly_sighandler(int sig, Siginfo_t *sip PERL_UNUSED_DECL,
         }
     }
     /* sv_2cv is too complicated, try a simpler variant first: */
-    if (!SvROK(PL_psig_ptr[sig]) || !(cv = MUTABLE_CV(SvRV(PL_psig_ptr[sig])))
+    if (!SvROK(PL_psig_ptr[sig]) || !(cv = CV_FROM_REF(PL_psig_ptr[sig]))
         || SvTYPE(cv) != SVt_PVCV) {
         HV *st;
         cv = sv_2cv(PL_psig_ptr[sig], &st, &gv, GV_ADD);
@@ -3604,7 +3800,6 @@ Perl_perly_sighandler(int sig, Siginfo_t *sip PERL_UNUSED_DECL,
         if (SvTRUE_NN(errsv)) {
             SvREFCNT_dec(errsv_save);
 
-#ifndef PERL_MICRO
             /* Handler "died", for example to get out of a restart-able read().
              * Before we re-do that on its behalf re-enable the signal which was
              * blocked by the system when we entered.
@@ -3630,7 +3825,6 @@ Perl_perly_sighandler(int sig, Siginfo_t *sip PERL_UNUSED_DECL,
             (void)rsignal(sig, SIG_IGN);
             (void)rsignal(sig, PL_csighandlerp);
 #  endif
-#endif /* !PERL_MICRO */
 
             die_sv(errsv);
         }
@@ -3648,7 +3842,6 @@ Perl_perly_sighandler(int sig, Siginfo_t *sip PERL_UNUSED_DECL,
     PL_op = myop;			/* Apparently not needed... */
 
     PL_Sv = tSv;			/* Restore global temporaries. */
-    PL_Xpv = tXpv;
     return;
 }
 

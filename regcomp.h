@@ -13,6 +13,62 @@
 
 #define PERL_REGCOMP_H_
 
+#ifndef RE_PESSIMISTIC_PARENS
+/* Define this to 1 if you want to enable a really aggressive and
+ * inefficient paren cleanup during backtracking which should ensure
+ * correctness. Doing so should fix any bugs related to backreferences,
+ * at the cost of saving and restoring paren state far more than we
+ * necessarily must.
+ *
+ * When it is set to 0 we try to optimize away unnecessary save/restore
+ * operations which could potentially introduce bugs. We should pass our
+ * test suite with this as 0, but setting it to 1 might fix cases we do
+ * not currently test for. If setting this to 1 does fix a bug, then
+ * review the code related to storing and restoring paren state.
+ *
+ * See comment for VOLATILE_REF below for more details of a
+ * related case.
+ */
+#define RE_PESSIMISTIC_PARENS 0
+#endif
+
+/* a VOLATILE_REF is a ref which is inside of a capturing group and it
+ * refers to the capturing group it is inside of or to a following capture
+ * group which might be affected by what this capture group matches, and
+ * thus the ref requires additional backtracking support. For example:
+ *
+ *  "xa=xaaa" =~ /^(xa|=?\1a){2}\z/
+ *
+ * should not match.  In older perls the matching process would go like this:
+ *
+ * Iter 1: "xa" matches in capture group.
+ * Iter 2: "xa" does not match, goes to next alternation.
+ *         "=" matches in =?
+ *         Bifurcates here (= might not match)
+ *         "xa" matches via \1 from previous iteration
+ *         "a" matches via "a" at end of second alternation
+ *         # at this point $1 is "=xaa"
+ *         \z  does not match -> backtracks.
+ * Backtracks to Iter 2 "=?" Bifurcation point where we have NOT matched "="
+ *         "=xaa" matches via \1 (as $1 has not been reset)
+ *         "a" matches via "a" at end of second alternation
+ *         "\z" does match. -> Pattern matches overall.
+ *
+ * What should happen and now does happen instead is:
+ *
+ * Backtracks to Iter 2 "=?" Bifurcation point where we have NOT matched "=",
+ *         \1 does not match as it is "xa" (as $1 was reset when backtracked)
+ *         and the current character in the string is an "="
+ *
+ * The fact that \1 in this case is marked as a VOLATILE_REF is what ensures
+ * that we reset the capture buffer properly.
+ *
+ * See 59db194299c94c6707095797c3df0e2f67ff82b2
+ * and 38508ce8fc3a1bd12a3bb65e9d4ceb9b396a18db
+ * for more details.
+ */
+#define VOLATILE_REF 1
+
 #include "regcharclass.h"
 
 /* Convert branch sequences to more efficient trie ops? */
@@ -108,6 +164,7 @@ typedef struct regexp_internal {
 #define PREGf_ANCH_SBOL         0x00000800
 #define PREGf_ANCH_GPOS         0x00001000
 #define PREGf_RECURSE_SEEN      0x00002000
+#define PREGf_PESSIMIZE_SEEN    0x00004000
 
 #define PREGf_ANCH              \
     ( PREGf_ANCH_SBOL | PREGf_ANCH_GPOS | PREGf_ANCH_MBOL )
@@ -121,16 +178,36 @@ typedef struct regexp_internal {
  * change things without care. If you look at regexp.h you will see it
  * contains this:
  *
- * struct regnode {
- *   U8  flags;
- *   U8  type;
- *   U16 next_off;
+ * union regnode_head {
+ *   struct {
+ *     union {
+ *       U8 flags;
+ *       U8 str_len_u8;
+ *       U8 first_byte;
+ *     } u_8;
+ *     U8  type;
+ *     U16 next_off;
+ *   } data;
+ *   U32 data_u32;
  * };
  *
- * This structure is the base unit of elements in the regexp program. When
- * we increment our way through the program we increment by the size of this
- * structure, and in all cases where regnode sizing is considered it is in
- * units of this structure.
+ * struct regnode {
+ *   union regnode_head head;
+ * };
+ *
+ * Which really is a complicated and alignment friendly version of
+ *
+ *  struct {
+ *    U8  flags;
+ *    U8  type;
+ *    U16 next_off;
+ *  };
+ *
+ * This structure is the base unit of elements in the regexp program.
+ * When we increment our way through the program we increment by the
+ * size of this structure (32 bits), and in all cases where regnode
+ * sizing is considered it is in units of this structure. All regnodes
+ * have a union regnode_head as their first parameter.
  *
  * This implies that no regnode style structure should contain 64 bit
  * aligned members. Since the base regnode is 32 bits any member might
@@ -153,36 +230,40 @@ typedef struct regexp_internal {
  * we already have support for in the data array.
  */
 
+union regnode_arg {
+    I32 i32;
+    U32 u32;
+    struct {
+        U16 u16a;
+        U16 u16b;
+    } hi_lo;
+};
+
+
 struct regnode_string {
-    U8	str_len;
-    U8  type;
-    U16 next_off;
+    union regnode_head head;
     char string[1];
 };
 
 struct regnode_lstring { /* Constructed this way to keep the string aligned. */
-    U8	flags;
-    U8  type;
-    U16 next_off;
-    U32 str_len;    /* Only 18 bits allowed before would overflow 'next_off' */
+    union regnode_head head;
+    U32 str_len_u32;    /* Only 18 bits allowed before would overflow 'next_off' */
     char string[1];
 };
 
 struct regnode_anyofhs { /* Constructed this way to keep the string aligned. */
-    U8	str_len;
-    U8  type;
-    U16 next_off;
-    U32 arg1;                           /* set by set_ANYOF_arg() */
+    union regnode_head head;
+    union regnode_arg arg1;
     char string[1];
 };
 
-/* Argument bearing node - workhorse, 
-   arg1 is often for the data field */
+/* Argument bearing node - workhorse, ARG1u() is often used for the data field
+ * Can store either a signed 32 bit value via ARG1i() or unsigned 32 bit value
+ * via ARG1u(), or two unsigned 16 bit values via ARG1a() or ARG1b()
+ */
 struct regnode_1 {
-    U8	flags;
-    U8  type;
-    U16 next_off;
-    U32 arg1;
+    union regnode_head head;
+    union regnode_arg arg1;
 };
 
 /* Node whose argument is 'SV *'.  This needs to be used very carefully in
@@ -201,28 +282,33 @@ struct regnode_1 {
  * then use inline functions to copy the data in or out.
  * */
 struct regnode_p {
-    U8	flags;
-    U8  type;
-    U16 next_off;
+    union regnode_head head;
     char arg1_sv_ptr_bytes[sizeof(SV *)];
 };
 
-/* Similar to a regnode_1 but with an extra signed argument */
-struct regnode_2L {
-    U8	flags;
-    U8  type;
-    U16 next_off;
-    U32 arg1;
-    I32 arg2;
+/* "Two Node" - similar to a regnode_1 but with space for an extra 32
+ * bit value, or two 16 bit valus. The first fields must match regnode_1.
+ * Extra field can be accessed as (U32)ARG2u() (I32)ARG2i() or (U16)ARG2a()
+ * and (U16)ARG2b() */
+struct regnode_2 {
+    union regnode_head head;
+    union regnode_arg arg1;
+    union regnode_arg arg2;
 };
 
-/* 'Two field' -- Two 16 bit unsigned args */
-struct regnode_2 {
-    U8	flags;
-    U8  type;
-    U16 next_off;
-    U16 arg1;
-    U16 arg2;
+/* "Three Node" - similar to a regnode_2 but with space for an additional
+ * 32 bit value, or two 16 bit values. The first fields must match regnode_2.
+ * The extra field can be accessed as (U32)ARG3u() (I32)ARG3i() or (U16)ARG3a()
+ * and (U16)ARG3b().
+ * Currently used for the CURLY style regops used to represent quantifers,
+ * storing the min and of the quantifier via ARG1i() and ARG2i(), along with
+ * ARG3a() and ARG3b() which are used to store information about the number of
+ * parens before and inside the quantified expression. */
+struct regnode_3 {
+    union regnode_head head;
+    union regnode_arg arg1;
+    union regnode_arg arg2;
+    union regnode_arg arg3;
 };
 
 #define REGNODE_BBM_BITMAP_LEN                                                  \
@@ -233,9 +319,7 @@ struct regnode_2 {
  * The array is a bitmap capable of representing any possible continuation
  * byte. */
 struct regnode_bbm {
-    U8	first_byte;
-    U8  type;
-    U16 next_off;
+    union regnode_head head;
     U8 bitmap[REGNODE_BBM_BITMAP_LEN];
 };
 
@@ -251,22 +335,18 @@ struct regnode_bbm {
  * the code that inserts and deletes regnodes.  The basic single-argument
  * regnode has a U32, which is what reganode() allocates as a unit.  Therefore
  * no field can require stricter alignment than U32. */
-
+    
 /* also used by trie */
 struct regnode_charclass {
-    U8	flags;
-    U8  type;
-    U16 next_off;
-    U32 arg1;                           /* set by set_ANYOF_arg() */
+    union regnode_head head;
+    union regnode_arg arg1;
     char bitmap[ANYOF_BITMAP_SIZE];	/* only compile-time */
 };
 
 /* has runtime (locale) \d, \w, ..., [:posix:] classes */
 struct regnode_charclass_posixl {
-    U8	flags;                      /* ANYOF_MATCHES_POSIXL bit must go here */
-    U8  type;
-    U16 next_off;
-    U32 arg1;
+    union regnode_head head;
+    union regnode_arg arg1;
     char bitmap[ANYOF_BITMAP_SIZE];		/* both compile-time ... */
     U32 classflags;	                        /* and run-time */
 };
@@ -285,10 +365,8 @@ struct regnode_charclass_posixl {
  * never a next node.
  */
 struct regnode_ssc {
-    U8	flags;                      /* ANYOF_MATCHES_POSIXL bit must go here */
-    U8  type;
-    U16 next_off;
-    U32 arg1;
+    union regnode_head head;
+    union regnode_arg arg1;
     char bitmap[ANYOF_BITMAP_SIZE];	/* both compile-time ... */
     U32 classflags;	                /* ... and run-time */
 
@@ -317,22 +395,22 @@ struct regnode_ssc {
    Impose a limit of REG_INFTY on various pattern matching operations
    to limit stack growth and to avoid "infinite" recursions.
 */
-/* The default size for REG_INFTY is U16_MAX, which is the same as
-   USHORT_MAX (see perl.h).  Unfortunately U16 isn't necessarily 16 bits
-   (see handy.h).  On the Cray C90, sizeof(short)==4 and hence U16_MAX is
-   ((1<<32)-1), while on the Cray T90, sizeof(short)==8 and U16_MAX is
-   ((1<<64)-1).  To limit stack growth to reasonable sizes, supply a
+/* The default size for REG_INFTY is I32_MAX, which is the same as UINT_MAX
+   (see perl.h). Unfortunately I32 isn't necessarily 32 bits (see handy.h).
+   On the Cray C90, or Cray T90, I32_MAX is considerably larger than it
+   might be elsewhere. To limit stack growth to reasonable sizes, supply a
    smaller default.
         --Andy Dougherty  11 June 1998
+        --Amended by Yves Orton 15 Jan 2023
 */
-#if SHORTSIZE > 2
+#if INTSIZE > 4
 #  ifndef REG_INFTY
-#    define REG_INFTY  nBIT_UMAX(16)
+#    define REG_INFTY  nBIT_IMAX(32)
 #  endif
 #endif
 
 #ifndef REG_INFTY
-#  define REG_INFTY U16_MAX
+#  define REG_INFTY I32_MAX
 #endif
 
 #define ARG_VALUE(arg) (arg)
@@ -342,23 +420,48 @@ struct regnode_ssc {
 #undef ARG1
 #undef ARG2
 
-#define ARG(p) ARG_VALUE(ARG_LOC(p))
-#define ARGp(p) ARGp_VALUE_inline(p)
-#define ARG1(p) ARG_VALUE(ARG1_LOC(p))
-#define ARG2(p) ARG_VALUE(ARG2_LOC(p))
-#define ARG2L(p) ARG_VALUE(ARG2L_LOC(p))
+/* convention: each arg is is 32 bits, with the "u" suffix
+ * being unsigned 32 bits, the "i" suffix being signed 32 bits,
+ * and the "a" and "b" suffixes being unsigned 16 bit fields.
+ *
+ * We provide all 4 macros for each case for consistency, even
+ * though they arent all used.
+ */
 
-#define ARG_SET(p, val) ARG__SET(ARG_LOC(p), (val))
-#define ARG1_SET(p, val) ARG__SET(ARG1_LOC(p), (val))
-#define ARG2_SET(p, val) ARG__SET(ARG2_LOC(p), (val))
-#define ARG2L_SET(p, val) ARG__SET(ARG2L_LOC(p), (val))
+#define ARG1u(p) ARG_VALUE(ARG1u_LOC(p))
+#define ARG1i(p) ARG_VALUE(ARG1i_LOC(p))
+#define ARG1a(p) ARG_VALUE(ARG1a_LOC(p))
+#define ARG1b(p) ARG_VALUE(ARG1b_LOC(p))
+
+#define ARG2u(p) ARG_VALUE(ARG2u_LOC(p))
+#define ARG2i(p) ARG_VALUE(ARG2i_LOC(p))
+#define ARG2a(p) ARG_VALUE(ARG2a_LOC(p))
+#define ARG2b(p) ARG_VALUE(ARG2b_LOC(p))
+
+#define ARG3u(p) ARG_VALUE(ARG3u_LOC(p))
+#define ARG3i(p) ARG_VALUE(ARG3i_LOC(p))
+#define ARG3a(p) ARG_VALUE(ARG3a_LOC(p))
+#define ARG3b(p) ARG_VALUE(ARG3b_LOC(p))
+
+#define ARGp(p) ARGp_VALUE_inline(p)
+
+#define ARG1u_SET(p, val) ARG__SET(ARG1u_LOC(p), (val))
+#define ARG1i_SET(p, val) ARG__SET(ARG1i_LOC(p), (val))
+#define ARG1a_SET(p, val) ARG__SET(ARG1a_LOC(p), (val))
+#define ARG1b_SET(p, val) ARG__SET(ARG1b_LOC(p), (val))
+
+#define ARG2u_SET(p, val) ARG__SET(ARG2u_LOC(p), (val))
+#define ARG2i_SET(p, val) ARG__SET(ARG2i_LOC(p), (val))
+#define ARG2a_SET(p, val) ARG__SET(ARG2a_LOC(p), (val))
+#define ARG2b_SET(p, val) ARG__SET(ARG2b_LOC(p), (val))
+
+#define ARG3u_SET(p, val) ARG__SET(ARG3u_LOC(p), (val))
+#define ARG3i_SET(p, val) ARG__SET(ARG3i_LOC(p), (val))
+#define ARG3a_SET(p, val) ARG__SET(ARG3a_LOC(p), (val))
+#define ARG3b_SET(p, val) ARG__SET(ARG3b_LOC(p), (val))
+
 #define ARGp_SET(p, val) ARGp_SET_inline((p),(val))
 
-#undef NEXT_OFF
-#undef NODE_ALIGN
-
-#define NEXT_OFF(p) ((p)->next_off)
-#define NODE_ALIGN(node)
 /* the following define was set to 0xde in 075abff3
  * as part of some linting logic. I have set it to 0
  * as otherwise in every place where we /might/ set flags
@@ -368,25 +471,32 @@ struct regnode_ssc {
  * is changed from 0 then at the very least make sure
  * that SBOL for /^/ sets the flags to 0 explicitly.
  * -- Yves */
-#define NODE_ALIGN_FILL(node) ((node)->flags = 0)
 
+#define NODE_ALIGN(node)
 #define SIZE_ALIGN NODE_ALIGN
 
 #undef OP
 #undef OPERAND
 #undef STRING
+#undef NEXT_OFF
+#undef NODE_ALIGN
 
-#define	OP(p)		((p)->type)
-#define FLAGS(p)	((p)->flags)	/* Caution: Doesn't apply to all      \
+#define NEXT_OFF(p)     ((p)->head.data.next_off)
+#define OP(p)           ((p)->head.data.type)
+#define STR_LEN_U8(p)   ((p)->head.data.u_8.str_len_u8)
+#define FIRST_BYTE(p)   ((p)->head.data.u_8.first_byte)
+#define FLAGS(p)        ((p)->head.data.u_8.flags) /* Caution: Doesn't apply to all      \
                                            regnode types.  For some, it's the \
                                            character set of the regnode */
-#define	STR_LENs(p)	(__ASSERT_(OP(p) != LEXACT && OP(p) != LEXACT_REQ8)  \
-                                    ((struct regnode_string *)p)->str_len)
-#define	STRINGs(p)	(__ASSERT_(OP(p) != LEXACT && OP(p) != LEXACT_REQ8)  \
+#define STR_LENs(p)	(__ASSERT_(OP(p) != LEXACT && OP(p) != LEXACT_REQ8)  \
+                                    STR_LEN_U8((struct regnode_string *)p))
+#define STRINGs(p)	(__ASSERT_(OP(p) != LEXACT && OP(p) != LEXACT_REQ8)  \
                                     ((struct regnode_string *)p)->string)
-#define	OPERANDs(p)	STRINGs(p)
+#define OPERANDs(p)	STRINGs(p)
 
-#define PARNO(p)        ARG(p)          /* APPLIES for OPEN and CLOSE only */
+#define PARNO(p)        ARG1u(p)          /* APPLIES for OPEN and CLOSE only */
+
+#define NODE_ALIGN_FILL(node) (FLAGS(node) = 0)
 
 /* Long strings.  Currently limited to length 18 bits, which handles a 262000
  * byte string.  The limiting factor is the 16 bit 'next_off' field, which
@@ -400,17 +510,17 @@ struct regnode_ssc {
  * node to be an ARG2L, using the second 32 bit field for the length, and not
  * using the flags nor next_off fields at all.  One could have an llstring node
  * and even an lllstring type. */
-#define	STR_LENl(p)	(__ASSERT_(OP(p) == LEXACT || OP(p) == LEXACT_REQ8)  \
-                                    (((struct regnode_lstring *)p)->str_len))
-#define	STRINGl(p)	(__ASSERT_(OP(p) == LEXACT || OP(p) == LEXACT_REQ8)  \
+#define STR_LENl(p)	(__ASSERT_(OP(p) == LEXACT || OP(p) == LEXACT_REQ8)  \
+                                    (((struct regnode_lstring *)p)->str_len_u32))
+#define STRINGl(p)	(__ASSERT_(OP(p) == LEXACT || OP(p) == LEXACT_REQ8)  \
                                     (((struct regnode_lstring *)p)->string))
-#define	OPERANDl(p)	STRINGl(p)
+#define OPERANDl(p)	STRINGl(p)
 
-#define	STR_LEN(p)	((OP(p) == LEXACT || OP(p) == LEXACT_REQ8)           \
+#define STR_LEN(p)	((OP(p) == LEXACT || OP(p) == LEXACT_REQ8)           \
                                                ? STR_LENl(p) : STR_LENs(p))
-#define	STRING(p)	((OP(p) == LEXACT || OP(p) == LEXACT_REQ8)           \
+#define STRING(p)	((OP(p) == LEXACT || OP(p) == LEXACT_REQ8)           \
                                                ? STRINGl(p)  : STRINGs(p))
-#define	OPERAND(p)	STRING(p)
+#define OPERAND(p)	STRING(p)
 
 /* The number of (smallest) regnode equivalents that a string of length l bytes
  * occupies - Used by the REGNODE_AFTER() macros and functions. */
@@ -419,30 +529,36 @@ struct regnode_ssc {
 #define setSTR_LEN(p,v)                                                     \
     STMT_START{                                                             \
         if (OP(p) == LEXACT || OP(p) == LEXACT_REQ8)                        \
-            ((struct regnode_lstring *)(p))->str_len = (v);                 \
+            ((struct regnode_lstring *)(p))->str_len_u32 = (v);             \
         else                                                                \
-            ((struct regnode_string *)(p))->str_len = (v);                  \
+            STR_LEN_U8((struct regnode_string *)(p)) = (v);                 \
     } STMT_END
 
 #define ANYOFR_BASE_BITS    20
-#define ANYOFRbase(p)   (ARG(p) & nBIT_MASK(ANYOFR_BASE_BITS))
-#define ANYOFRdelta(p)  (ARG(p) >> ANYOFR_BASE_BITS)
+#define ANYOFRbase(p)   (ARG1u(p) & nBIT_MASK(ANYOFR_BASE_BITS))
+#define ANYOFRdelta(p)  (ARG1u(p) >> ANYOFR_BASE_BITS)
 
 #undef NODE_ALIGN
 #undef ARG_LOC
 
-#define	NODE_ALIGN(node)
-#define	ARG_LOC(p)	(((struct regnode_1 *)p)->arg1)
+#define NODE_ALIGN(node)
 #define ARGp_BYTES_LOC(p)  (((struct regnode_p *)p)->arg1_sv_ptr_bytes)
-#define	ARG1_LOC(p)	(((struct regnode_2 *)p)->arg1)
-#define	ARG2_LOC(p)	(((struct regnode_2 *)p)->arg2)
-#define ARG2L_LOC(p)	(((struct regnode_2L *)p)->arg2)
-
+#define ARG1u_LOC(p)    (((struct regnode_1 *)p)->arg1.u32)
+#define ARG1i_LOC(p)    (((struct regnode_1 *)p)->arg1.i32)
+#define ARG1a_LOC(p)    (((struct regnode_1 *)p)->arg1.hi_lo.u16a)
+#define ARG1b_LOC(p)    (((struct regnode_1 *)p)->arg1.hi_lo.u16b)
+#define ARG2u_LOC(p)    (((struct regnode_2 *)p)->arg2.u32)
+#define ARG2i_LOC(p)    (((struct regnode_2 *)p)->arg2.i32)
+#define ARG2a_LOC(p)    (((struct regnode_2 *)p)->arg2.hi_lo.u16a)
+#define ARG2b_LOC(p)    (((struct regnode_2 *)p)->arg2.hi_lo.u16b)
+#define ARG3u_LOC(p)    (((struct regnode_3 *)p)->arg3.u32)
+#define ARG3i_LOC(p)    (((struct regnode_3 *)p)->arg3.i32)
+#define ARG3a_LOC(p)    (((struct regnode_3 *)p)->arg3.hi_lo.u16a)
+#define ARG3b_LOC(p)    (((struct regnode_3 *)p)->arg3.hi_lo.u16b)
 
 /* These should no longer be used directly in most cases. Please use
  * the REGNODE_AFTER() macros instead. */
 #define NODE_STEP_REGNODE	1	/* sizeof(regnode)/sizeof(regnode) */
-#define EXTRA_STEP_2ARGS	EXTRA_SIZE(struct regnode_2)
 
 /* Core macros for computing "the regnode after this one". See also
  * Perl_regnode_after() in reginline.h
@@ -476,7 +592,7 @@ struct regnode_ssc {
  * Be aware that C<REGNODE_AFTER()> is not guaranteed to give a *useful*
  * result once the regex peephole optimizer has run (it will be correct
  * however!). By the time code in regexec.c executes various regnodes
- * may have been optimized out of the the C<next_off> chain. An example
+ * may have been optimized out of the C<next_off> chain. An example
  * can be seen above, node 13 will never be reached during execution
  * flow as it has been stitched out of the C<next_off> chain. Both 6 and
  * 11 would have pointed at it during compilation, but it exists only to
@@ -557,24 +673,24 @@ struct regnode_ssc {
                     FILL_NODE(offset, op);                              \
                     (offset)++;                                         \
     } STMT_END
-#define FILL_ADVANCE_NODE_ARG(offset, op, arg)                          \
+#define FILL_ADVANCE_NODE_ARG1u(offset, op, arg)                        \
     STMT_START {                                                        \
-                    ARG_SET(REGNODE_p(offset), arg);                    \
+                    ARG1u_SET(REGNODE_p(offset), arg);                  \
                     FILL_ADVANCE_NODE(offset, op);                      \
                     /* This is used generically for other operations    \
                      * that have a longer argument */                   \
-                    (offset) += REGNODE_ARG_LEN(op);                          \
+                    (offset) += REGNODE_ARG_LEN(op);                    \
     } STMT_END
-#define FILL_ADVANCE_NODE_ARGp(offset, op, arg)                          \
+#define FILL_ADVANCE_NODE_ARGp(offset, op, arg)                         \
     STMT_START {                                                        \
-                    ARGp_SET(REGNODE_p(offset), arg);                    \
+                    ARGp_SET(REGNODE_p(offset), arg);                   \
                     FILL_ADVANCE_NODE(offset, op);                      \
-                    (offset) += REGNODE_ARG_LEN(op);                          \
+                    (offset) += REGNODE_ARG_LEN(op);                    \
     } STMT_END
-#define FILL_ADVANCE_NODE_2L_ARG(offset, op, arg1, arg2)                \
+#define FILL_ADVANCE_NODE_2ui_ARG(offset, op, arg1, arg2)               \
     STMT_START {                                                        \
-                    ARG_SET(REGNODE_p(offset), arg1);                   \
-                    ARG2L_SET(REGNODE_p(offset), arg2);                 \
+                    ARG1u_SET(REGNODE_p(offset), arg1);                 \
+                    ARG2i_SET(REGNODE_p(offset), arg2);                 \
                     FILL_ADVANCE_NODE(offset, op);                      \
                     (offset) += 2;                                      \
     } STMT_END
@@ -614,16 +730,16 @@ ARGp_SET_inline(struct regnode *node, SV *ptr) {
 
 #define ANYOF_MATCHES_ALL_OUTSIDE_BITMAP_VALUE   U32_MAX
 #define ANYOF_MATCHES_ALL_OUTSIDE_BITMAP(node)                              \
-                    (ARG(node) == ANYOF_MATCHES_ALL_OUTSIDE_BITMAP_VALUE)
+                    (ARG1u(node) == ANYOF_MATCHES_ALL_OUTSIDE_BITMAP_VALUE)
 
 #define ANYOF_MATCHES_NONE_OUTSIDE_BITMAP_VALUE                             \
    /* Assumes ALL is odd */  (ANYOF_MATCHES_ALL_OUTSIDE_BITMAP_VALUE - 1)
 #define ANYOF_MATCHES_NONE_OUTSIDE_BITMAP(node)                             \
-                    (ARG(node) == ANYOF_MATCHES_NONE_OUTSIDE_BITMAP_VALUE)
+                    (ARG1u(node) == ANYOF_MATCHES_NONE_OUTSIDE_BITMAP_VALUE)
 
 #define ANYOF_ONLY_HAS_BITMAP_MASK  ANYOF_MATCHES_NONE_OUTSIDE_BITMAP_VALUE
 #define ANYOF_ONLY_HAS_BITMAP(node)                                         \
-  ((ARG(node) & ANYOF_ONLY_HAS_BITMAP_MASK) == ANYOF_ONLY_HAS_BITMAP_MASK)
+  ((ARG1u(node) & ANYOF_ONLY_HAS_BITMAP_MASK) == ANYOF_ONLY_HAS_BITMAP_MASK)
 
 #define ANYOF_HAS_AUX(node)  (! ANYOF_ONLY_HAS_BITMAP(node))
 
@@ -889,7 +1005,7 @@ ARGp_SET_inline(struct regnode *node, SV *ptr) {
 #define BITMAP_BIT(c)	        (1U << ((c) & 7))
 #define BITMAP_TEST(p, c)	(BITMAP_BYTE(p, c) & BITMAP_BIT((U8)(c)))
 
-#define ANYOF_FLAGS(p)		((p)->flags)
+#define ANYOF_FLAGS(p)          (FLAGS(p))
 
 #define ANYOF_BIT(c)		BITMAP_BIT(c)
 
@@ -977,6 +1093,7 @@ ARGp_SET_inline(struct regnode *node, SV *ptr) {
 #define REG_UNFOLDED_MULTI_SEEN             0x00000400
 /* spare */
 #define REG_UNBOUNDED_QUANTIFIER_SEEN       0x00001000
+#define REG_PESSIMIZE_SEEN                  0x00002000
 
 
 START_EXTERN_C
@@ -1125,6 +1242,11 @@ struct _reg_trie_data {
     char            *bitmap;         /* stclass bitmap */
     U16 	    *jump;           /* optional 1 indexed array of offsets before tail 
                                         for the node following a given word. */
+    U16             *j_before_paren; /* optional 1 indexed array of parno reset data
+                                        for the given jump. */
+    U16             *j_after_paren;  /* optional 1 indexed array of parno reset data
+                                        for the given jump. */
+
     reg_trie_wordinfo *wordinfo;     /* array of info per word */
     U16             uniquecharcount; /* unique chars in trie (width of trans table) */
     U32             startstate;      /* initial state - used for common prefix optimisation */
@@ -1134,6 +1256,8 @@ struct _reg_trie_data {
     U32             statecount;      /* Build only - number of states in the states array 
                                         (including the unused zero state) */
     U32             wordcount;       /* Build only */
+    U16             before_paren;
+    U16             after_paren;
 #ifdef DEBUGGING
     STRLEN          charcount;       /* Build only */
 #endif
@@ -1329,7 +1453,7 @@ re.pm, especially to the documentation.
                      /* get_sv() can return NULL during global destruction. */ \
         re_debug_flags_sv = PL_curcop ? get_sv(RE_DEBUG_FLAGS, GV_ADD) : NULL; \
         if (re_debug_flags_sv) {                                               \
-            if (!SvIOK(re_debug_flags_sv)) /* If doesnt exist set to default */\
+            if (!SvIOK(re_debug_flags_sv)) /* If doesn't exist set to default */\
                 sv_setuv(re_debug_flags_sv,                                    \
                         /* These defaults should be kept in sync with re.pm */ \
                             RE_DEBUG_COMPILE_DUMP | RE_DEBUG_EXECUTE_MASK );   \
@@ -1423,8 +1547,25 @@ typedef enum {
 #define REGNODE_ARG_LEN_VARIES(node)    (PL_regnode_info[(node)].arg_len_varies)
 #define REGNODE_NAME(node)              (PL_regnode_name[(node)])
 
-#if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_REGEXEC_C)
+#if defined(PERL_IN_REGEX_ENGINE)
 #include "reginline.h"
+#endif
+
+#define EVAL_OPTIMISTIC_FLAG    128
+#define EVAL_FLAGS_MASK         (EVAL_OPTIMISTIC_FLAG-1)
+
+/* We define PERL_RE_BUILD_DEBUG if we are NOT compiling the re extension and
+ * we are under DEBUGGING, or if we are ARE compiling the re extension
+ * and this is not a DEBUGGING enabled build (identified by
+ * DEBUGGING_RE_ONLY being defined)
+ */
+#if ( !defined(PERL_EXT_RE_STATIC) && defined(DEBUGGING)) ||       \
+    ( defined(PERL_EXT_RE_BUILD) && defined(DEBUGGING_RE_ONLY)) || \
+    (!defined(PERL_EXT_RE_BUILD) && defined(DEBUGGING))
+#define PERL_RE_BUILD_DEBUG
+#endif
+#if !defined(PERL_EXT_RE_STATIC)
+#define PERL_RE_BUILD_AUX
 #endif
 
 #endif /* PERL_REGCOMP_H_ */

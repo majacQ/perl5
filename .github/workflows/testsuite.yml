@@ -9,14 +9,14 @@
 # When actions are enabled then it will - by default - run the 'Sanity Check' job.
 #
 # Testing other build configurations is controlled by the 'Secrets' configured
-# in 'Settings' -> 'Secrets' -> 'Actions' -> 'Repository Secrets':
-#   - EXTENDED_TESTING: when this secret exists and is set to a true value then
+# in 'Settings' -> 'Secrets and Variables' -> 'Actions' -> 'Variables':
+#   - DO_EXTENDED_TESTING: when this var exists and is set to a true value then
 #     all build configurations are tested;
 #   - CI_SKIP_SANITY: if set to a true value then most of the 'Sanity Check' job is skipped;
 #   - CI_FORCE_LINUX: if set to a true value: run the 'linux' job;
 #   - CI_FORCE_LINUX_I386: if set to a true value: run the 'linux-i386' job;
 #   - CI_FORCE_INSTALL: if set to a true value: run the 'install' job;
-#   - CI_FORCE_MACOS: if set to a true value: run the 'smoke-macos-catalina-xcode12' job;
+#   - CI_FORCE_MACOS: if set to a true value: run the 'smoke-macos-14' job;
 #   - CI_FORCE_MSVC142: if set to a true value: run the 'windows-msvc142' job;
 #   - CI_FORCE_MINGW64: if set to a true value: run the 'mingw64' job;
 #   - CI_FORCE_CYGWIN: if set to a true value: run the 'cygwin' job;
@@ -33,18 +33,11 @@
 #      * string containing only zeroes (i.e. '0', '0000')
 #      * string containing only spaces and zeroes (i.e. '0  0 0 0')
 #
-# When setting a value it's best to set a long and complex value
-# since GitHub will mask the secrets in the output. Which means if you
-# set (for example) EXTENDED_TESTING to 1 then all occurrences of '1'
-# are replaced with '*'. (e.g. `s/1/*/g;`). So it's recommended to set
-# something that is unlikely to occur in the job(/build/test) output
-# (for example: '111111111111111111', 'Rumpelstiltskin', ...).
-#
 # Example: if you only want to run tests on cygwin then you can set:
-#   - EXTENDED_TESTING=00000000000000000000000000000000000000
-#   - CI_SKIP_SANITY=1111111111111111111111111111111111111111
-#   - CI_FORCE_CYGWIN=111111111111111111111111111111111111111
-#   - (and all other CI_FORCE_... secrets to 0000000000000000)
+#   - DO_EXTENDED_TESTING=0
+#   - CI_SKIP_SANITY=1
+#   - CI_FORCE_CYGWIN=1
+#   - (and all other CI_FORCE_... vars to 0)
 #
 
 name: testsuite
@@ -86,7 +79,7 @@ jobs:
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
         run: echo "$GITHUB_CONTEXT"
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 1000
       - name: git setup
@@ -117,13 +110,23 @@ jobs:
   # "linux-i386" tests -Uusethreads without -DDEBUGGING
   # All builds in the "linux" matrix test with -DDEBUGGING
   #
-  # "sanity_check" sets `fetch-depth: 0` so that it does a git clone with full
-  # history, and hence can run t/porting/cmp_version.t etc
-  # The git-related tests require full history, but we only need to run them
-  # once (they aren't platform specific).
-  # Hence leave the others with the default setting (1), which performs a
-  # shallow clone. In these shallow checkouts, the git related porting tests
-  # skip (or rapidly pass), but they won't fail spuriously.
+  # "sanity_check" sets `fetch-depth: 0` so that it does a git clone
+  # with full history, and hence can run t/porting/cmp_version.t etc
+  #
+  # The git-related tests require full history, but we only need to run
+  # them once (they aren't platform specific).  Hence leave the others
+  # with the default setting (1), which performs a shallow clone. In
+  # these shallow checkouts, the git related porting tests skip (or
+  # rapidly pass), but they won't fail spuriously.
+  #
+  # TODO - Now that we do not use secrets and instead use vars for the
+  # control of which tests we run (due to the way secrets are elided
+  # from the output), we can simplify the shell code below.  The
+  # following url includes discussion on what next steps we could take
+  # to simplify the complexity of this code.
+  #
+  # https://github.com/Perl/perl5/pull/20845#issuecomment-1440676127
+  #
 
   sanity_check:
     name: "Sanity: Linux -Dusethreads"
@@ -152,18 +155,18 @@ jobs:
       - name: Check what-to-do
         id: ci_config
         env:
-          CI_SKIP_SANITY: ${{ secrets.CI_SKIP_SANITY }}
-          CI_FORCE_LINUX: ${{ secrets.CI_FORCE_LINUX }}
-          CI_FORCE_LINUX_I386: ${{ secrets.CI_FORCE_LINUX_I386 }}
-          CI_FORCE_INSTALL: ${{ secrets.CI_FORCE_INSTALL }}
-          CI_FORCE_MACOS: ${{ secrets.CI_FORCE_MACOS }}
-          CI_FORCE_MSVC142: ${{ secrets.CI_FORCE_MSVC142 }}
-          CI_FORCE_MINGW64: ${{ secrets.CI_FORCE_MINGW64 }}
-          CI_FORCE_CYGWIN: ${{ secrets.CI_FORCE_CYGWIN }}
-          CI_FORCE_MINITEST: ${{ secrets.CI_FORCE_MINITEST }}
-          CI_FORCE_ASAN: ${{ secrets.CI_FORCE_ASAN }}
-          CI_FORCE_PERL_UNICODE: ${{ secrets.CI_FORCE_PERL_UNICODE }}
-          CI_FORCE_DIST_MODULES: ${{ secrets.CI_FORCE_DIST_MODULES }}
+          CI_SKIP_SANITY: ${{ vars.CI_SKIP_SANITY }}
+          CI_FORCE_LINUX: ${{ vars.CI_FORCE_LINUX }}
+          CI_FORCE_LINUX_I386: ${{ vars.CI_FORCE_LINUX_I386 }}
+          CI_FORCE_INSTALL: ${{ vars.CI_FORCE_INSTALL }}
+          CI_FORCE_MACOS: ${{ vars.CI_FORCE_MACOS }}
+          CI_FORCE_MSVC142: ${{ vars.CI_FORCE_MSVC142 }}
+          CI_FORCE_MINGW64: ${{ vars.CI_FORCE_MINGW64 }}
+          CI_FORCE_CYGWIN: ${{ vars.CI_FORCE_CYGWIN }}
+          CI_FORCE_MINITEST: ${{ vars.CI_FORCE_MINITEST }}
+          CI_FORCE_ASAN: ${{ vars.CI_FORCE_ASAN }}
+          CI_FORCE_PERL_UNICODE: ${{ vars.CI_FORCE_PERL_UNICODE }}
+          CI_FORCE_DIST_MODULES: ${{ vars.CI_FORCE_DIST_MODULES }}
         run: |
           echo '::echo::on'
           [[ -n "${CI_SKIP_SANITY}"        ]] && [[ "${CI_SKIP_SANITY%[!0 ]*}"        != "${CI_SKIP_SANITY}"        ]] && echo "ci_skip_sanity=true" >> "$GITHUB_OUTPUT"
@@ -184,7 +187,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgdbm-dev libdb-dev
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
         if: steps.ci_config.outputs.ci_skip_sanity != 'true'
@@ -214,16 +217,16 @@ jobs:
           TEST_JOBS=2 ./perl t/harness -nre='^porting/'
 
       # Set a variable for dependent jobs to signal if full testsuite is enabled
-      - name: "Check if EXTENDED_TESTING is set"
+      - name: "Check if DO_EXTENDED_TESTING is set"
         id: check_extended_testing
         env:
-          EXTENDED_TESTING: ${{ secrets.EXTENDED_TESTING }}
+          DO_EXTENDED_TESTING: ${{ vars.DO_EXTENDED_TESTING }}
           CURRENT_REPOSITORY: ${{ github.repository }}
         run: |
           if [[ "${CURRENT_REPOSITORY}" = 'Perl/perl5' ]]; then
             echo "Running all test jobs"
             echo "run_all_jobs=true" >> "$GITHUB_OUTPUT"
-          elif [[ -n "${EXTENDED_TESTING}" ]] && [[ "${EXTENDED_TESTING%[!0 ]*}" != "${EXTENDED_TESTING}" ]]; then
+          elif [[ -n "${DO_EXTENDED_TESTING}" ]] && [[ "${DO_EXTENDED_TESTING%[!0 ]*}" != "${DO_EXTENDED_TESTING}" ]]; then
             echo "Running all test jobs"
             echo "run_all_jobs=true" >> "$GITHUB_OUTPUT"
           else
@@ -260,13 +263,17 @@ jobs:
           - "-Duserelocatableinc"
           - "-Dcc='clang'"
           - "-Dcc='g++'"
+          - "-Accflags=-DSILENT_NO_TAINT_SUPPORT"
+          - "-Accflags=-DNO_TAINT_SUPPORT"
+          - "-DDEBUGGING -Accflags=-DPERL_RC_STACK"
+          - "-Uusedl"
 
     steps:
       - name: Install System dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libgdbm-dev libdb-dev
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: git cfg
         run: |
           git config diff.renameLimit 999999
@@ -318,19 +325,31 @@ jobs:
         run: |
           apt-get update
           apt-get install -y build-essential git-core libgdbm-dev libdb-dev
-      # actions/checkout@v2 doesn't work in a i386 container: the GitHub runner
-      # uses `node` that is installed on the host inside the container. The host
-      # is (likely) running x86_64 and using a binary build for x86_64 inside a
+      # actions/checkout@v2 and higher don't work in a i386 container:
+      # the GitHub runner uses `node` that is installed on the host inside the container.
+      # The host is (likely) running x86_64 and using a binary build for x86_64 inside a
       # i386 container just doesn't work.
       # Upstream reports:
       # - https://github.com/actions/checkout/issues/334#issuecomment-1241306390
       # - https://github.com/actions/runner/issues/2115
-      - uses: actions/checkout@v1
-        with:
-          fetch-depth: 1
+      #
+      # actions/checkout@v1 does work inside a container but that doesn't work
+      # so well with a shallow clone (`fetch-depth: 1`). It contains a race condition
+      # and makes it impossible to re-run an older job.
+      # Upstream report:
+      # - https://github.com/actions/runner/issues/2357
+      - name: Clone repo
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git init
+          git remote add origin "https://$GITHUB_ACTOR:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY"
+          git config --local gc.auto 0
+          git fetch origin --depth=1 "$GITHUB_SHA"
+          git checkout "$GITHUB_SHA"
       - name: git cfg
         run: |
-          git config --global --add safe.directory /__w/perl5/perl5
           git config diff.renameLimit 999999
       - name: Configure
         run: |
@@ -366,7 +385,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgdbm-dev libdb-dev
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: git cfg
         run: |
           git config diff.renameLimit 999999
@@ -403,9 +422,9 @@ jobs:
   # | '  \/ _` / _| (_) \__ \
   # |_|_|_\__,_\__|\___/|___/
 
-  smoke-macos-big-sur-xcode13:
-    name: "macOS (big sur) xcode 13"
-    runs-on: macos-11
+  smoke-macos-14:
+    name: "macOS (Sonoma) 14"
+    runs-on: macos-14
     timeout-minutes: 120
     needs: sanity_check
     if: (! cancelled() && (needs.sanity_check.outputs.run_all_jobs == 'true' || needs.sanity_check.outputs.ci_force_macos == 'true'))
@@ -418,7 +437,7 @@ jobs:
           - "-Duseithreads -Duseshrplib"
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Configure
         run: |
           sh ./Configure -des -Dusedevel ${{ matrix.CONFIGURE_ARGS }}
@@ -447,7 +466,7 @@ jobs:
 
     steps:
       - run: git config --global core.autocrlf false
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       #- name: Install clcache
       #  shell: cmd
       #  run: |
@@ -503,28 +522,29 @@ jobs:
 
     steps:
       - run: git config --global core.autocrlf false
-      - uses: actions/checkout@v2
-      - name: Set up Perl build environment
+      - uses: actions/checkout@v4
+      - name: Install mingw-64
         run: |
-          # skip installing perl if it is already installed.
-          if (!(Test-Path "C:\strawberry\perl\bin")) {
-            choco install strawberryperl
+          mkdir C:\perl_ci && cd C:\perl_ci
+          curl -L https://github.com/brechtsanders/winlibs_mingw/releases/download/13.1.0-16.0.5-11.0.0-ucrt-r5/winlibs-x86_64-posix-seh-gcc-13.1.0-mingw-w64ucrt-11.0.0-r5.zip -o mingw.zip
+          $expected_hash = '418E8A0175640E617EC6F6639BCA8D3AEDDB6A108391EAF312D1351D19375958'
+          $file_hash = (Get-FileHash mingw.zip -Algorithm SHA256).Hash
+          if ($file_hash -ne $expected_hash) {
+            throw "Wrong hash. Got ${file_hash}, expected ${expected_hash}"
           }
-          echo @"
-          C:\strawberry\c\bin
-          C:\strawberry\perl\site\bin
-          C:\strawberry\perl\bin
-          "@ |
-            Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          tar -xf mingw.zip && rm mingw.zip
+          copy mingw64\bin\mingw32-make.exe mingw64\bin\gmake.exe
+          echo 'C:\perl_ci\mingw64\bin' >> $env:GITHUB_PATH
       - name: Host perl -V
-        run: perl -V
+        run: |
+          perl -V
       - name: gcc --version
         run: gcc --version
       - name: Build
         shell: cmd
         run: |
           cd win32
-          gmake CCHOME=C:\strawberry\c CFG=Debug -f GNUMakefile -j2
+          gmake CCHOME=C:\perl_ci\mingw64 CFG=Debug -f GNUMakefile -j2
       - name: Show Config
         shell: cmd
         run: |
@@ -535,7 +555,7 @@ jobs:
         run: |
           cd win32
           set HARNESS_OPTIONS=j2
-          gmake CCHOME=C:\strawberry\c CFG=Debug -f GNUMakefile test
+          gmake CCHOME=C:\perl_ci\mingw64 CFG=Debug -f GNUMakefile test
 
   #                            _
   #   ___ _   _  __ ___      _(_)_ __
@@ -555,7 +575,7 @@ jobs:
       # we use Cygwin git, so no need to configure git here.
 
       - name: Set up Cygwin
-        uses: cygwin/cygwin-install-action@v2
+        uses: cygwin/cygwin-install-action@v3
         with:
           packages: >
               cygwin-devel gcc-core gcc-g++ make w32api-headers binutils libtool
@@ -585,7 +605,7 @@ jobs:
         run: |
           cd ~/work
           set +e
-          ./Configure -des -Dusedevel -Doptimize=-g -DDEBUGGING || exit 1
+          ./Configure -des -Dusedevel -Doptimize=-g -DDEBUGGING -Astatic_ext=I18N/Langinfo || exit 1
       - name: Build
         shell: sh
         env:
@@ -648,7 +668,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgdbm-dev libdb-dev
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: git cfg
         run: |
           git config diff.renameLimit 999999
@@ -699,7 +719,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgdbm-dev libdb-dev
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: git cfg
         run: |
           git config diff.renameLimit 999999
@@ -747,7 +767,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgdbm-dev libdb-dev
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: git cfg
         run: |
           git config diff.renameLimit 999999
@@ -775,9 +795,9 @@ jobs:
   #  \__,_|_|___/\__|    |_| |_| |_|\___/ \__,_|\__,_|_|\___||___/
 
   dist-modules:
-    name: dist-modules
+    name: dist ${{ matrix.os.label }} ${{ matrix.perl-version }} ${{ matrix.threads.label }}
     needs: sanity_check
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os.id }}
     if: (! cancelled() && (needs.sanity_check.outputs.run_all_jobs == 'true' || needs.sanity_check.outputs.ci_force_dist_modules == 'true'))
 
     env:
@@ -787,21 +807,39 @@ jobs:
       AUTHOR_TESTING: 1
       AUTOMATED_TESTING: 1
       RELEASE_TESTING: 1
+      NO_NETWORK_TESTING: 1
 
     strategy:
       fail-fast: false
       matrix:
+        # once some failures are resolved we may be able to add Windows to this
+        os:
+          - id: ubuntu-latest
+            label: Linux
         perl-version:
-          - 'latest'
+          - '5.38'
           - '5.24'
           - '5.10'
           - '5.8'
-
-    container:
-      image: perldocker/perl-tester:${{ matrix.perl-version }}
+        threads:
+          - enable: true
+            label: -Dusethreads
+          - enable: false
+            label: -Uusethreads
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+      - name: Set up perl
+        uses: shogo82148/actions-setup-perl@v1.30.0
+        with:
+          perl-version: ${{ matrix.perl-version }}
+          multi-thread: ${{ matrix.threads.id }}
+          install-modules:
+            ExtUtils::MakeMaker
+            Perl::OSType
+            Scalar::Util
+            Socket
+            version
       - name: perl -V
         run: perl -V
       - name: Build and test dist modules
@@ -811,7 +849,7 @@ jobs:
   dist-modules-sys-macos:
     name: "Test dist/ modules on MacOS system perl"
     needs: sanity_check
-    runs-on: macos-11
+    runs-on: macos-latest
     if: (! cancelled() && (needs.sanity_check.outputs.run_all_jobs == 'true' || needs.sanity_check.outputs.ci_force_dist_modules == 'true'))
 
     env:
@@ -821,15 +859,16 @@ jobs:
       AUTHOR_TESTING: 1
       AUTOMATED_TESTING: 1
       RELEASE_TESTING: 1
+      NO_NETWORK_TESTING: 1
 
     strategy:
       fail-fast: false
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: perl -V
         run: /usr/bin/perl -V
       - name: Build and test dist modules
         run:
-          /usr/bin/perl Porting/test-dist-modules.pl -continue -separate
+          /usr/bin/perl Porting/test-dist-modules.pl -continue
 

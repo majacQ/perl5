@@ -2,7 +2,7 @@
 #
 # Test Pod::Text behavior with various snippets.
 #
-# Copyright 2002, 2004, 2006-2009, 2012, 2018-2020
+# Copyright 2002, 2004, 2006-2009, 2012, 2018-2020, 2022, 2024
 #     Russ Allbery <rra@cpan.org>
 #
 # This program is free software; you may redistribute it and/or modify it
@@ -10,13 +10,12 @@
 #
 # SPDX-License-Identifier: GPL-1.0-or-later OR Artistic-1.0-Perl
 
-use 5.008;
-use strict;
+use 5.012;
 use warnings;
 
 use lib 't/lib';
 
-use Test::More tests => 53;
+use Test::More tests => 69;
 use Test::Podlators qw(test_snippet);
 
 # Load the module.
@@ -26,10 +25,12 @@ BEGIN {
 
 # List of snippets run by this test.
 my @snippets = qw(
-  alt c-with-spaces code cpp empty error-die error-none error-normal error-pod
-  error-stderr error-stderr-opt for late-encoding link-rt link-url margin
-  nonbreaking-space nourls periods quotes-opt s-whitespace sentence-spacing
-  utf8 verbatim
+    alt c-with-spaces code cpp empty error-die error-none error-normal
+    error-pod error-stderr error-stderr-opt for guesswork-quoting
+    guesswork-no-quoting late-encoding link-rt link-url margin naive
+    name-quotes name-quotes-none non-latin nonbreaking-space
+    nonbreaking-space-l nonbreaking-wrap nourls periods quotes-opt
+    s-whitespace sentence-spacing utf8 verbatim
 );
 
 # Run all the tests.

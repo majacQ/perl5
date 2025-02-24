@@ -112,6 +112,9 @@ union _xhvnameu {
     HEK **xhvnameu_names;	/* When xhv_name_count is non-0 */
 };
 
+/* A struct defined by pad.h and used within class.c */
+struct suspended_compcv;
+
 struct xpvhv_aux {
     union _xhvnameu xhv_name_u;	/* name, if a symbol table */
     AV		*xhv_backreferences; /* back references for weak references */
@@ -132,10 +135,25 @@ struct xpvhv_aux {
                                    used to detect each() after insert for warnings */
 #endif
     U32         xhv_aux_flags;      /* assorted extra flags */
+
+    /* The following fields are only valid if we have the flag HvAUXf_IS_CLASS */
+    HV          *xhv_class_superclass;         /* STASH of the :isa() base class */
+    CV          *xhv_class_initfields_cv;      /* CV for running initfields */
+    AV          *xhv_class_adjust_blocks;      /* CVs containing the ADJUST blocks */
+    PADNAMELIST *xhv_class_fields;             /* PADNAMEs with PadnameIsFIELD() */
+    PADOFFSET    xhv_class_next_fieldix;
+    HV          *xhv_class_param_map;          /* Maps param names to field index stored in UV */
+
+    struct suspended_compcv
+                *xhv_class_suspended_initfields_compcv;
 };
 
 #define HvAUXf_SCAN_STASH   0x1   /* stash is being scanned by gv_check */
 #define HvAUXf_NO_DEREF     0x2   /* @{}, %{} etc (and nomethod) not present */
+#define HvAUXf_IS_CLASS     0x4   /* the package is a 'class' */
+
+#define HvSTASH_IS_CLASS(hv) \
+    (HvHasAUX(hv) && HvAUX(hv)->xhv_aux_flags & HvAUXf_IS_CLASS)
 
 /* hash structure: */
 /* This structure must match the beginning of struct xpvmg in sv.h. */
@@ -153,6 +171,24 @@ struct xpvhv_with_aux {
     STRLEN      xhv_max;        /* subscript of last element of xhv_array */
     struct xpvhv_aux xhv_aux;
 };
+
+/*
+=for apidoc_section $HV
+
+=for apidoc      Am|HV *|HvREFCNT_inc|HV *hv
+=for apidoc_item   |HV *|HvREFCNT_inc_simple|HV *hv
+=for apidoc_item   |HV *|HvREFCNT_inc_simple_NN|HV *hv
+
+These all increment the reference count of the given SV, which must be a HV.
+They are useful when assigning the result into a typed pointer as they avoid
+the need to cast the result to the appropriate type.
+
+=cut
+*/
+
+#define HvREFCNT_inc(hv)            ((HV *)SvREFCNT_inc((SV *)hv))
+#define HvREFCNT_inc_simple(hv)     ((HV *)SvREFCNT_inc_simple((SV *)hv))
+#define HvREFCNT_inc_simple_NN(hv)  ((HV *)SvREFCNT_inc_simple_NN((SV *)hv))
 
 /*
 =for apidoc AmnU||HEf_SVKEY
@@ -477,9 +513,9 @@ whether it is valid to call C<HvAUX()>.
 /* Flags for hv_iternext_flags.  */
 #define HV_ITERNEXT_WANTPLACEHOLDERS	0x01	/* Don't skip placeholders.  */
 
-#define hv_iternext(hv)	hv_iternext_flags(hv, 0)
-#define hv_magic(hv, gv, how) sv_magic(MUTABLE_SV(hv), MUTABLE_SV(gv), how, NULL, 0)
-#define hv_undef(hv) Perl_hv_undef_flags(aTHX_ hv, 0)
+#define Perl_hv_iternext(mTHX, hv)	Perl_hv_iternext_flags(aTHX_ hv, 0)
+#define Perl_hv_magic(mTHX, hv, gv, how) Perl_sv_magic(aTHX_ MUTABLE_SV(hv), MUTABLE_SV(gv), how, NULL, 0)
+#define Perl_hv_undef(mTHX, hv) Perl_hv_undef_flags(aTHX_ hv, 0)
 
 #define Perl_sharepvn(pv, len, hash) HEK_KEY(share_hek(pv, len, hash))
 #define sharepvn(pv, len, hash)	     Perl_sharepvn(pv, len, hash)
@@ -491,49 +527,60 @@ whether it is valid to call C<HvAUX()>.
         ->shared_he_he.he_valu.hent_refcount),				\
      hek)
 
-#define hv_store_ent(hv, keysv, val, hash)				\
-    ((HE *) hv_common((hv), (keysv), NULL, 0, 0, HV_FETCH_ISSTORE,	\
+#define Perl_hv_store_ent(mTHX, hv, keysv, val, hash)				\
+    ((HE *) Perl_hv_common(aTHX_ (hv), (keysv), NULL, 0, 0, HV_FETCH_ISSTORE,	\
                       (val), (hash)))
 
-#define hv_exists_ent(hv, keysv, hash)					\
-    cBOOL(hv_common((hv), (keysv), NULL, 0, 0, HV_FETCH_ISEXISTS, 0, (hash)))
-#define hv_fetch_ent(hv, keysv, lval, hash)				\
-    ((HE *) hv_common((hv), (keysv), NULL, 0, 0,			\
+#define Perl_hv_exists_ent(mTHX, hv, keysv, hash)					\
+    cBOOL(Perl_hv_common(aTHX_ (hv), (keysv), NULL, 0, 0, HV_FETCH_ISEXISTS, 0, (hash)))
+#define Perl_hv_fetch_ent(mTHX, hv, keysv, lval, hash)				\
+    ((HE *) Perl_hv_common(aTHX_ (hv), (keysv), NULL, 0, 0,			\
                       ((lval) ? HV_FETCH_LVALUE : 0), NULL, (hash)))
-#define hv_delete_ent(hv, key, flags, hash)				\
-    (MUTABLE_SV(hv_common((hv), (key), NULL, 0, 0, (flags) | HV_DELETE,	\
+#define Perl_hv_delete_ent(mTHX, hv, key, flags, hash)				\
+    (MUTABLE_SV(Perl_hv_common(aTHX_ (hv), (key), NULL, 0, 0, (flags) | HV_DELETE,	\
                           NULL, (hash))))
 
-#define hv_store_flags(hv, key, klen, val, hash, flags)			\
-    ((SV**) hv_common((hv), NULL, (key), (klen), (flags),		\
+#define Perl_hv_store_flags(mTHX, hv, key, klen, val, hash, flags)			\
+    ((SV**) Perl_hv_common(aTHX_ (hv), NULL, (key), (klen), (flags),		\
                       (HV_FETCH_ISSTORE|HV_FETCH_JUST_SV), (val),	\
                       (hash)))
 
-#define hv_store(hv, key, klen, val, hash)				\
-    ((SV**) hv_common_key_len((hv), (key), (klen),			\
+#define Perl_hv_store(mTHX, hv, key, klen, val, hash)				\
+    ((SV**) Perl_hv_common_key_len(aTHX_ (hv), (key), (klen),			\
                               (HV_FETCH_ISSTORE|HV_FETCH_JUST_SV),	\
                               (val), (hash)))
 
 
 
-#define hv_exists(hv, key, klen)					\
-    cBOOL(hv_common_key_len((hv), (key), (klen), HV_FETCH_ISEXISTS, NULL, 0))
+#define Perl_hv_exists(mTHX, hv, key, klen)					\
+    cBOOL(Perl_hv_common_key_len(aTHX_ (hv), (key), (klen), HV_FETCH_ISEXISTS, NULL, 0))
 
-#define hv_fetch(hv, key, klen, lval)					\
-    ((SV**) hv_common_key_len((hv), (key), (klen), (lval)		\
+#define Perl_hv_fetch(mTHX, hv, key, klen, lval)				\
+    ((SV**) Perl_hv_common_key_len(aTHX_ (hv), (key), (klen), (lval)		\
                               ? (HV_FETCH_JUST_SV | HV_FETCH_LVALUE)	\
                               : HV_FETCH_JUST_SV, NULL, 0))
 
-#define hv_delete(hv, key, klen, flags)					\
-    (MUTABLE_SV(hv_common_key_len((hv), (key), (klen),			\
+#define Perl_hv_delete(mTHX, hv, key, klen, flags)					\
+    (MUTABLE_SV(Perl_hv_common_key_len(aTHX_ (hv), (key), (klen),			\
                                   (flags) | HV_DELETE, NULL, 0)))
 
 /* Provide 's' suffix subs for constant strings (and avoid needing to count
  * chars). See STR_WITH_LEN in handy.h - because these are macros we cant use
- * STR_WITH_LEN to do the work, we have to unroll it. */
+ * STR_WITH_LEN to do the work, we have to unroll it.
+ *
+ *
+=for apidoc_defn AmR|bool|hv_existss|HV *hv|"key"
+=cut
+*/
 #define hv_existss(hv, key) \
     hv_exists((hv), ASSERT_IS_LITERAL(key), (sizeof(key)-1))
 
+/*
+=for apidoc_defn Am|SV**|hv_fetchs|HV* hv|"key"|I32 lval
+=for apidoc_defn Am|SV *|hv_deletes|HV *hv|"key"|U32 flags
+=for apidoc_defn Am|void|hv_name_sets|HV *hv|"name"|U32 flags
+=cut
+*/
 #define hv_fetchs(hv, key, lval) \
     hv_fetch((hv), ASSERT_IS_LITERAL(key), (sizeof(key)-1), (lval))
 
@@ -543,8 +590,8 @@ whether it is valid to call C<HvAUX()>.
 #define hv_name_sets(hv, name, flags) \
     hv_name_set((hv),ASSERT_IS_LITERAL(name),(sizeof(name)-1), flags)
 
-#define hv_stores(hv, key, val) \
-    hv_store((hv), ASSERT_IS_LITERAL(key), (sizeof(key)-1), (val), 0)
+#define Perl_hv_stores(mTHX, hv, key, val) \
+    Perl_hv_store(aTHX, (hv), ASSERT_IS_LITERAL(key), (sizeof(key)-1), (val), 0)
 
 #ifdef PERL_CORE
 # define hv_storehek(hv, hek, val) \
@@ -684,7 +731,7 @@ Creates a new HV.  The reference count is set to 1.
 =cut
 */
 
-#define newHV()	MUTABLE_HV(newSV_type(SVt_PVHV))
+#define Perl_newHV(mTHX)	MUTABLE_HV(Perl_newSV_type(aTHX_ SVt_PVHV))
 
 #include "hv_func.h"
 

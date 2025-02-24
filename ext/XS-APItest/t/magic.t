@@ -76,4 +76,63 @@ is $@, "", 'PERL_MAGIC_ext is permitted on read-only things';
     is($i, 0, "hash () with set magic");
 }
 
+{
+    # check if set magic triggered by av_store() via aassign results in
+    # unreferenced scalars being freed. IOW, results in a double store
+    # without a corresponding refcount bump. If things work properly this
+    # should not warn. If there is an issue it will.
+    my @warn;
+    local $SIG{__WARN__}= sub { push @warn, $_[0] };
+    {
+        my (@a, $i);
+        sv_magic_myset_dies(\@a, $i);
+        eval {
+            $i = 0;
+            @a = (1);
+        };
+    }
+    is(0+@warn, 0,
+        "If AV set magic dies via aassign it should not warn about double free");
+    @warn = ();
+    {
+        my (@a, $i, $j);
+        sv_magic_myset_dies(\@a, $i);
+        eval {
+            $j = "blorp";
+            my_av_store(\@a,0,$j);
+        };
+
+        # what extra refcount is added to the SV by virtue of being on the
+        # stack?
+        my $extra = (Internals::stack_refcounted() & 1) ? 1 : 0;
+
+        # Evaluate this boolean as a separate statement, so the two
+        # temporary \ refs are freed before we start comparing reference
+        # counts
+        my $is_same_SV = \$a[0] == \$j;
+
+        if ($is_same_SV) {
+            # in this case we expect to have 2 refcounts,
+            # one from $a[0] and one from $j itself.
+            is( sv_refcnt($j), 2 + $extra,
+                "\$a[0] is \$j, so refcount(\$j) should be 2");
+        } else {
+            # Note this branch isn't exercised. Whether by design
+            # or not. I leave it here because it is a possible valid
+            # outcome. It is marked TODO so if we start going down
+            # this path we do so knowingly.
+            diag "av_store has changed behavior - please review this test";
+            TODO:{
+                local $TODO = "av_store bug stores even if it dies during magic";
+                # in this case we expect to have only 1 refcount,
+                # from $j itself.
+                is( sv_refcnt($j), 1 + $extra,
+                    "\$a[0] is not \$j, so refcount(\$j) should be 1");
+            }
+        }
+    }
+    is(0+@warn, 0,
+        "AV set magic that dies via av_store should not warn about double free");
+}
+
 done_testing;

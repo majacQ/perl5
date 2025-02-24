@@ -1,4 +1,4 @@
-/* -*- buffer-read-only: t -*-
+/* -*- mode: C; buffer-read-only: t -*-
 
       Copyright (C) 2022 by Larry Wall and others
 
@@ -43,24 +43,24 @@
 #define SAVEt_READONLY_OFF        22
 #define SAVEt_FREEPADNAME         23
 #define SAVEt_STRLEN_SMALL        24
+#define SAVEt_FREERCPV            25
 
 /* two args */
 
-#define SAVEt_AV                  25
-#define SAVEt_DESTRUCTOR          26
-#define SAVEt_DESTRUCTOR_X        27
-#define SAVEt_GENERIC_PVREF       28
-#define SAVEt_GENERIC_SVREF       29
-#define SAVEt_GP                  30
-#define SAVEt_GVSV                31
-#define SAVEt_HINTS               32
-#define SAVEt_HPTR                33
-#define SAVEt_HV                  34
-#define SAVEt_I32                 35
-#define SAVEt_INT                 36
-#define SAVEt_ITEM                37
-#define SAVEt_IV                  38
-#define SAVEt_LONG                39
+#define SAVEt_AV                  26
+#define SAVEt_DESTRUCTOR          27
+#define SAVEt_DESTRUCTOR_X        28
+#define SAVEt_GENERIC_PVREF       29
+#define SAVEt_GENERIC_SVREF       30
+#define SAVEt_GP                  31
+#define SAVEt_GVSV                32
+#define SAVEt_HINTS               33
+#define SAVEt_HPTR                34
+#define SAVEt_HV                  35
+#define SAVEt_I32                 36
+#define SAVEt_INT                 37
+#define SAVEt_ITEM                38
+#define SAVEt_IV                  39
 #define SAVEt_PPTR                40
 #define SAVEt_SAVESWITCHSTACK     41
 #define SAVEt_SHARED_PVREF        42
@@ -71,7 +71,7 @@
 #define SAVEt_VPTR                47
 #define SAVEt_ADELETE             48
 #define SAVEt_APTR                49
-#define SAVEt_RCPV_FREE           50
+#define SAVEt_RCPV                50
 
 /* three args */
 
@@ -109,6 +109,7 @@ static const U8 leave_scope_arg_counts[] = {
     1, /* SAVEt_READONLY_OFF        */
     1, /* SAVEt_FREEPADNAME         */
     1, /* SAVEt_STRLEN_SMALL        */
+    1, /* SAVEt_FREERCPV            */
     2, /* SAVEt_AV                  */
     2, /* SAVEt_DESTRUCTOR          */
     2, /* SAVEt_DESTRUCTOR_X        */
@@ -123,7 +124,6 @@ static const U8 leave_scope_arg_counts[] = {
     2, /* SAVEt_INT                 */
     2, /* SAVEt_ITEM                */
     2, /* SAVEt_IV                  */
-    2, /* SAVEt_LONG                */
     2, /* SAVEt_PPTR                */
     2, /* SAVEt_SAVESWITCHSTACK     */
     2, /* SAVEt_SHARED_PVREF        */
@@ -134,7 +134,7 @@ static const U8 leave_scope_arg_counts[] = {
     2, /* SAVEt_VPTR                */
     2, /* SAVEt_ADELETE             */
     2, /* SAVEt_APTR                */
-    2, /* SAVEt_RCPV_FREE           */
+    2, /* SAVEt_RCPV                */
     3, /* SAVEt_HELEM               */
     3, /* SAVEt_PADSV_AND_MORTALIZE */
     3, /* SAVEt_SET_SVFLAGS         */
@@ -146,4 +146,4 @@ static const U8 leave_scope_arg_counts[] = {
 
 #define MAX_SAVEt 57
 
-/* ex: set ro: */
+/* ex: set ro ft=c: */

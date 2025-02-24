@@ -40,7 +40,7 @@
  * proxy PVLV element with attached element magic.
  *
  * Pointers to the shared SV are squirrelled away in the mg->mg_ptr field
- * of magic (with mg_len == 0), and in the IV2PTR(SvIV(sv)) field of tied
+ * of magic (with mg_len == 0), and in the INT2PTR(SvIV(sv)) field of tied
  * object SVs. These pointers have to be hidden like this because they
  * cross interpreter boundaries, and we don't want sv_clear() and friends
  * following them.
@@ -130,14 +130,11 @@
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
-#ifdef HAS_PPPORT_H
-#  define NEED_sv_2pv_flags
-#  define NEED_vnewSVpvf
-#  define NEED_warner
-#  define NEED_newSVpvn_flags
-#  include "ppport.h"
-#  include "shared.h"
-#endif
+#define NEED_sv_2pv_flags
+#define NEED_vnewSVpvf
+#define NEED_warner
+#define NEED_newSVpvn_flags
+#include "ppport.h"
 
 #ifndef CLANG_DIAG_IGNORE
 # define CLANG_DIAG_IGNORE(x)
@@ -700,14 +697,14 @@ Perl_sharedsv_cond_timedwait(perl_cond *cond, perl_mutex *mut, double abs)
     struct timespec ts;
     int got_it = 0;
 
-    ts.tv_sec = (long)abs;
+    ts.tv_sec = (time_t)abs;
     abs -= (NV)ts.tv_sec;
     ts.tv_nsec = (long)(abs * 1000000000.0);
 
-    CLANG_DIAG_IGNORE_STMT(-Wthread-safety);
+    CLANG_DIAG_IGNORE(-Wthread-safety)
     /* warning: calling function 'pthread_cond_timedwait' requires holding mutex 'mut' exclusively [-Wthread-safety-analysis] */
     switch (pthread_cond_timedwait(cond, mut, &ts)) {
-	CLANG_DIAG_RESTORE_STMT;
+	CLANG_DIAG_RESTORE
 
         case 0:         got_it = 1; break;
         case ETIMEDOUT:             break;
@@ -1287,6 +1284,21 @@ S_shared_signal_hook(pTHX) {
 }
 #endif
 
+#ifdef noshutdownhook
+
+static shutdown_proc_t old_shutdownhook;
+
+static void
+shared_shutdown() {
+    PerlInterpreter* my_perl;
+    SHARED_CONTEXT;
+    perl_destruct(PL_sharedsv_space);
+    perl_free(PL_sharedsv_space);
+    PL_sharedsv_space = NULL;
+    old_shutdownhook();
+}
+#endif
+
 /* Saves a space for keeping SVs wider than an interpreter. */
 
 static void
@@ -1302,6 +1314,12 @@ Perl_sharedsv_init(pTHX)
         LEAVE; /* This balances the ENTER at the end of perl_construct.  */
         PERL_SET_CONTEXT((aTHX = caller_perl));
         recursive_lock_init(aTHX_ &PL_sharedsv_lock);
+#ifdef noshutdownhook
+		OP_CHECK_MUTEX_LOCK;
+        old_shutdownhook = PL_shutdownhook;
+        PL_shutdownhook = &shared_shutdown;
+		OP_CHECK_MUTEX_UNLOCK;
+#endif
     }
     PL_lockhook = &Perl_sharedsv_locksv;
     PL_sharehook = &Perl_sharedsv_share;

@@ -34,17 +34,15 @@
 /*
 =for apidoc_section $string
 
-=for apidoc ibcmp
+=for apidoc      ibcmp
+=for apidoc_item ibcmp_locale
+=for apidoc_item ibcmp_utf8
 
-This is a synonym for S<C<(! foldEQ())>>
+These return the complement of C<L</foldEQ>>, C<L</foldEQ_locale>>, and
+C<L</foldEQ_utf8>> respectively.  Those other names are preferred, as being
+clearer.
 
-=for apidoc ibcmp_locale
-
-This is a synonym for S<C<(! foldEQ_locale())>>
-
-=for apidoc ibcmp_utf8
-
-This is a synonym for S<C<(! foldEQ_utf8())>>
+Hence, for example, C<ibcmp()> is S<C<(! foldEQ())>>
 
 =cut
 */
@@ -184,7 +182,7 @@ typedef struct {
 /* uses var file to set default filename for newXS_deffile to use for CvFILE */
 #define HSf_SETXSUBFN 0x00000020
 #define HSf_POPMARK 0x00000040 /* popmark mode or you must supply ax and items */
-#define HSf_IMP_CXT 0x00000080 /* ABI, threaded/MULTIPLICITY, pTHX_ present */
+#define HSf_IMP_CXT 0x00000080 /* ABI, threaded, MULTIPLICITY, pTHX_ present */
 #define HSm_INTRPSIZE 0xFFFF0000 /* ABI, interp struct size */
 /* A mask of bits in the key which must always match between a XS mod and interp.
    Also if all ABI bits in a key are true, skip all ABI checks, it is very
@@ -243,7 +241,7 @@ returning NULL if not found.  The terminating NUL bytes are not compared.
 */
 
 
-#define instr(haystack, needle) strstr((char *) haystack, (char *) needle)
+#define Perl_instr(haystack, needle) strstr((char *) haystack, (char *) needle)
 
 #ifdef HAS_MEMMEM
 #   define ninstr(big, bigend, little, lend)                                \

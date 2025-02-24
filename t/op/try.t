@@ -12,29 +12,6 @@ use warnings;
 use feature 'try';
 
 {
-    my $warnings;
-    BEGIN { $SIG{__WARN__} = sub { $warnings .= shift; }; }
-
-    my $x;
-    my ($ltry, $lcatch) = (__LINE__+1, __LINE__+4);
-    try {
-        $x .= "try";
-    }
-    catch ($e) {
-        $x .= "catch";
-    }
-    is($x, "try", 'successful try/catch runs try but not catch');
-
-    is($warnings, "try/catch is experimental at $0 line $ltry.\n" .
-                  "try/catch is experimental at $0 line $lcatch.\n",
-        'compiletime warnings');
-    BEGIN { undef $SIG{__WARN__}; }
-}
-
-
-no warnings 'experimental::try';
-
-{
     my $x;
     try {
         $x .= "try";
@@ -265,6 +242,9 @@ no warnings 'experimental::try';
     is($scalar, "result", 'do { try/catch } with multiple statements');
 }
 
+my $program = $0;
+$program =~ s/\.dp$//; # running under 'cd t; ./TEST -deparse'
+
 # try{} blocks should be invisible to caller()
 {
     my $caller;
@@ -278,10 +258,34 @@ no warnings 'experimental::try';
     my $LINE = __LINE__+1;
     B();
 
-    is($caller, "main::B ($0 line $LINE)", 'try {} block is invisible to caller()');
+    is($caller, "main::B ($program line $LINE)", 'try {} block is invisible to caller()');
 }
 
 # try/catch/finally
+
+# experimental warnings
+{
+    my $warnings;
+    BEGIN { $SIG{__WARN__} = sub { $warnings .= shift; }; }
+
+    my $lfinally = __LINE__; $lfinally += 7;
+    try {
+        1;  # empty line to make line numbers match when being deparsed
+    }
+    catch ($e) {
+        1;  # empty line to make line numbers match when being deparsed
+    }
+    finally {
+        1;  # empty line to make line numbers match when being deparsed
+    }
+
+    is($warnings, "try/catch/finally is experimental at $program line $lfinally.\n",
+        'compiletime warnings');
+    BEGIN { undef $SIG{__WARN__}; }
+}
+
+no warnings 'experimental::try';
+
 {
     my $x;
     try {
@@ -324,32 +328,6 @@ no warnings 'experimental::try';
     }
     is(ff(), "return inside try+finally", 'return inside try+finally');
     ok($finally_invoked, 'finally block still invoked for side-effects');
-}
-
-# Complaints about forbidden control flow talk about "finally" blocks, not "defer"
-{
-    my $e;
-
-    $e = defined eval {
-        try {} catch ($e) {} finally { return "123" }
-        1;
-    } ? undef : $@;
-    like($e, qr/^Can't "return" out of a "finally" block /,
-        'Cannot return out of finally block');
-
-    $e = defined eval {
-        try {} catch ($e) {} finally { goto HERE; }
-        HERE: 1;
-    } ? undef : $@;
-    like($e, qr/^Can't "goto" out of a "finally" block /,
-        'Cannot goto out of finally block');
-
-    $e = defined eval {
-        LOOP: { try {} catch ($e) {} finally { last LOOP; } }
-        1;
-    } ? undef : $@;
-    like($e, qr/^Can't "last" out of a "finally" block /,
-        'Cannot last out of finally block');
 }
 
 # Nicer compiletime errors

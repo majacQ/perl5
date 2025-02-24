@@ -38,9 +38,11 @@ The types are:
     SVt_PVCV
     SVt_PVFM
     SVt_PVIO
+    SVt_PVOBJ
 
 These are most easily explained from the bottom up.
 
+C<SVt_PVOBJ> is for object instances of the new `use feature 'class'` kind.
 C<SVt_PVIO> is for I/O objects, C<SVt_PVFM> for formats, C<SVt_PVCV> for
 subroutines, C<SVt_PVHV> for hashes and C<SVt_PVAV> for arrays.
 
@@ -67,10 +69,13 @@ PVMG, we save memory by allocating smaller structs when possible.  All the
 other types are just simpler forms of C<SVt_PVMG>, with fewer internal fields.
 C<SVt_NULL> can only hold undef.  C<SVt_IV> can hold undef, an integer, or a
 reference.  (C<SVt_RV> is an alias for C<SVt_IV>, which exists for backward
-compatibility.)  C<SVt_NV> can hold any of those or a double.  C<SVt_PV> can only
-hold C<undef> or a string.  C<SVt_PVIV> is a superset of C<SVt_PV> and C<SVt_IV>.
-C<SVt_PVNV> is similar.  C<SVt_PVMG> can hold anything C<SVt_PVNV> can hold, but it
-can, but does not have to, be blessed or magical.
+compatibility.)  C<SVt_NV> can hold undef or a double. (In builds that support
+headless NVs, these could also hold a reference via a suitable offset, in the
+same way that SVt_IV does, but this is not currently supported and seems to
+be a rare use case.) C<SVt_PV> can hold C<undef>, a string, or a reference.
+C<SVt_PVIV> is a superset of C<SVt_PV> and C<SVt_IV>. C<SVt_PVNV> is a
+superset of C<SVt_PV> and C<SVt_NV>. C<SVt_PVMG> can hold anything C<SVt_PVNV>
+can hold, but it may also be blessed or magical.
 
 =for apidoc AmnU||SVt_NULL
 Type flag for scalars.  See L</svtype>.
@@ -120,6 +125,9 @@ Type flag for formats.  See L</svtype>.
 =for apidoc AmnU||SVt_PVIO
 Type flag for I/O objects.  See L</svtype>.
 
+=for apidoc AmnUx||SVt_PVOBJ
+Type flag for object instances.  See L</svtype>.
+
 =cut
 
   These are ordered so that the simpler types have a lower value; SvUPGRADE
@@ -149,7 +157,8 @@ typedef enum {
         SVt_PVCV,	/* 13 */
         SVt_PVFM,	/* 14 */
         SVt_PVIO,	/* 15 */
-                        /* 16-31: Unused, though one should be reserved for a
+        SVt_PVOBJ,      /* 16 */
+                        /* 17-31: Unused, though one should be reserved for a
                          * freed sv, if the other 3 bits below the flags ones
                          * get allocated */
         SVt_LAST	/* keep last in enum. used to size arrays */
@@ -184,7 +193,7 @@ typedef enum {
 #  define HVAUX_ARENA_ROOT_IX   SVt_IV
 #endif
 #ifdef PERL_IN_SV_C
-#  define SVt_FIRST SVt_NULL	/* the type of SV that new_SV() in sv.c returns */
+#  define SVt_FIRST SVt_NULL	/* the type of SV that new_SV() in sv_inline.h returns */
 #endif
 
 #define PERL_ARENA_ROOTS_SIZE	(SVt_LAST)
@@ -273,6 +282,11 @@ struct invlist {
     _SV_HEAD_UNION;
 };
 
+struct object {
+    _SV_HEAD(XPVOBJ*);          /* pointer to xobject body */
+    _SV_HEAD_UNION;
+};
+
 #undef _SV_HEAD
 #undef _SV_HEAD_UNION		/* ensure no pollution */
 
@@ -283,14 +297,14 @@ struct invlist {
 Returns the value of the object's reference count. Exposed
 to perl code via Internals::SvREFCNT().
 
-=for apidoc            SvREFCNT_inc
-=for apidoc_item       SvREFCNT_inc_NN
-=for apidoc_item |SV* |SvREFCNT_inc_simple|SV* sv
-=for apidoc_item |SV* |SvREFCNT_inc_simple_NN|SV* sv
-=for apidoc_item |void|SvREFCNT_inc_simple_void|SV* sv
-=for apidoc_item |void|SvREFCNT_inc_simple_void_NN|SV* sv
-=for apidoc_item       SvREFCNT_inc_void
-=for apidoc_item |void|SvREFCNT_inc_void_NN|SV* sv
+=for apidoc      SvREFCNT_inc
+=for apidoc_item SvREFCNT_inc_NN
+=for apidoc_item SvREFCNT_inc_simple
+=for apidoc_item SvREFCNT_inc_simple_NN
+=for apidoc_item SvREFCNT_inc_simple_void
+=for apidoc_item SvREFCNT_inc_simple_void_NN
+=for apidoc_item SvREFCNT_inc_void
+=for apidoc_item SvREFCNT_inc_void_NN
 
 These all increment the reference count of the given SV.
 The ones without C<void> in their names return the SV.
@@ -322,12 +336,29 @@ effects and you don't need the return value.
 C<SvREFCNT_inc_simple_void_NN> can only be used with expressions without side
 effects, you don't need the return value, and you know C<sv> is not C<NULL>.
 
-=for apidoc SvREFCNT_dec
+=for apidoc      SvREFCNT_dec
+=for apidoc_item SvREFCNT_dec_set_NULL
+=for apidoc_item SvREFCNT_dec_ret_NULL
 =for apidoc_item SvREFCNT_dec_NN
 
 These decrement the reference count of the given SV.
 
 C<SvREFCNT_dec_NN> may only be used when C<sv> is known to not be C<NULL>.
+
+The function C<SvREFCNT_dec_ret_NULL()> is identical to the
+C<SvREFCNT_dec()> except it returns a NULL C<SV *>.  It is used by
+C<SvREFCNT_dec_set_NULL()> which is a macro which will, when passed a
+non-NULL argument, decrement the reference count of its argument and
+then set it to NULL. You can replace code of the following form:
+
+    if (sv) {
+       SvREFCNT_dec_NN(sv);
+       sv = NULL;
+    }
+
+with
+
+    SvREFCNT_dec_set_NULL(sv);
 
 =for apidoc Am|svtype|SvTYPE|SV* sv
 Returns the type of the SV.  See C<L</svtype>>.
@@ -343,12 +374,22 @@ perform the upgrade if necessary.  See C<L</svtype>>.
 #define SvFLAGS(sv)	(sv)->sv_flags
 #define SvREFCNT(sv)	(sv)->sv_refcnt
 
+/*
+=for apidoc_defn Am|SV *|SvREFCNT_inc_simple|SV *sv
+=cut
+*/
 #define SvREFCNT_inc(sv)		Perl_SvREFCNT_inc(MUTABLE_SV(sv))
 #define SvREFCNT_inc_simple(sv)		SvREFCNT_inc(sv)
 #define SvREFCNT_inc_NN(sv)		Perl_SvREFCNT_inc_NN(MUTABLE_SV(sv))
 #define SvREFCNT_inc_void(sv)		Perl_SvREFCNT_inc_void(MUTABLE_SV(sv))
 
-/* These guys don't need the curly blocks */
+/*
+=for apidoc_defn Am|void|SvREFCNT_inc_simple_void|SV *sv
+
+These guys don't need the curly blocks
+
+=cut
+*/
 #define SvREFCNT_inc_simple_void(sv)	                                \
         STMT_START {                                                    \
             SV * sv_ = MUTABLE_SV(sv);                                  \
@@ -356,11 +397,21 @@ perform the upgrade if necessary.  See C<L</svtype>>.
                 SvREFCNT(sv_)++;                                        \
         } STMT_END
 
+/*
+=for apidoc_defn Am|SV *|SvREFCNT_inc_simple_NN|SV *sv
+=for apidoc_defn Am|void|SvREFCNT_inc_void_NN|SV *sv
+=for apidoc_defn Am|void|SvREFCNT_inc_simple_void_NN|SV *sv
+=cut
+*/
 #define SvREFCNT_inc_simple_NN(sv)	(++(SvREFCNT(sv)),MUTABLE_SV(sv))
 #define SvREFCNT_inc_void_NN(sv)	(void)(++SvREFCNT(MUTABLE_SV(sv)))
 #define SvREFCNT_inc_simple_void_NN(sv)	(void)(++SvREFCNT(MUTABLE_SV(sv)))
 
 #define SvREFCNT_dec(sv)	Perl_SvREFCNT_dec(aTHX_ MUTABLE_SV(sv))
+#define SvREFCNT_dec_set_NULL(sv)                               \
+    STMT_START {                                                \
+        sv = Perl_SvREFCNT_dec_ret_NULL(aTHX_ MUTABLE_SV(sv));  \
+    } STMT_END
 #define SvREFCNT_dec_NN(sv)	Perl_SvREFCNT_dec_NN(aTHX_ MUTABLE_SV(sv))
 
 #define SVTYPEMASK	0xff
@@ -666,6 +717,18 @@ struct xpvio {
 #define IOf_NOLINE	32	/* slurped a pseudo-line from empty file */
 #define IOf_FAKE_DIRP	64	/* xio_dirp is fake (source filters kludge)
                                    Also, when this is set, SvPVX() is valid */
+
+struct xobject {
+    HV*         xmg_stash;
+    union _xmgu xmg_u;
+    SSize_t     xobject_maxfield;
+    SSize_t     xobject_iter_sv_at; /* this is only used by Perl_sv_clear() */
+    SV**        xobject_fields;
+};
+
+#define ObjectMAXFIELD(inst)  ((XPVOBJ *)SvANY(inst))->xobject_maxfield
+#define ObjectITERSVAT(inst)  ((XPVOBJ *)SvANY(inst))->xobject_iter_sv_at
+#define ObjectFIELDS(inst)    ((XPVOBJ *)SvANY(inst))->xobject_fields
 
 /* The following macros define implementation-independent predicates on SVs. */
 
@@ -1200,7 +1263,7 @@ C<sv_force_normal> does nothing.
 #define SvTHINKFIRST(sv)	(SvFLAGS(sv) & SVf_THINKFIRST)
 
 #define SVs_PADMY		0
-#define SvPADMY(sv)		!(SvFLAGS(sv) & SVs_PADTMP)
+#define SvPADMY(sv)		(!(SvFLAGS(sv) & SVs_PADTMP))
 #ifndef PERL_CORE
 # define SvPADMY_on(sv)		SvPADTMP_off(sv)
 #endif
@@ -1500,7 +1563,7 @@ object type. Exposed to perl code via Internals::SvREADONLY().
 =for apidoc Am|void|SvPV_renew|SV* sv|STRLEN len
 Low level micro optimization of C<L</SvGROW>>.  It is generally better to use
 C<SvGROW> instead.  This is because C<SvPV_renew> ignores potential issues that
-C<SvGROW> handles.  C<sv> needs to have a real C<PV> that is unencombered by
+C<SvGROW> handles.  C<sv> needs to have a real C<PV> that is unencumbered by
 things like COW.  Using C<SV_CHECK_THINKFIRST> or
 C<SV_CHECK_THINKFIRST_COW_DROP> before calling this should clean it up, but
 why not just use C<SvGROW> if you're not sure about the provenance?
@@ -1517,7 +1580,7 @@ why not just use C<SvGROW> if you're not sure about the provenance?
 =for apidoc Am|void|SvPV_shrink_to_cur|SV* sv
 
 Trim any trailing unused memory in the PV of C<sv>, which needs to have a real
-C<PV> that is unencombered by things like COW.  Think first before using this
+C<PV> that is unencumbered by things like COW.  Think first before using this
 functionality.  Is the space saving really worth giving up COW?  Will the
 needed size of C<sv> stay the same?
 
@@ -1658,10 +1721,14 @@ inputs such as locale settings.  C<SvTAINT> propagates that taintedness to
 the outputs of an expression in a pessimistic fashion; i.e., without paying
 attention to precisely which outputs are influenced by which inputs.
 
+=for apidoc sv_taint
+Taint an SV.  Use C<SvTAINTED_on> instead.
+
 =cut
 */
 
-#define sv_taint(sv)	  sv_magic((sv), NULL, PERL_MAGIC_taint, NULL, 0)
+#define Perl_sv_taint(mTHX, sv)                                     \
+        Perl_sv_magic(aTHX_ (sv), NULL, PERL_MAGIC_taint, NULL, 0)
 
 #ifdef NO_TAINT_SUPPORT
 #   define SvTAINTED(sv) 0
@@ -1817,7 +1884,7 @@ As of 5.38, all forms are guaranteed to evaluate C<sv> exactly once.  For
 earlier Perls, use a form whose name ends with C<x> for single evaluation.
 
 C<SvPVutf8> is like C<SvPV>, but converts C<sv> to UTF-8 first if not already
-UTF-8.  Similiarly, the other forms with C<utf8> in their names correspond to
+UTF-8.  Similarly, the other forms with C<utf8> in their names correspond to
 their respective forms without.
 
 C<SvPVutf8_or_null> and C<SvPVutf8_or_null_nomg> don't have corresponding
@@ -1826,7 +1893,7 @@ undef, they return C<NULL>.
 
 C<SvPVbyte> is like C<SvPV>, but converts C<sv> to byte representation first if
 currently encoded as UTF-8.  If C<sv> cannot be downgraded from UTF-8, it
-croaks.  Similiarly, the other forms with C<byte> in their names correspond to
+croaks.  Similarly, the other forms with C<byte> in their names correspond to
 their respective forms without.
 
 C<SvPVbyte_or_null> doesn't have a corresponding non-C<byte> form.  Instead it
@@ -1998,13 +2065,18 @@ END_EXTERN_C
 #define SvPVutf8x_force(sv, len) sv_pvutf8n_force(sv, &len)
 #define SvPVbytex_force(sv, len) sv_pvbyten_force(sv, &len)
 
+/*
+=for apidoc_defn Am|bool|SvTRUEx|SV *sv
+=for apidoc_defn Am|bool|SvTRUE_nomg_NN|SV *sv
+=cut
+*/
 #define SvTRUEx(sv)        SvTRUE(sv)
 #define SvTRUEx_nomg(sv)   SvTRUE_nomg(sv)
 #define SvTRUE_nomg_NN(sv) SvTRUE_common(sv, TRUE)
 
-#  define SvIVx(sv) SvIV(sv)
-#  define SvUVx(sv) SvUV(sv)
-#  define SvNVx(sv) SvNV(sv)
+#define SvIVx(sv) SvIV(sv)
+#define SvUVx(sv) SvUV(sv)
+#define SvNVx(sv) SvNV(sv)
 
 #if defined(PERL_USE_GCC_BRACE_GROUPS)
 
@@ -2055,31 +2127,33 @@ Returns the hash for C<sv> created by C<L</newSVpvn_share>>.
 =cut
 */
 
-#define SV_IMMEDIATE_UNREF	1
-#define SV_GMAGIC		2
-#define SV_COW_DROP_PV		4
-#define SV_NOSTEAL		16
-#define SV_CONST_RETURN		32
-#define SV_MUTABLE_RETURN	64
-#define SV_SMAGIC		128
-#define SV_HAS_TRAILING_NUL	256
-#define SV_COW_SHARED_HASH_KEYS	512
+/* Flags used as `U32 flags` arguments to various functions */
+#define SV_IMMEDIATE_UNREF      (1 <<  0) /* 0x0001 -     1 */
+#define SV_GMAGIC               (1 <<  1) /* 0x0002 -     2 */
+#define SV_COW_DROP_PV          (1 <<  2) /* 0x0004 -     4 */
+/* SV_NOT_USED                  (1 <<  3)    0x0008 -     8 */
+#define SV_NOSTEAL              (1 <<  4) /* 0x0010 -    16 */
+#define SV_CONST_RETURN         (1 <<  5) /* 0x0020 -    32 */
+#define SV_MUTABLE_RETURN       (1 <<  6) /* 0x0040 -    64 */
+#define SV_SMAGIC               (1 <<  7) /* 0x0080 -   128 */
+#define SV_HAS_TRAILING_NUL     (1 <<  8) /* 0x0100 -   256 */
+#define SV_COW_SHARED_HASH_KEYS (1 <<  9) /* 0x0200 -   512 */
 /* This one is only enabled for PERL_OLD_COPY_ON_WRITE */
 /* XXX This flag actually enabled for any COW.  But it appears not to do
        anything.  Can we just remove it?  Or will it serve some future
        purpose.  */
-#define SV_COW_OTHER_PVS	1024
+#define SV_COW_OTHER_PVS        (1 << 10) /* 0x0400 -  1024 */
 /* Make sv_2pv_flags return NULL if something is undefined.  */
-#define SV_UNDEF_RETURNS_NULL	2048
+#define SV_UNDEF_RETURNS_NULL   (1 << 11) /* 0x0800 -  2048 */
 /* Tell sv_utf8_upgrade() to not check to see if an upgrade is really needed.
  * This is used when the caller has already determined it is, and avoids
  * redundant work */
-#define SV_FORCE_UTF8_UPGRADE	4096
+#define SV_FORCE_UTF8_UPGRADE   (1 << 12) /* 0x1000 -  4096 */
 /* if (after resolving magic etc), the SV is found to be overloaded,
  * don't call the overload magic, just return as-is */
-#define SV_SKIP_OVERLOAD	8192
-#define SV_CATBYTES		16384
-#define SV_CATUTF8		32768
+#define SV_SKIP_OVERLOAD        (1 << 13) /* 0x2000 -  8192 */
+#define SV_CATBYTES             (1 << 14) /* 0x4000 - 16384 */
+#define SV_CATUTF8              (1 << 15) /* 0x8000 - 32768 */
 
 /* The core is safe for this COW optimisation. XS code on CPAN may not be.
    So only default to doing the COW setup if we're in the core.
@@ -2095,10 +2169,12 @@ Returns the hash for C<sv> created by C<L</newSVpvn_share>>.
 #endif
 
 
-#define sv_unref(sv)    	sv_unref_flags(sv, 0)
-#define sv_force_normal(sv)	sv_force_normal_flags(sv, 0)
-#define sv_usepvn(sv, p, l)	sv_usepvn_flags(sv, p, l, 0)
-#define sv_usepvn_mg(sv, p, l)	sv_usepvn_flags(sv, p, l, SV_SMAGIC)
+#define Perl_sv_unref(mTHX, sv)  Perl_sv_unref_flags(aTHX_ sv, 0)
+#define Perl_sv_force_normal(mTHX, sv)  Perl_sv_force_normal_flags(aTHX_ sv, 0)
+#define Perl_sv_usepvn(mTHX, sv, p, l)                                  \
+        Perl_sv_usepvn_flags(aTHX_ sv, p, l, 0)
+#define Perl_sv_usepvn_mg(mTHX, sv, p, l)                               \
+        Perl_sv_usepvn_flags(aTHX_ sv, p, l, SV_SMAGIC)
 
 /*
 =for apidoc Am|void|SV_CHECK_THINKFIRST_COW_DROP|SV * sv
@@ -2149,51 +2225,134 @@ immediately written again.
 
 /* all these 'functions' are now just macros */
 
-#define sv_pv(sv) SvPV_nolen(sv)
-#define sv_pvutf8(sv) SvPVutf8_nolen(sv)
-#define sv_pvbyte(sv) SvPVbyte_nolen(sv)
+/*
+=for apidoc sv_pv
+
+Use the C<SvPV_nolen> macro instead
+
+=cut
+*/
+#define Perl_sv_pv(mTHX, sv) Perl_SvPV_nolen(aTHX_ sv)
+
+/*
+=for apidoc sv_pvutf8
+
+Use the C<SvPVutf8_nolen> macro instead
+
+=cut
+*/
+
+#define Perl_sv_pvutf8(mTHX, sv)  Perl_SvPVutf8_nolen(aTHX_ sv)
+
+/*
+=for apidoc sv_pvbyte
+
+Use C<SvPVbyte_nolen> instead.
+
+=cut
+*/
+#define Perl sv_pvbyte(mTHX, sv)  Perl SvPVbyte_nolen(aTHX_ sv)
 
 #define sv_pvn_force_nomg(sv, lp) sv_pvn_force_flags(sv, lp, 0)
-#define sv_utf8_upgrade_flags(sv, flags) sv_utf8_upgrade_flags_grow(sv, flags, 0)
+#define Perl_sv_utf8_upgrade_flags(mTHX, sv, flags)                     \
+        Perl_sv_utf8_upgrade_flags_grow(aTHX_ sv, flags, 0)
 #define sv_utf8_upgrade_nomg(sv) sv_utf8_upgrade_flags(sv, 0)
-#define sv_utf8_downgrade(sv, fail_ok) sv_utf8_downgrade_flags(sv, fail_ok, SV_GMAGIC)
+#define Perl_sv_utf8_downgrade(mTHX, sv, fail_ok)                       \
+        Perl_sv_utf8_downgrade_flags(aTHX_ sv, fail_ok, SV_GMAGIC)
 #define sv_utf8_downgrade_nomg(sv, fail_ok) sv_utf8_downgrade_flags(sv, fail_ok, 0)
+/*
+=for apidoc_defn Am|void|sv_catpvn_nomg|NN SV * const dsv               \
+                                       |NULLOK const char * sstr        \
+                                       |const STRLEN len
+=for apidoc_defn Am|void|sv_catpv_nomg|NN SV * const dsv                \
+                                      |NULLOK const char * sstr
+=cut
+*/
 #define sv_catpvn_nomg(dsv, sstr, slen) sv_catpvn_flags(dsv, sstr, slen, 0)
 #define sv_catpv_nomg(dsv, sstr) sv_catpv_flags(dsv, sstr, 0)
-#define sv_setsv(dsv, ssv) \
-        sv_setsv_flags(dsv, ssv, SV_GMAGIC|SV_DO_COW_SVSETSV)
+#define Perl_sv_setsv(mTHX, dsv, ssv)                                   \
+        Perl_sv_setsv_flags(aTHX_ dsv, ssv, SV_GMAGIC|SV_DO_COW_SVSETSV)
+/*
+=for apidoc_defn Am|void|sv_setsv_nomg|SV *dsv|SV *ssv
+=for apidoc_defn Am|void|sv_catsv_nomg|SV * const dsv|SV * const sstr
+=cut
+*/
 #define sv_setsv_nomg(dsv, ssv) sv_setsv_flags(dsv, ssv, SV_DO_COW_SVSETSV)
-#define sv_catsv(dsv, ssv) sv_catsv_flags(dsv, ssv, SV_GMAGIC)
+#define Perl_sv_catsv(mTHX, dsv, ssv)                                   \
+        Perl_sv_catsv_flags(aTHX_ dsv, ssv, SV_GMAGIC)
 #define sv_catsv_nomg(dsv, ssv) sv_catsv_flags(dsv, ssv, 0)
-#define sv_catsv_mg(dsv, ssv) sv_catsv_flags(dsv, ssv, SV_GMAGIC|SV_SMAGIC)
-#define sv_catpvn(dsv, sstr, slen) sv_catpvn_flags(dsv, sstr, slen, SV_GMAGIC)
-#define sv_catpvn_mg(dsv, sstr, slen) sv_catpvn_flags(dsv, sstr, slen, SV_GMAGIC|SV_SMAGIC);
-#define sv_copypv(dsv, ssv) sv_copypv_flags(dsv, ssv, SV_GMAGIC)
+#define Perl_sv_catsv_mg(mTHX, dsv, ssv)                                \
+        Perl_sv_catsv_flags(aTHX_ dsv, ssv, SV_GMAGIC|SV_SMAGIC)
+#define Perl_sv_catpvn(mTHX, dsv, sstr, slen)                           \
+        Perl_sv_catpvn_flags(aTHX_ dsv, sstr, slen, SV_GMAGIC)
+#define Perl_sv_catpvn_mg(mTHX, dsv, sstr, slen)                        \
+        Perl_sv_catpvn_flags(aTHX_ dsv, sstr, slen, SV_GMAGIC|SV_SMAGIC)
+#define Perl_sv_copypv(mTHX, dsv, ssv)                                  \
+        Perl_sv_copypv_flags(aTHX_ dsv, ssv, SV_GMAGIC)
 #define sv_copypv_nomg(dsv, ssv) sv_copypv_flags(dsv, ssv, 0)
-#define sv_2pv(sv, lp) sv_2pv_flags(sv, lp, SV_GMAGIC)
-#define sv_2pv_nolen(sv) sv_2pv(sv, 0)
-#define sv_2pvbyte(sv, lp) sv_2pvbyte_flags(sv, lp, SV_GMAGIC)
-#define sv_2pvbyte_nolen(sv) sv_2pvbyte(sv, 0)
-#define sv_2pvutf8(sv, lp) sv_2pvutf8_flags(sv, lp, SV_GMAGIC)
-#define sv_2pvutf8_nolen(sv) sv_2pvutf8(sv, 0)
+#define Perl_sv_2pv(mTHX, sv, lp)  Perl_sv_2pv_flags(aTHX_ sv, lp, SV_GMAGIC)
+
+/*
+=for apidoc sv_2pv_nolen
+
+Like C<sv_2pv()>, but doesn't return the length too.  You should usually
+use the macro wrapper C<SvPV_nolen(sv)> instead.
+
+=cut
+*/
+#define Perl_sv_2pv_nolen(mTHX, sv)  Perl_sv_2pv(mTHX, sv, 0)
+#define Perl_sv_2pvbyte(mTHX, sv, lp)                                   \
+        Perl_sv_2pvbyte_flags(aTHX_ sv, lp, SV_GMAGIC)
+
+/*
+=for apidoc sv_2pvbyte_nolen
+
+Return a pointer to the byte-encoded representation of the SV.
+May cause the SV to be downgraded from UTF-8 as a side-effect.
+
+Usually accessed via the C<SvPVbyte_nolen> macro.
+
+=cut
+*/
+#define Perl_sv_2pvbyte_nolen(mTHX, sv)                                 \
+        Perl_sv_2pvbyte(aTHX_ sv, 0)
+
+#define Perl_sv_2pvutf8(mTHX, sv, lp)                                   \
+        Perl_sv_2pvutf8_flags(aTHX_ sv, lp, SV_GMAGIC)
+
+/*
+=for apidoc sv_2pvutf8_nolen
+
+Return a pointer to the UTF-8-encoded representation of the SV.
+May cause the SV to be upgraded to UTF-8 as a side-effect.
+
+Usually accessed via the C<SvPVutf8_nolen> macro.
+
+=cut
+*/
+#define Perl_sv_2pvutf8_nolen(mTHX, sv)  Perl_sv_2pvutf8(aTHX, sv, 0)
+
 #define sv_2pv_nomg(sv, lp) sv_2pv_flags(sv, lp, 0)
-#define sv_pvn_force(sv, lp) sv_pvn_force_flags(sv, lp, SV_GMAGIC)
-#define sv_utf8_upgrade(sv) sv_utf8_upgrade_flags(sv, SV_GMAGIC)
-#define sv_2iv(sv) sv_2iv_flags(sv, SV_GMAGIC)
-#define sv_2uv(sv) sv_2uv_flags(sv, SV_GMAGIC)
-#define sv_2nv(sv) sv_2nv_flags(sv, SV_GMAGIC)
-#define sv_eq(sv1, sv2) sv_eq_flags(sv1, sv2, SV_GMAGIC)
+#define Perl_sv_pvn_force(mTHX, sv, lp)                                 \
+        Perl_sv_pvn_force_flags(aTHX_ sv, lp, SV_GMAGIC)
+#define Perl_sv_utf8_upgrade(mTHX, sv)                                  \
+        Perl_sv_utf8_upgrade_flags(aTHX, sv, SV_GMAGIC)
+#define Perl_sv_2iv(mTHX, sv) Perl_sv_2iv_flags(aTHX_ sv, SV_GMAGIC)
+#define Perl_sv_2uv(mTHX, sv) Perl_sv_2uv_flags(aTHX_ sv, SV_GMAGIC)
+#define Perl_sv_2nv(mTHX, sv) Perl_sv_2nv_flags(aTHX_ sv, SV_GMAGIC)
+#define Perl_sv_eq(mTHX, sv1, sv2) Perl_sv_eq_flags(aTHX_ sv1, sv2, SV_GMAGIC)
 #define sv_cmp(sv1, sv2) sv_cmp_flags(sv1, sv2, SV_GMAGIC)
 #define sv_cmp_locale(sv1, sv2) sv_cmp_locale_flags(sv1, sv2, SV_GMAGIC)
 #define sv_numeq(sv1, sv2) sv_numeq_flags(sv1, sv2, SV_GMAGIC)
 #define sv_streq(sv1, sv2) sv_streq_flags(sv1, sv2, SV_GMAGIC)
-#define sv_collxfrm(sv, nxp) sv_collxfrm_flags(sv, nxp, SV_GMAGIC)
-#define sv_2bool(sv) sv_2bool_flags(sv, SV_GMAGIC)
+#define Perl_sv_collxfrm(mTHX, sv, nxp)                                     \
+        Perl_sv_collxfrm_flags(aTHX_ sv, nxp, SV_GMAGIC)
+#define Perl_sv_2bool(mTHX, sv) Perl_sv_2bool_flags(aTHX_ sv, SV_GMAGIC)
 #define sv_2bool_nomg(sv) sv_2bool_flags(sv, 0)
-#define sv_insert(bigstr, offset, len, little, littlelen)		\
+#define Perl_sv_insert(mTHX, bigstr, offset, len, little, littlelen)        \
         Perl_sv_insert_flags(aTHX_ (bigstr),(offset), (len), (little),	\
                              (littlelen), SV_GMAGIC)
-#define sv_mortalcopy(sv) \
+#define Perl_sv_mortalcopy(mTHX, sv)                                        \
         Perl_sv_mortalcopy_flags(aTHX_ sv, SV_GMAGIC|SV_DO_COW_SVSETSV)
 #define sv_cathek(sv,hek)					    \
         STMT_START {						     \
@@ -2213,6 +2372,14 @@ immediately written again.
             sv_utf8_upgrade(nsv);			\
             sv_catsv_nomg(dsv, nsv);			\
         } STMT_END
+
+/*
+=for apidoc_defn Adm|void|sv_catpvn_nomg_maybeutf8|NN SV * const dsv    \
+                                                  |NN const char *sstr  \
+                                                  |const STRLEN len     \
+                                                  |const I32 flags
+=cut
+*/
 #define sv_catpvn_nomg_maybeutf8(dsv, sstr, len, is_utf8) \
         sv_catpvn_flags(dsv, sstr, len, (is_utf8)?SV_CATUTF8:SV_CATBYTES)
 
@@ -2224,8 +2391,8 @@ immediately written again.
 #endif
 
 /*
-=for apidoc newRV
-=for apidoc_item ||newRV_inc|
+=for apidoc         newRV
+=for apidoc_item m||newRV_inc|
 
 These are identical.  They create an RV wrapper for an SV.  The reference count
 for the original SV is incremented.
@@ -2366,7 +2533,17 @@ that already have a PV buffer allocated, but no SvTHINKFIRST.
 
 #ifdef DEBUGGING
    /* exercise the immortal resurrection code in sv_free2() */
-#  define SvREFCNT_IMMORTAL 1000
+#  ifdef PERL_RC_STACK
+     /* When the stack is ref-counted, the code tends to take a lot of
+      * short cuts with immortals, such as skipping the bump of the ref
+      * count of PL_sv_undef when pushing it on the stack. Exercise that
+      * this doesn't cause problems, especially on code which
+      * special-cases RC==1 etc.
+      */
+#    define SvREFCNT_IMMORTAL 10
+#  else
+#    define SvREFCNT_IMMORTAL 1000
+#  endif
 #else
 #  define SvREFCNT_IMMORTAL ((~(U32)0)/2)
 #endif
@@ -2465,7 +2642,8 @@ struct clone_params {
 
 /* SV_NOSTEAL prevents TEMP buffers being, well, stolen, and saves games
    with SvTEMP_off and SvTEMP_on round a call to sv_setsv.  */
-#define newSVsv(sv) newSVsv_flags((sv), SV_GMAGIC|SV_NOSTEAL)
+#define Perl_newSVsv(mTHX, sv)                                  \
+        Perl_newSVsv_flags(aTHX_ (sv), SV_GMAGIC|SV_NOSTEAL)
 #define newSVsv_nomg(sv) newSVsv_flags((sv), SV_NOSTEAL)
 
 /*
@@ -2553,7 +2731,7 @@ Create a new IO, setting the reference count to 1.
 
 =cut
 */
-#define newIO()	MUTABLE_IO(newSV_type(SVt_PVIO))
+#define Perl_newIO(mTHX)  MUTABLE_IO(Perl_newSV_type(aTHX_ SVt_PVIO))
 
 #if defined(PERL_CORE) || defined(PERL_EXT)
 
@@ -2643,6 +2821,24 @@ Create a new IO, setting the reference count to 1.
         SvANY(sv_) =   (XPVNV*)((char*)&(sv_->sv_u.svu_nv)  \
                     - STRUCT_OFFSET(XPVNV, xnv_u.xnv_nv));  \
     } STMT_END
+
+#if defined(PERL_CORE) && defined(USE_ITHREADS)
+/* Certain cases in Perl_ss_dup have been merged, by relying on the fact
+   that currently av_dup, gv_dup and hv_dup are the same as sv_dup.
+   If this changes, please unmerge ss_dup.
+   Likewise, sv_dup_inc_multiple() relies on this fact.  */
+#  define sv_dup_inc_NN(s,t)	SvREFCNT_inc_NN(sv_dup_inc(s,t))
+#  define av_dup(s,t)	MUTABLE_AV(sv_dup((const SV *)s,t))
+#  define av_dup_inc(s,t)	MUTABLE_AV(sv_dup_inc((const SV *)s,t))
+#  define hv_dup(s,t)	MUTABLE_HV(sv_dup((const SV *)s,t))
+#  define hv_dup_inc(s,t)	MUTABLE_HV(sv_dup_inc((const SV *)s,t))
+#  define cv_dup(s,t)	MUTABLE_CV(sv_dup((const SV *)s,t))
+#  define cv_dup_inc(s,t)	MUTABLE_CV(sv_dup_inc((const SV *)s,t))
+#  define io_dup(s,t)	MUTABLE_IO(sv_dup((const SV *)s,t))
+#  define io_dup_inc(s,t)	MUTABLE_IO(sv_dup_inc((const SV *)s,t))
+#  define gv_dup(s,t)	MUTABLE_GV(sv_dup((const SV *)s,t))
+#  define gv_dup_inc(s,t)	MUTABLE_GV(sv_dup_inc((const SV *)s,t))
+#endif
 
 /*
  * ex: set ts=8 sts=4 sw=4 et:

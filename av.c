@@ -42,8 +42,8 @@ Perl_av_reify(pTHX_ AV *av)
             SvREFCNT_inc_simple_void(sv);
     }
     key = AvARRAY(av) - AvALLOC(av);
-    while (key)
-        AvALLOC(av)[--key] = NULL;
+    if (key)
+        Zero(AvALLOC(av), key, SV*);
     AvREIFY_off(av);
     AvREAL_on(av);
 }
@@ -103,12 +103,19 @@ Perl_av_extend_guts(pTHX_ AV *av, SSize_t key, SSize_t *maxp, SV ***allocp,
             "panic: av_extend_guts() negative count (%" IVdf ")", (IV)key);
 
     if (key > *maxp) {
-        SSize_t ary_offset = *maxp + 1;
-        SSize_t to_null = 0;
+        SSize_t ary_offset = *maxp + 1; /* Start NULL initialization
+                                         * from this element */
+        SSize_t to_null = 0; /* How many elements to Zero */
         SSize_t newmax  = 0;
 
         if (av && *allocp != *arrayp) { /* a shifted SV* array exists */
+
+            /* to_null will contain the number of elements currently
+             * shifted and about to be unshifted. If the array has not
+             * been shifted to the maximum possible extent, this will be
+             * a smaller number than (*maxp - AvFILLp(av)). */
             to_null = *arrayp - *allocp;
+
             *maxp += to_null;
             ary_offset = AvFILLp(av) + 1;
 
@@ -116,6 +123,13 @@ Perl_av_extend_guts(pTHX_ AV *av, SSize_t key, SSize_t *maxp, SV ***allocp,
 
             if (key > *maxp - 10) {
                 newmax = key + *maxp;
+
+                /* Zero everything above AvFILLp(av), which could be more
+                 * elements than have actually been shifted. If we don't
+                 * do this, trailing elements at the end of the resized
+                 * array may not be correctly initialized. */
+                to_null = *maxp - AvFILLp(av);
+
                 goto resize;
             }
         } else if (*allocp) { /* a full SV* array exists */
@@ -167,7 +181,9 @@ Perl_av_extend_guts(pTHX_ AV *av, SSize_t key, SSize_t *maxp, SV ***allocp,
 #ifdef Perl_safesysmalloc_size
           resized:
 #endif
-            to_null += newmax - *maxp;
+            to_null += newmax - *maxp; /* Initialize all new elements
+                                        * (newmax - *maxp) in addition to
+                                        * any previously specified */
             *maxp = newmax;
 
             /* See GH#18014 for discussion of when this might be needed: */
@@ -177,7 +193,8 @@ Perl_av_extend_guts(pTHX_ AV *av, SSize_t key, SSize_t *maxp, SV ***allocp,
                 PL_stack_max = PL_stack_base + newmax;
             }
         } else { /* there is no SV* array yet */
-            *maxp = key < 3 ? 3 : key;
+            *maxp = key < PERL_ARRAY_NEW_MIN_KEY ?
+                          PERL_ARRAY_NEW_MIN_KEY : key;
             {
                 /* see comment above about newmax+1*/
                 MEM_WRAP_CHECK_s(*maxp, SV*,
@@ -193,7 +210,7 @@ Perl_av_extend_guts(pTHX_ AV *av, SSize_t key, SSize_t *maxp, SV ***allocp,
              * don't get any special treatment here.
              * See https://github.com/Perl/perl5/pull/18690 for more detail */
             ary_offset = 0;
-            to_null = *maxp+1;
+            to_null = *maxp+1; /* Initialize all new array elements */
             goto zero;
         }
 
@@ -286,11 +303,11 @@ Perl_av_fetch(pTHX_ AV *av, SSize_t key, I32 lval)
     if ((Size_t)key >= (Size_t)size) {
         if (UNLIKELY(neg))
             return NULL;
-        goto emptyness;
+        goto emptiness;
     }
 
     if (!AvARRAY(av)[key]) {
-      emptyness:
+      emptiness:
         return lval ? av_store(av,key,newSV_type(SVt_NULL)) : NULL;
     }
 
@@ -372,10 +389,47 @@ Perl_av_store(pTHX_ AV *av, SSize_t key, SV *val)
     }
     else if (AvREAL(av))
         SvREFCNT_dec(ary[key]);
+
+    /* store the val into the AV before we call magic so that the magic can
+     * "see" the new value. Especially set magic on the AV itself. */
     ary[key] = val;
+
     if (SvSMAGICAL(av)) {
         const MAGIC *mg = SvMAGIC(av);
         bool set = TRUE;
+        /* We have to increment the refcount on val before we call any magic,
+         * as it is now stored in the AV (just before this block), we will
+         * then call the magic handlers which might die/Perl_croak, and
+         * longjmp up the stack to the most recent exception trap. Which means
+         * the caller code that would be expected to handle the refcount
+         * increment likely would never be executed, leading to a double free.
+         * This can happen in a case like
+         *
+         * @ary = (1);
+         *
+         * or this:
+         *
+         * if (av_store(av,n,sv)) SvREFCNT_inc(sv);
+         *
+         * where @ary/av has set magic applied to it which can die. In the
+         * first case the sv representing 1 would be mortalized, so when the
+         * set magic threw an exception it would be freed as part of the
+         * normal stack unwind. However this leaves the av structure still
+         * holding a valid visible pointer to the now freed value. In practice
+         * the next SV created will reuse the same reference, but without the
+         * refcount to account for the previous ownership and we end up with
+         * warnings about a totally different variable being double freed in
+         * the form of "attempt to free unreferenced variable"
+         * warnings/errors.
+         *
+         * https://github.com/Perl/perl5/issues/20675
+         *
+         * Arguably the API for av_store is broken in the face of magic. Instead
+         * av_store should be responsible for the refcount increment, and only
+         * not do it when specifically told to do so (eg, when storing an
+         * otherwise unreferenced scalar into an AV).
+         */
+        SvREFCNT_inc(val);  /* see comment above */
         for (; mg; mg = mg->mg_moremagic) {
           if (!isUPPER(mg->mg_type)) continue;
           if (val) {
@@ -388,6 +442,10 @@ Perl_av_store(pTHX_ AV *av, SSize_t key, SV *val)
         }
         if (set)
            mg_set(MUTABLE_SV(av));
+        /* And now we are done the magic, we have to decrement it back as the av_store() api
+         * says the caller is responsible for the refcount increment, assuming
+         * av_store returns true. */
+        SvREFCNT_dec(val);
     }
     return &ary[key];
 }
@@ -575,7 +633,6 @@ to it.
 void
 Perl_av_clear(pTHX_ AV *av)
 {
-    SSize_t extra;
     bool real;
     SSize_t orig_ix = 0;
 
@@ -620,12 +677,9 @@ Perl_av_clear(pTHX_ AV *av)
             SvREFCNT_dec(sv);
         }
     }
-    extra = AvARRAY(av) - AvALLOC(av);
-    if (extra) {
-        AvMAX(av) += extra;
-        AvARRAY(av) = AvALLOC(av);
-    }
     AvFILLp(av) = -1;
+    av_remove_offset(av);
+
     if (real) {
         /* disarm av's premature free guard */
         if (LIKELY(PL_tmps_ix == orig_ix))
@@ -654,7 +708,7 @@ void
 Perl_av_undef(pTHX_ AV *av)
 {
     bool real;
-    SSize_t orig_ix = PL_tmps_ix; /* silence bogus warning about possible unitialized use */
+    SSize_t orig_ix = PL_tmps_ix; /* silence bogus warning about possible uninitialized use */
 
     PERL_ARGS_ASSERT_AV_UNDEF;
     assert(SvTYPE(av) == SVt_PVAV);
@@ -713,12 +767,22 @@ Perl_av_create_and_push(pTHX_ AV **const avp, SV *const val)
 }
 
 /*
-=for apidoc av_push
+=for apidoc      av_push
+=for apidoc_item av_push_simple
 
-Pushes an SV (transferring control of one reference count) onto the end of the
-array.  The array will grow automatically to accommodate the addition.
+These each push an SV (transferring control of one reference count) onto the
+end of the array.  The array will grow automatically to accommodate the
+addition.
 
 Perl equivalent: C<push @myarray, $val;>.
+
+C<av_push> is the general purpose form, suitable for all situations.
+
+C<av_push_simple> is a cut-down version of C<av_push> that assumes that the
+array is very straightforward, with no magic, not readonly, and is AvREAL
+(see L<perlguts/Real AVs - and those that are not>), and that C<key> is not
+less than -1. This function MUST NOT be used in situations where any of those
+assumptions may not hold.
 
 =cut
 */
@@ -844,6 +908,9 @@ Perl_av_unshift(pTHX_ AV *av, SSize_t num)
         AvMAX(av) += i;
         AvFILLp(av) += i;
         AvARRAY(av) = AvARRAY(av) - i;
+#ifdef PERL_RC_STACK
+        Zero(AvARRAY(av), i, SV*);
+#endif
     }
     if (num) {
         SV **ary;
@@ -897,8 +964,10 @@ Perl_av_shift(pTHX_ AV *av)
     if (AvFILL(av) < 0)
       return &PL_sv_undef;
     retval = *AvARRAY(av);
+#ifndef PERL_RC_STACK
     if (AvREAL(av))
         *AvARRAY(av) = NULL;
+#endif
     AvARRAY(av) = AvARRAY(av) + 1;
     AvMAX(av)--;
     AvFILLp(av)--;
@@ -908,8 +977,10 @@ Perl_av_shift(pTHX_ AV *av)
 }
 
 /*
-=for apidoc av_tindex
-=for apidoc_item av_top_index
+=for apidoc      av_top_index
+=for apidoc_item av_tindex
+=for apidoc_item AvFILL
+=for apidoc_item av_len
 
 These behave identically.
 If the array C<av> is empty, these return -1; otherwise they return the maximum
@@ -920,15 +991,10 @@ They process 'get' magic.
 
 The Perl equivalent for these is C<$#av>.
 
-Use C<L</av_count>> to get the number of elements in an array.
-
-=for apidoc av_len
-
-Same as L</av_top_index>.  Note that, unlike what the name implies, it returns
+Note that, unlike what the name C<av_len> implies, it returns
 the maximum index in the array.  This is unlike L</sv_len>, which returns what
-you would expect.
-
-B<To get the true number of elements in the array, instead use C<L</av_count>>>.
+you would expect.  To get the actual number of elements in an array, use
+C<L</av_count>>.
 
 =cut
 */

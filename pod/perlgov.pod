@@ -492,11 +492,11 @@ how the membership has changed over time.
 
 =over
 
-=item * Paul Evans
+=item * Aristotle Pagaltzis
+
+=item * Graham Knop
 
 =item * Philippe Bruhat
-
-=item * Ricardo Signes
 
 =back
 
@@ -507,6 +507,8 @@ The current members of the Perl Core Team are:
 =head2 Active Members
 
 =over 4
+
+=item Aristotle Pagaltzis <pagaltzis@gmx.de>
 
 =item Chad Granum <exodist7@gmail.com>
 
@@ -525,8 +527,6 @@ The current members of the Perl Core Team are:
 =item Hugo van der Sanden <hv@crypt.org>
 
 =item James E Keenan <jkeenan@cpan.org>
-
-=item Jason McIntosh <jmac@jmac.org>
 
 =item Karen Etheridge <ether@cpan.org>
 
@@ -558,6 +558,8 @@ The current members of the Perl Core Team are:
 
 =item Tony Cook <tony@develop-help.com>
 
+=item Yves Orton <demerphq@gmail.com>
+
 =back
 
 =head2 Inactive Members
@@ -571,6 +573,8 @@ The current members of the Perl Core Team are:
 =item David Golden <xdg@xdg.me>
 
 =item Jan Dubois <jan@jandubois.com>
+
+=item Jason McIntosh <jmac@jmac.org>
 
 =item Jesse Vincent <jesse@fsck.com>
 

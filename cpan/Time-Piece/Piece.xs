@@ -1,15 +1,8 @@
-#ifdef __cplusplus
-extern "C" {
-#endif
 #define PERL_NO_GET_CONTEXT
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
 #include <time.h>
-#ifdef __cplusplus
-}
-#endif
-
 
 #define    DAYS_PER_YEAR    365
 #define    DAYS_PER_QYEAR    (4*DAYS_PER_YEAR+1)
@@ -85,7 +78,7 @@ extern "C" {
  *
  * Note that we don't free() the malloc()ed memory unless and until we call
  * malloc() again ourselves because the CRT putenv() function simply puts its
- * pointer argument into the environ[] arrary (it doesn't make a copy of it)
+ * pointer argument into the environ[] array (it doesn't make a copy of it)
  * so this memory must otherwise be leaked.
  */
 

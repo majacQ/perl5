@@ -246,7 +246,7 @@ sub _ok {
         $name =~ s/#/\\#/g;
 	$out = $pass ? "ok $test - $name" : "not ok $test - $name";
     } else {
-	$out = $pass ? "ok $test" : "not ok $test";
+	$out = $pass ? "ok $test - [$where]" : "not ok $test - [$where]";
     }
 
     if ($TODO) {
@@ -274,8 +274,8 @@ sub _ok {
 }
 
 sub _where {
-    my @caller = caller($Level);
-    return "at $caller[1] line $caller[2]";
+    my (undef, $filename, $lineno) = caller($Level);
+    return "at $filename line $lineno";
 }
 
 # DON'T use this for matches. Use like() instead.
@@ -313,7 +313,8 @@ foreach my $x (split //, 'enrtfa\\\'"') {
 # Trying to avoid setting $_, or relying on local $_ to work.
 sub display {
     my @result;
-    foreach my $x (@_) {
+    foreach my $element (@_) {
+        my $x = $element; # Make a copy in case @_ contains unmodifiable elements
         if (defined $x and not ref $x) {
             my $y = '';
             foreach my $c (unpack($chars_template, $x)) {
@@ -342,6 +343,50 @@ sub display {
     return @result;
 }
 
+
+# Escape a string in a similar (but not identical) fashion to how the
+# regex debugger does, using "x" style escapes in the form
+# "%x{01+bc+02+cd}" to show the codepoint of the escaped values.  Like
+# the regex debugger we use percentage instead of backslash so that it
+# is trivial to distinguish backslash based sequences that are commonly
+# found in regex patterns from escaped octets that are in the pattern.
+# To reduce the output length and improve clarity if there are multiple
+# escaped codepoints in a row we bundle them together into one "%x{...}"
+# structure.
+#
+# Implementation note: This code should work fine on all platforms as we
+# use utf8::native_to_unicode() to map native codepoints to unicode
+# (thanks Karl!) and back again, also we deliberately avoid using the
+# regex engine to do the escaping as this function is intended for cases
+# where we are testing the regex engine.
+#
+# WARNING: This function should only be used for diagnostic purposes, it
+# does not output valid code!
+
+sub display_rx {
+    my ($str) = @_;
+    my $escaped = "";
+    my @cp; # codepoints
+    for my $i (0 .. length($str)-1) {
+        my $char = substr($str,$i,1);
+        push @cp, utf8::native_to_unicode(ord($char));
+    }
+    while (@cp) {
+        my $ord = shift @cp;
+        if (32 <= $ord <= 126 and $ord != 37) {
+            $escaped .= chr(utf8::unicode_to_native($ord));
+        }
+        else {
+            my @cp_hex = sprintf "%02x", $ord;
+            while (@cp and $cp[0] != 37 and ($cp[0]<32 or $cp[0]>126)) {
+                push @cp_hex, sprintf "%02x", shift @cp;
+            }
+            $escaped .= sprintf "%%x{%s}", join "+", @cp_hex;
+        }
+    }
+    return $escaped;
+}
+
 sub is ($$@) {
     my ($got, $expected, $name, @mess) = @_;
 
@@ -357,6 +402,17 @@ sub is ($$@) {
     unless ($pass) {
 	unshift(@mess, "#      got "._qq($got)."\n",
 		       "# expected "._qq($expected)."\n");
+        if (defined $got and defined $expected and
+            (length($got)>20 or length($expected)>20))
+        {
+            my $p = 0;
+            $p++ while substr($got,$p,1) eq substr($expected,$p,1);
+            push @mess,"#  diff at $p\n";
+            push @mess,"#    after "._qq(substr($got,$p < 40 ? 0  : $p - 40,
+                                                     $p < 40 ? $p : 40)) . "\n";
+            push @mess,"#     have "._qq(substr($got,$p,40))."\n";
+            push @mess,"#     want "._qq(substr($expected,$p,40))."\n";
+        }
     }
     _ok($pass, _where(), $name, @mess);
 }
@@ -456,21 +512,17 @@ sub like_yn ($$$@) {
     # definitely not like(..., '/.../') like
     # Test::Builder::maybe_regex() does.
     unless (re::is_regexp($expected)) {
-	die "PANIC: The value '$expected' isn't a regexp. The like() function needs a qr// pattern, not a string";
+        die "PANIC: The value '$expected' isn't a regexp. The like() function needs a qr// pattern, not a string";
     }
 
-    my $pass;
-    $pass = $_[1] =~ /$expected/ if !$flip;
-    $pass = $_[1] !~ /$expected/ if $flip;
-    my $display_got = $_[1];
-    $display_got = display($display_got);
-    my $display_expected = $expected;
-    $display_expected = display($display_expected);
+    my $pass = ($flip) ? $_[1] !~ /$expected/ : $_[1] =~ /$expected/;
     unless ($pass) {
-	unshift(@mess, "#      got '$display_got'\n",
-		$flip
-		? "# expected !~ /$display_expected/\n"
-                : "# expected /$display_expected/\n");
+        my $display_got = display($_[1]);
+        my $display_expected = display($expected);
+        unshift(@mess, "#      got '$display_got'\n",
+            $flip
+            ? "# expected !~ /$display_expected/\n"
+            : "# expected /$display_expected/\n");
     }
     local $Level = $Level + 1;
     _ok($pass, _where(), $name, @mess);
@@ -991,8 +1043,8 @@ sub _num_to_alpha {
     $max_char = 0 if !defined($max_char) or $max_char < 0;
 
     while( 1 ){
-        $alpha = $letters[ $num % 26 ] . $alpha;
-        $num = int( $num / 26 );
+        $alpha = $letters[ $num % @letters ] . $alpha;
+        $num = int( $num / @letters );
         last if $num == 0;
         $num = $num - 1;
 
@@ -1007,7 +1059,7 @@ sub _num_to_alpha {
 my %tmpfiles;
 sub unlink_tempfiles {
     unlink_all keys %tmpfiles;
-    %tempfiles = ();
+    %tmpfiles = ();
 }
 
 END { unlink_tempfiles(); }
@@ -1023,6 +1075,9 @@ $::tempfile_regexp = 'tmp_[A-Z]+_[A-Z]+';
 # Avoid ++, avoid ranges, avoid split //
 my $tempfile_count = 0;
 my $max_file_chars = 3;
+# Note that the max number of is NOT 26**3, it is 26**3 + 26**2 + 26,
+# as 3 character files are distinct from 2 character files, from 1 characters
+# files, etc.
 sub tempfile {
     # if you change the format returned by tempfile() you MUST change
     # the $::tempfile_regex define above.
@@ -1093,6 +1148,7 @@ sub fresh_perl {
     # it feels like the least-worse thing is to assume that auto-vivification
     # works. At least, this is only going to be a run-time failure, so won't
     # affect tests using this file but not this function.
+    my $trim= delete $runperl_args->{rtrim_result}; # hide from runperl
     $runperl_args->{progfile} ||= $tmpfile;
     $runperl_args->{stderr}     = 1 unless exists $runperl_args->{stderr};
 
@@ -1104,7 +1160,7 @@ sub fresh_perl {
     my $results = runperl(%$runperl_args);
     my $status = $?;    # Not necessary to save this, but it makes it clear to
                         # future maintainers.
-
+    $results=~s/[ \t]+\n/\n/g if $trim;
     # Clean up the results into something a bit more predictable.
     $results  =~ s/\n+$//;
     $results =~ s/at\s+$::tempfile_regexp\s+line/at - line/g;
@@ -1129,6 +1185,11 @@ sub fresh_perl {
 
 sub _fresh_perl {
     my($prog, $action, $expect, $runperl_args, $name) = @_;
+
+    local $Level = $Level + 1;
+
+    # strip trailing whitespace if requested - makes some tests easier
+    $expect=~s/[[:blank:]]+\n/\n/g if $runperl_args->{rtrim_result};
 
     my $results = fresh_perl($prog, $runperl_args);
     my $status = $?;
@@ -1173,7 +1234,7 @@ sub fresh_perl_is {
     # This will make it so the test author doesn't have to know that.
     $expected =~ s/\n+$//;
 
-    local $Level = 2;
+    local $Level = $Level + 1;
     _fresh_perl($prog, 'eq', $expected, $runperl_args, $name);
 }
 
@@ -1185,7 +1246,7 @@ sub fresh_perl_is {
 
 sub fresh_perl_like {
     my($prog, $expected, $runperl_args, $name) = @_;
-    local $Level = 2;
+    local $Level = $Level + 1;
     _fresh_perl($prog, '=~', $expected, $runperl_args, $name);
 }
 
@@ -1308,6 +1369,13 @@ sub run_multiple_progs {
         my $dummy;
         ($dummy, @prgs) = _setup_one_file(shift);
     }
+    my $taint_disabled;
+    if (! eval {require Config; 1}) {
+        warn "test.pl had problems loading Config: $@";
+        $taint_disabled = '';
+    } else {
+        $taint_disabled = $Config::Config{taint_disabled};
+    }
 
     my $tmpfile = tempfile();
 
@@ -1329,6 +1397,14 @@ sub run_multiple_progs {
 	if (s/^(\s*-\w+)//) {
 	    $switch = $1;
 	}
+
+        s/^# NOTE.*\n//mg; # remove any NOTE comments in the content
+
+        # unhide conflict markers - we hide them so that naive
+        # conflict marker detection logic doesn't get upset with our
+        # tests.
+        s/([<=>])CONFLICT\1/$1 x 7/ge;
+
 	my ($prog, $expected) = split(/\nEXPECT(?:\n|$)/, $_, 2);
 
 	my %reason;
@@ -1351,6 +1427,10 @@ sub run_multiple_progs {
     } elsif (defined $file) {
         $name = "test from $file at line $line";
     }
+
+        if ($switch=~/[Tt]/ and $taint_disabled eq "define") {
+            $reason{skip} ||= "This perl does not support taint";
+        }
 
 	if ($reason{skip}) {
 	SKIP:
@@ -1724,10 +1804,27 @@ sub warning_like {
     }
 }
 
-# Set a watchdog to timeout the entire test file.  The input seconds is
-# multiplied by $ENV{PERL_TEST_TIME_OUT_FACTOR} (default 1; minimum 1).
-# Set this in your profile for slow boxes, or use it to override the timeout
-# temporarily for debugging.
+# Set or clear a watchdog timer.  The input seconds is:
+#   zero      to clear;
+#   non-zero  to set
+# and is multiplied by $ENV{PERL_TEST_TIME_OUT_FACTOR} (default 1; minimum 1).
+# Set this variable in your profile for slow boxes, or use it to override the
+# timeout temporarily for debugging.
+#
+# This will figure out a suitable method to implement the timer, but you can
+# force it to use an alarm by setting the optional second parameter to
+# 'alarm', or to use a separate process (if available on this platform) by
+# setting that parameter to 'process'.
+#
+# It is good practice to CLEAR EVERY WATCHDOG timer.  Otherwise the timer
+# applies to the entire rest of the file.  Even if that works now, new tests
+# tend to get added to the end of the file, and people may not notice that
+# they are being timed.  Those tests may all complete before the timer kills
+# them, but then more new tests get added, even further away from the timer
+# setting code, with less likelihood of noticing that.  Those tests may also
+# generally work, but flap on heavily loaded smokers, leading to debugging
+# effort that wouldn't have had to be expended if the timer had been cancelled
+# in the first place
 #
 # NOTE:  If the test file uses 'threads', then call the watchdog() function
 #        _AFTER_ the 'threads' module is loaded.
@@ -1744,11 +1841,11 @@ sub watchdog ($;$)
     if ($timeout == 0) {
         if ($watchdog_thread) {
             $watchdog_thread->kill('KILL');
-            undef $watch_dog_thread;
+            undef $watchdog_thread;
         }
         elsif ($watchdog) {
             kill('KILL', $watchdog);
-            undef $watch_dog;
+            undef $watchdog;
         }
         else {
             alarm(0);
@@ -1927,8 +2024,8 @@ sub watchdog ($;$)
 
         # Don't proceed until the watchdog has set up its signal handler.
         # (Otherwise there is a possibility that we will exit with threads
-        # running.)  The watchdog tells us the handler is set by detaching
-        # itself.  (The 'is_running()' is a fail-safe.)
+        # running.)  The watchdog tells us that the handler is set by
+        # detaching itself.  (The 'is_running()' is a fail-safe.)
         while (     $watchdog_thread->is_running()
                && ! $watchdog_thread->is_detached())
         {

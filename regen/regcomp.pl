@@ -50,6 +50,7 @@
 BEGIN {
     # Get function prototypes
     require './regen/regen_lib.pl';
+    require './regen/HeaderParser.pm';
 }
 
 use strict;
@@ -613,39 +614,44 @@ EOP
     my $val= 0;
     my %reverse;
     my $REG_EXTFLAGS_NAME_SIZE= 0;
+    my $hp= HeaderParser->new();
     foreach my $file ( "op_reg_common.h", "regexp.h" ) {
-        open my $in_fh, "<", $file or die "Can't read '$file': $!";
-        while (<$in_fh>) {
+        $hp->read_file($file);
+        foreach my $line_info (@{$hp->lines}) {
+            next unless $line_info->{type}     eq "content"
+                    and $line_info->{sub_type} eq "#define";
+            my $line= $line_info->{line};
+            $line=~s/\s*\\\n\s*/ /g;
 
             # optional leading '_'.  Return symbol in $1, and strip it from
             # comment of line.  Currently doesn't handle comments running onto
             # next line
-            if (s/^ \# \s* define \s+ ( _? RXf_ \w+ ) \s+ //xi) {
-                chomp;
+            if ($line=~s/^ \# \s* define \s+ ( _? RXf_ \w+ ) \s+ //xi) {
+                chomp($line);
                 my $define= $1;
                 my $orig= $_;
-                s{ /\* .*? \*/ }{ }x;    # Replace comments by a blank
+                $line=~s{ /\* .*? \*/ }{ }x;    # Replace comments by a blank
 
                 # Replace any prior defined symbols by their values
                 foreach my $key ( keys %definitions ) {
-                    s/\b$key\b/$definitions{$key}/g;
+                    $line=~s/\b$key\b/$definitions{$key}/g;
                 }
 
                 # Remove the U suffix from unsigned int literals
-                s/\b([0-9]+)U\b/$1/g;
+                $line=~s/\b([0-9]+)U\b/$1/g;
 
-                my $newval= eval $_;     # Get numeric definition
+                my $newval= eval $line;     # Get numeric definition
 
                 $definitions{$define}= $newval;
 
-                next unless $_ =~ /<</;    # Bit defines use left shift
+                next unless $line =~ /<</;    # Bit defines use left shift
                 if ( $val & $newval ) {
                     my @names= ( $define, $reverse{$newval} );
                     s/PMf_// for @names;
                     if ( $names[0] ne $names[1] ) {
                         die sprintf
                             "ERROR: both $define and $reverse{$newval} use 0x%08X (%s:%s)",
-                            $newval, $orig, $_;
+                            $newval, $orig, $line;
                     }
                     next;
                 }
@@ -719,29 +725,48 @@ EOP
     my $val= 0;
     my %reverse;
     my $REG_INTFLAGS_NAME_SIZE= 0;
+    my $hp= HeaderParser->new();
+    my $last_val = 0;
     foreach my $file ("regcomp.h") {
-        open my $fh, "<", $file or die "Can't read $file: $!";
-        while (<$fh>) {
+        $hp->read_file($file);
+        my @bit_tuples;
+        foreach my $line_info (@{$hp->lines}) {
+            next unless $line_info->{type}     eq "content"
+                    and $line_info->{sub_type} eq "#define";
+            my $line= $line_info->{line};
+            $line=~s/\s*\\\n\s*/ /g;
 
             # optional leading '_'.  Return symbol in $1, and strip it from
             # comment of line
             if (
-                m/^ \# \s* define \s+ ( PREGf_ ( \w+ ) ) \s+ 0x([0-9a-f]+)(?:\s*\/\*(.*)\*\/)?/xi
-                )
-            {
-                chomp;
+                $line =~ m/^ \# \s* define \s+ ( PREGf_ ( \w+ ) ) \s+ 0x([0-9a-f]+)(?:\s*\/\*(.*)\*\/)?/xi
+            ){
+                chomp $line;
                 my $define= $1;
                 my $abbr= $2;
                 my $hex= $3;
                 my $comment= $4;
                 my $val= hex($hex);
+                my $bin= sprintf "%b", $val;
+                if ($bin=~/1.*?1/) { die "Not expecting multiple bits in PREGf" }
+                my $bit= length($bin) - 1 ;
                 $comment= $comment ? " - $comment" : "";
-
-                printf $out qq(\t%-30s/* 0x%08x - %s%s */\n), qq("$abbr",),
-                    $val, $define, $comment;
-                $REG_INTFLAGS_NAME_SIZE++;
+                if ($bit_tuples[$bit]) {
+                    die "Duplicate PREGf bit '$bit': $define $val ($hex)";
+                }
+                $bit_tuples[$bit]= [ $bit, $val, $abbr, $define, $comment ];
             }
         }
+        foreach my $i (0..$#bit_tuples) {
+            my $bit_tuple= $bit_tuples[$i];
+            if (!$bit_tuple) {
+                $bit_tuple= [ $i, 1<<$i, "", "", "*UNUSED*" ];
+            }
+            my ($bit, $val, $abbr, $define, $comment)= @$bit_tuple;
+            printf $out qq(\t%-30s/* (1<<%2d) - 0x%08x - %s%s */\n),
+                qq("$abbr",), $bit, $val, $define, $comment;
+        }
+        $REG_INTFLAGS_NAME_SIZE=0+@bit_tuples;
     }
 
     print $out <<EOP;

@@ -16,6 +16,24 @@ struct xpvcv {
 };
 
 /*
+=for apidoc_section $CV
+
+=for apidoc      Am|CV *|CvREFCNT_inc|CV *cv
+=for apidoc_item   |CV *|CvREFCNT_inc_simple|CV *cv
+=for apidoc_item   |CV *|CvREFCNT_inc_simple_NN|CV *cv
+
+These all increment the reference count of the given SV, which must be a CV.
+They are useful when assigning the result into a typed pointer as they avoid
+the need to cast the result to the appropriate type.
+
+=cut
+*/
+
+#define CvREFCNT_inc(cv)            ((CV *)SvREFCNT_inc((SV *)cv))
+#define CvREFCNT_inc_simple(cv)     ((CV *)SvREFCNT_inc_simple((SV *)cv))
+#define CvREFCNT_inc_simple_NN(cv)  ((CV *)SvREFCNT_inc_simple_NN((SV *)cv))
+
+/*
 =for apidoc Ayh||CV
 
 =for apidoc ADmnU||Nullcv
@@ -108,7 +126,7 @@ See L<perlguts/Autoloading with XSUBs>.
         )
 
 /* CV has the `:method` attribute. This used to be called CVf_METHOD but is
- * renamed to avoid collision with an upcoming feature */
+ * renamed to avoid collision with CVf_IsMETHOD */
 #define CVf_NOWARN_AMBIGUOUS	0x0001
 
 #define CVf_LVALUE	0x0002  /* CV return value can be used as lvalue */
@@ -120,7 +138,7 @@ See L<perlguts/Autoloading with XSUBs>.
 #define CVf_CLONED	0x0040	/* a clone of one of those */
 #define CVf_ANON	0x0080	/* CV is not pointed to by a GV */
 #define CVf_UNIQUE	0x0100	/* sub is only called once (eg PL_main_cv,
-                                 * require, eval). */
+                                   require, eval). */
 #define CVf_NODEBUG	0x0200	/* no DB::sub indirection for this CV
                                    (esp. useful for special XSUBs) */
 #define CVf_CVGV_RC	0x0400	/* CvGV is reference counted */
@@ -135,6 +153,12 @@ See L<perlguts/Autoloading with XSUBs>.
 #define CVf_ANONCONST	0x20000 /* :const - create anonconst op */
 #define CVf_SIGNATURE   0x40000 /* CV uses a signature */
 #define CVf_REFCOUNTED_ANYSV 0x80000 /* CvXSUBANY().any_sv is refcounted */
+#define CVf_IsMETHOD    0x100000 /* CV is a (real) method of a real class. Not
+                                   to be confused with what used to be called
+                                   CVf_METHOD; now CVf_NOWARN_AMBIGUOUS */
+#define CVf_XS_RCSTACK  0x200000 /* the XS function understands a
+                                    reference-counted stack */
+#define CVf_EVAL_COMPILED 0x400000 /* an eval CV is fully compiled */
 
 /* This symbol for optimised communication between toke.c and op.c: */
 #define CVf_BUILTIN_ATTRS	(CVf_NOWARN_AMBIGUOUS|CVf_LVALUE|CVf_ANONCONST)
@@ -256,6 +280,18 @@ Helper macro to turn off the C<CvREFCOUNTED_ANYSV> flag.
 #define CvREFCOUNTED_ANYSV(cv)          (CvFLAGS(cv) & CVf_REFCOUNTED_ANYSV)
 #define CvREFCOUNTED_ANYSV_on(cv)       (CvFLAGS(cv) |= CVf_REFCOUNTED_ANYSV)
 #define CvREFCOUNTED_ANYSV_off(cv)      (CvFLAGS(cv) &= ~CVf_REFCOUNTED_ANYSV)
+
+#define CvIsMETHOD(cv)		(CvFLAGS(cv) & CVf_IsMETHOD)
+#define CvIsMETHOD_on(cv)	(CvFLAGS(cv) |= CVf_IsMETHOD)
+#define CvIsMETHOD_off(cv)	(CvFLAGS(cv) &= ~CVf_IsMETHOD)
+
+#define CvXS_RCSTACK(cv)        (CvFLAGS(cv) & CVf_XS_RCSTACK)
+#define CvXS_RCSTACK_on(cv)     (CvFLAGS(cv) |= CVf_XS_RCSTACK)
+#define CvXS_RCSTACK_off(cv)    (CvFLAGS(cv) &= ~CVf_XS_RCSTACK)
+
+#define CvEVAL_COMPILED(cv)     (CvFLAGS(cv) & CVf_EVAL_COMPILED)
+#define CvEVAL_COMPILED_on(cv)  (CvFLAGS(cv) |= CVf_EVAL_COMPILED)
+#define CvEVAL_COMPILED_off(cv) (CvFLAGS(cv) &= ~CVf_EVAL_COMPILED)
 
 /* Back-compat */
 #ifndef PERL_CORE

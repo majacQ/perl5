@@ -82,6 +82,10 @@
 #  endif
 #endif
 
+#ifndef PTHREAD_INIT_SELF
+#  define PTHREAD_INIT_SELF(var) (var = pthread_self())
+#endif
+
 #ifdef __VMS
   /* Default is 1024 on VAX, 8192 otherwise */
 #  ifdef __ia64
@@ -221,13 +225,16 @@
         RESTORE_ERRNO;                                          \
     } STMT_END
 
-#  define MUTEX_DESTROY(m)                                      \
-    STMT_START {						\
-        int _eC_;						\
-        if ((_eC_ = pthread_mutex_destroy((m)))) {              \
-            Perl_croak_nocontext("panic: MUTEX_DESTROY (%d) [%s:%d]",	\
-                                 _eC_, __FILE__, __LINE__);	\
-        }                                                       \
+#  define MUTEX_DESTROY(m)                                                  \
+    STMT_START {						            \
+        int _eC_;						            \
+        if ((_eC_ = pthread_mutex_destroy((m)))) {                          \
+            dTHX;                                                           \
+            if (PL_phase != PERL_PHASE_DESTRUCT) {                          \
+                Perl_croak_nocontext("panic: MUTEX_DESTROY (%d) [%s:%d]",   \
+                                    _eC_, __FILE__, __LINE__);	            \
+            }                                                               \
+        }                                                                   \
     } STMT_END
 #endif /* MUTEX_INIT */
 
@@ -265,11 +272,15 @@
     } STMT_END
 
 #  define COND_DESTROY(c) \
-    STMT_START {						\
-        int _eC_;						\
-        if ((_eC_ = pthread_cond_destroy((c))))			\
-            Perl_croak_nocontext("panic: COND_DESTROY (%d) [%s:%d]",	\
-                                 _eC_, __FILE__, __LINE__);	\
+    STMT_START {						            \
+        int _eC_;						            \
+        if ((_eC_ = pthread_cond_destroy((c)))) {                           \
+            dTHX;                                                           \
+            if (PL_phase != PERL_PHASE_DESTRUCT) {                          \
+                Perl_croak_nocontext("panic: COND_DESTROY (%d) [%s:%d]",    \
+                                    _eC_, __FILE__, __LINE__);	            \
+            }                                                               \
+        }                                                                   \
     } STMT_END
 #endif /* COND_INIT */
 

@@ -32,7 +32,7 @@
 #define PERL_IN_PP_PACK_C
 #include "perl.h"
 
-/* Types used by pack/unpack */ 
+/* Types used by pack/unpack */
 typedef enum {
   e_no_len,     /* no length  */
   e_number,     /* number, [] */
@@ -48,7 +48,7 @@ typedef struct tempsym {
   U32      flags;    /* /=4, comma=2, pack=1  */
                      /*   and group modifiers */
   SSize_t  length;   /* length/repeat count   */
-  howlen_t howlen;   /* how length is given   */ 
+  howlen_t howlen;   /* how length is given   */
   int      level;    /* () nesting level      */
   STRLEN   strbeg;   /* offset of group start */
   struct tempsym *previous; /* previous group */
@@ -842,8 +842,7 @@ Perl_unpackstring(pTHX_ const char *pat, const char *patend, const char *s, cons
         /* We probably should try to avoid this in case a scalar context call
            wouldn't get to the "U0" */
         STRLEN len = strend - s;
-        s = (char *) bytes_to_utf8((U8 *) s, &len);
-        SAVEFREEPV(s);
+        s = (char *) bytes_to_utf8_temp_pv((U8 *) s, &len);
         strend = s + len;
         flags |= FLAG_DO_UTF8;
     }
@@ -979,16 +978,10 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
         case '@' | TYPE_IS_SHRIEKING:
         case '@':
             s = strbeg + symptr->strbeg;
-            if (utf8  && !(datumtype & TYPE_IS_SHRIEKING))
-            {
-                while (len > 0) {
-                    if (s >= strend)
-                        Perl_croak(aTHX_ "'@' outside of string in unpack");
-                    s += UTF8SKIP(s);
-                    len--;
-                }
-                if (s > strend)
-                    Perl_croak(aTHX_ "'@' outside of string with malformed UTF-8 in unpack");
+            if (utf8  && !(datumtype & TYPE_IS_SHRIEKING)) {
+                s = (char *) utf8_hop_forward((U8 *) s, len, (U8 *) strend);
+                if (s >= strend)
+                    Perl_croak(aTHX_ "'@' outside of string in unpack");
             } else {
                 if (strend-s < len)
                     Perl_croak(aTHX_ "'@' outside of string in unpack");
@@ -1018,15 +1011,9 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
             /* FALLTHROUGH */
         case 'X':
             if (utf8) {
-                while (len > 0) {
-                    if (s <= strbeg)
-                        Perl_croak(aTHX_ "'X' outside of string in unpack");
-                    while (--s, UTF8_IS_CONTINUATION(*s)) {
-                        if (s <= strbeg)
-                            Perl_croak(aTHX_ "'X' outside of string in unpack");
-                    }
-                    len--;
-                }
+                s = (char *) utf8_hop_back((U8 *) s, -len, (U8 *) strbeg);
+                if (s <= strbeg)
+                    Perl_croak(aTHX_ "'X' outside of string in unpack");
             } else {
                 if (len > s - strbeg)
                     Perl_croak(aTHX_ "'X' outside of string in unpack" );
@@ -1849,7 +1836,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
     return SP - PL_stack_base - start_sp_offset;
 }
 
-PP(pp_unpack)
+PP_wrapped(pp_unpack, 2, 0)
 {
     dSP;
     dPOPPOPssrl;
@@ -2032,7 +2019,7 @@ marked_upgrade(pTHX_ SV *sv, tempsym_t *sym_ptr) {
 
     for (;from_ptr < from_end; from_ptr++) {
         while (*m == from_ptr) *m++ = to_ptr;
-        to_ptr = (char *) uvchr_to_utf8((U8 *) to_ptr, *(U8 *) from_ptr);
+        to_ptr = (char *) uv_to_utf8((U8 *) to_ptr, *(U8 *) from_ptr);
     }
     *to_ptr = 0;
 
@@ -2403,7 +2390,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
                 GROWING(0, cat, start, cur, fromlen*(UTF8_EXPAND-1)+len);
                 len -= fromlen;
                 while (fromlen > 0) {
-                    cur = (char *) uvchr_to_utf8((U8 *) cur, * (U8 *) aptr);
+                    cur = (char *) uv_to_utf8((U8 *) cur, * (U8 *) aptr);
                     aptr++;
                     fromlen--;
                 }
@@ -2617,7 +2604,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
                         GROWING(0, cat, start, cur, len+UTF8_MAXLEN);
                         end = start+SvLEN(cat)-UTF8_MAXLEN;
                     }
-                    cur = (char *) uvchr_to_utf8_flags((U8 *) cur, auv, 0);
+                    cur = (char *) uv_to_utf8((U8 *) cur, auv);
                 } else {
                     if (auv >= 0x100) {
                         if (!SvUTF8(cat)) {
@@ -2668,7 +2655,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
                 auv = SvUV_no_inf(fromstr, datumtype);
                 if (utf8) {
                     U8 buffer[UTF8_MAXLEN+1], *endb;
-                    endb = uvchr_to_utf8_flags(buffer, auv, 0);
+                    endb = uv_to_utf8(buffer, auv);
                     if (cur+(endb-buffer)*UTF8_EXPAND >= end) {
                         *cur = '\0';
                         SvCUR_set(cat, cur - start);
@@ -2684,7 +2671,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
                         GROWING(0, cat, start, cur, len+UTF8_MAXLEN);
                         end = start+SvLEN(cat)-UTF8_MAXLEN;
                     }
-                    cur = (char *) uvchr_to_utf8_flags((U8 *) cur, auv, 0);
+                    cur = (char *) uv_to_utf8((U8 *) cur, auv);
                 }
             }
             break;
@@ -3064,13 +3051,19 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
                      * of pack() (and all copies of the result) are
                      * gone.
                      */
-                    if (((SvTEMP(fromstr) && SvREFCNT(fromstr) == 1)
+                    if (((SvTEMP(fromstr) && SvREFCNT(fromstr) <=
+#ifdef PERL_RC_STACK
+                            2
+#else
+                            1
+#endif
+                        )
                          || (SvPADTMP(fromstr) &&
                              !SvREADONLY(fromstr)))) {
                         Perl_ck_warner(aTHX_ packWARN(WARN_PACK),
                                        "Attempt to pack pointer to temporary value");
                     }
-                    if (SvPOK(fromstr) || SvNIOK(fromstr))
+                    if (SvREADONLY(fromstr))
                         aptr = SvPV_nomg_const_nolen(fromstr);
                     else
                         aptr = SvPV_force_flags_nolen(fromstr, 0);
@@ -3137,7 +3130,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 #undef NEXTFROM
 
 
-PP(pp_pack)
+PP_wrapped(pp_pack, 0, 1)
 {
     dSP; dMARK; dORIGMARK; dTARGET;
     SV *cat = TARG;
@@ -3158,10 +3151,10 @@ PP(pp_pack)
         const U8 * error_pos;
 
         if (! is_utf8_string_loc((U8 *) result, result_len, &error_pos)) {
-            _force_out_malformed_utf8_message(error_pos,
+            force_out_malformed_utf8_message_(error_pos,
                                               (U8 *) result + result_len,
                                               0, /* no flags */
-                                              1 /* Die */
+                                              MALFORMED_UTF8_DIE
                                             );
             NOT_REACHED; /* NOTREACHED */
         }

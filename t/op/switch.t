@@ -8,7 +8,6 @@ BEGIN {
 
 use strict;
 use warnings;
-no warnings 'experimental::smartmatch';
 
 plan tests => 197;
 

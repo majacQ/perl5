@@ -1,5 +1,10 @@
 name: "Push Notification"
-on: [push, pull_request]
+on:
+  issues:
+    types: [opened, reopened, closed]
+  pull_request:
+    types: [opened, reopened, closed]
+  push:
 # add create for tracking tags
 
 # IRC colors: https://modern.ircdocs.horse/formatting.html
@@ -16,7 +21,12 @@ jobs:
     env:
       server: ssl.irc.perl.org
       port: 7062
-      channel: "#p5p-commits"
+      channel_p5p: "#p5p"
+      channel_noise: "#p5p-commits"
+      color_green: "\x0303"
+      color_orange: "\x0307"
+      color_pink: "\x0313"
+      color_clear: "\x0F"
 
     steps:
       - name: Dump GitHub context
@@ -84,42 +94,42 @@ jobs:
           echo "SUMUP: $SUMUP"
 
       - name: irc push
-        uses: rectalogic/notify-irc@v1
+        uses: rectalogic/notify-irc@v2
         if: github.event_name == 'push' && github.ref != 'refs/heads/blead'
         with:
           server: ${{ env.server }}
           port: ${{ env.port }}
-          channel: ${{ env.channel }}
+          channel: ${{ env.channel_noise }}
           nickname: Commit
-          message:
-            "\x037${{ github.actor }}\x0F pushed to branch \x033${{ env.ref }}\x0F\n\
-            ${{ env.SUMUP }}\n\
-            ${{ github.event.compare }}"
+          message: |-
+            ${{ env.color_orange }}${{ github.actor }}${{ env.color_clear }} pushed to branch ${{ env.color_green }}${{ env.ref }}${{ env.color_clear }}
+            ${{ env.SUMUP }}
+            ${{ github.event.compare }}
 
       - name: irc push to blead
-        uses: rectalogic/notify-irc@v1
+        uses: rectalogic/notify-irc@v2
         if: github.event_name == 'push' && github.ref == 'refs/heads/blead'
         with:
           server: ${{ env.server }}
           port: ${{ env.port }}
-          channel: ${{ env.channel }}
+          channel: ${{ env.channel_noise }}
           nickname: inBlead
-          message:
-            "\x0313[blead]\x0F \x037${{ github.actor }}\x0F pushed to blead\n\
-            ${{ env.SUMUP }}\n\
-            ${{ github.event.compare }}"
+          message: |-
+            ${{ env.color_pink }}[blead]${{ env.color_clear }} ${{ env.color_orange }}${{ github.actor }}${{ env.color_clear }} pushed to blead
+            ${{ env.SUMUP }}
+            ${{ github.event.compare }}
 
-      - name: Shorten PR fields
-        if: github.event_name == 'pull_request'
+      - name: Shorten issue/PR fields
+        if: github.event_name == 'pull_request' || github.event_name == 'issues'
         id: shorten
         env:
-          TITLE: ${{ github.event.pull_request.title }}
-          BODY:  ${{ github.event.pull_request.body }}
+          TITLE: ${{ github.event.pull_request.title || github.event.issue.title }}
+          BODY:  ${{ github.event.pull_request.body || github.event.issue.body }}
         run: |
           # -------------------------------------
           echo "# script parse.pl"
           cat <<'EOS' > parse.pl
-          use v5.14; use strict; use warnings;
+          use v5.14; use warnings;
           my ( $key, $len ) = @ARGV;
           $key //= ''; $len //= 50;
           my $txt = substr( $ENV{$key} || "Unknown $key", 0, $len );
@@ -135,39 +145,102 @@ jobs:
           # -------------------------------------
           echo 'BODY<<EOS'        >> $GITHUB_ENV
           perl parse.pl BODY 500  >> $GITHUB_ENV
-          echo 'EOS'               >> $GITHUB_ENV
+          echo 'EOS'              >> $GITHUB_ENV
           # -------------------------------------
           echo "# done"
 
       - name: checking BODY and TITLE variable
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event_name == 'issues'
         run: |
           echo "BODY: $BODY"
           echo "TITLE: $TITLE"
 
       - name: irc opened pull request
-        uses: rectalogic/notify-irc@v1
+        uses: rectalogic/notify-irc@v2
         if: github.event_name == 'pull_request' && github.event.action == 'opened'
         with:
           server: ${{ env.server }}
           port: ${{ env.port }}
-          channel: ${{ env.channel }}
+          channel: ${{ env.channel_p5p }}
           nickname: Pull-Request
-          message:
-            "\x037${{ github.actor }}\x0F opened PR #${{ github.event.pull_request.number }}\n\
-            ${{ env.TITLE }}\n\
-            ${{ env.BODY }}\n\
-            ${{ github.event.pull_request.html_url }}"
+          message: |-
+            ${{ env.color_orange }}${{ github.actor }}${{ env.color_clear }} opened PR #${{ github.event.pull_request.number }}: ${{ env.TITLE }} - ${{ github.event.pull_request.html_url }}
+
+      - name: irc reopened pull request
+        uses: rectalogic/notify-irc@v2
+        if: github.event_name == 'pull_request' && github.event.action == 'reopened'
+        with:
+          server: ${{ env.server }}
+          port: ${{ env.port }}
+          channel: ${{ env.channel_p5p }}
+          nickname: Pull-Request
+          message: |-
+            ${{ env.color_orange }}${{ github.actor }}${{ env.color_clear }} reopened PR #${{ github.event.pull_request.number }}: ${{ env.TITLE }} - ${{ github.event.pull_request.html_url }}
+
+      - name: irc merged pull request
+        uses: rectalogic/notify-irc@v2
+        if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+        with:
+          server: ${{ env.server }}
+          port: ${{ env.port }}
+          channel: ${{ env.channel_p5p }}
+          nickname: Pull-Request
+          message: |-
+            ${{ env.color_orange }}${{ github.actor }}${{ env.color_clear }} merged PR #${{ github.event.pull_request.number }}: ${{ env.TITLE }} - ${{ github.event.pull_request.html_url }}
+
+      - name: irc closed pull request
+        uses: rectalogic/notify-irc@v2
+        if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == false
+        with:
+          server: ${{ env.server }}
+          port: ${{ env.port }}
+          channel: ${{ env.channel_p5p }}
+          nickname: Pull-Request
+          message: |-
+            ${{ env.color_orange }}${{ github.actor }}${{ env.color_clear }} closed PR #${{ github.event.pull_request.number }}: ${{ env.TITLE }} - ${{ github.event.pull_request.html_url }}
 
       - name: irc synchronize pull request
-        uses: rectalogic/notify-irc@v1
+        uses: rectalogic/notify-irc@v2
         if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
         with:
           server: ${{ env.server }}
           port: ${{ env.port }}
-          channel: ${{ env.channel }}
+          channel: ${{ env.channel_noise }}
           nickname: Pull-Request
-          message:
-            "\x037${{ github.actor }}\x0F updated PR #${{ github.event.pull_request.number }}\n\
-            ${{ env.TITLE }}\n\
-            ${{ github.event.pull_request.html_url }}"
+          message: |-
+            ${{ env.color_orange }}${{ github.actor }}${{ env.color_clear }} updated PR #${{ github.event.pull_request.number }}
+            ${{ env.TITLE }}
+            ${{ github.event.pull_request.html_url }}
+
+      - name: irc opened issue
+        uses: rectalogic/notify-irc@v2
+        if: github.event_name == 'issues' && github.event.action == 'opened'
+        with:
+          server: ${{ env.server }}
+          port: ${{ env.port }}
+          channel: ${{ env.channel_p5p }}
+          nickname: GH-Issue
+          message: |-
+            ${{ env.color_orange }}${{ github.actor }}${{ env.color_clear }} opened issue #${{ github.event.issue.number }}: ${{ env.TITLE }} - ${{ github.event.issue.html_url }}
+
+      - name: irc reopened issue
+        uses: rectalogic/notify-irc@v2
+        if: github.event_name == 'issues' && github.event.action == 'reopened'
+        with:
+          server: ${{ env.server }}
+          port: ${{ env.port }}
+          channel: ${{ env.channel_p5p }}
+          nickname: GH-Issue
+          message: |-
+            ${{ env.color_orange }}${{ github.actor }}${{ env.color_clear }} reopened issue #${{ github.event.issue.number }}: ${{ env.TITLE }} - ${{ github.event.issue.html_url }}
+
+      - name: irc closed issue
+        uses: rectalogic/notify-irc@v2
+        if: github.event_name == 'issues' && github.event.action == 'closed'
+        with:
+          server: ${{ env.server }}
+          port: ${{ env.port }}
+          channel: ${{ env.channel_p5p }}
+          nickname: GH-Issue
+          message: |-
+            ${{ env.color_orange }}${{ github.actor }}${{ env.color_clear }} closed issue #${{ github.event.issue.number }}: ${{ env.TITLE }} - ${{ github.event.issue.html_url }}

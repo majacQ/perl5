@@ -66,14 +66,29 @@ POD = perl.pod	\
 	perl5321delta.pod	\
 	perl5340delta.pod	\
 	perl5341delta.pod	\
+	perl5342delta.pod	\
+	perl5343delta.pod	\
 	perl5360delta.pod	\
-	perl5370delta.pod	\
-	perl5371delta.pod	\
-	perl5372delta.pod	\
-	perl5373delta.pod	\
-	perl5374delta.pod	\
-	perl5375delta.pod	\
-	perl5376delta.pod	\
+	perl5361delta.pod	\
+	perl5362delta.pod	\
+	perl5363delta.pod	\
+	perl5380delta.pod	\
+	perl5381delta.pod	\
+	perl5382delta.pod	\
+	perl5383delta.pod	\
+	perl5400delta.pod	\
+	perl5401delta.pod	\
+	perl5410delta.pod	\
+	perl54110delta.pod	\
+	perl5411delta.pod	\
+	perl5412delta.pod	\
+	perl5413delta.pod	\
+	perl5414delta.pod	\
+	perl5415delta.pod	\
+	perl5416delta.pod	\
+	perl5417delta.pod	\
+	perl5418delta.pod	\
+	perl5419delta.pod	\
 	perl561delta.pod	\
 	perl56delta.pod	\
 	perl581delta.pod	\
@@ -94,6 +109,8 @@ POD = perl.pod	\
 	perlbot.pod	\
 	perlcall.pod	\
 	perlcheat.pod	\
+	perlclass.pod	\
+	perlclassguts.pod	\
 	perlclib.pod	\
 	perlcommunity.pod	\
 	perldata.pod	\
@@ -238,14 +255,29 @@ MAN = perl.man	\
 	perl5321delta.man	\
 	perl5340delta.man	\
 	perl5341delta.man	\
+	perl5342delta.man	\
+	perl5343delta.man	\
 	perl5360delta.man	\
-	perl5370delta.man	\
-	perl5371delta.man	\
-	perl5372delta.man	\
-	perl5373delta.man	\
-	perl5374delta.man	\
-	perl5375delta.man	\
-	perl5376delta.man	\
+	perl5361delta.man	\
+	perl5362delta.man	\
+	perl5363delta.man	\
+	perl5380delta.man	\
+	perl5381delta.man	\
+	perl5382delta.man	\
+	perl5383delta.man	\
+	perl5400delta.man	\
+	perl5401delta.man	\
+	perl5410delta.man	\
+	perl54110delta.man	\
+	perl5411delta.man	\
+	perl5412delta.man	\
+	perl5413delta.man	\
+	perl5414delta.man	\
+	perl5415delta.man	\
+	perl5416delta.man	\
+	perl5417delta.man	\
+	perl5418delta.man	\
+	perl5419delta.man	\
 	perl561delta.man	\
 	perl56delta.man	\
 	perl581delta.man	\
@@ -266,6 +298,8 @@ MAN = perl.man	\
 	perlbot.man	\
 	perlcall.man	\
 	perlcheat.man	\
+	perlclass.man	\
+	perlclassguts.man	\
 	perlclib.man	\
 	perlcommunity.man	\
 	perldata.man	\
@@ -410,14 +444,29 @@ HTML = perl.html	\
 	perl5321delta.html	\
 	perl5340delta.html	\
 	perl5341delta.html	\
+	perl5342delta.html	\
+	perl5343delta.html	\
 	perl5360delta.html	\
-	perl5370delta.html	\
-	perl5371delta.html	\
-	perl5372delta.html	\
-	perl5373delta.html	\
-	perl5374delta.html	\
-	perl5375delta.html	\
-	perl5376delta.html	\
+	perl5361delta.html	\
+	perl5362delta.html	\
+	perl5363delta.html	\
+	perl5380delta.html	\
+	perl5381delta.html	\
+	perl5382delta.html	\
+	perl5383delta.html	\
+	perl5400delta.html	\
+	perl5401delta.html	\
+	perl5410delta.html	\
+	perl54110delta.html	\
+	perl5411delta.html	\
+	perl5412delta.html	\
+	perl5413delta.html	\
+	perl5414delta.html	\
+	perl5415delta.html	\
+	perl5416delta.html	\
+	perl5417delta.html	\
+	perl5418delta.html	\
+	perl5419delta.html	\
 	perl561delta.html	\
 	perl56delta.html	\
 	perl581delta.html	\
@@ -438,6 +487,8 @@ HTML = perl.html	\
 	perlbot.html	\
 	perlcall.html	\
 	perlcheat.html	\
+	perlclass.html	\
+	perlclassguts.html	\
 	perlclib.html	\
 	perlcommunity.html	\
 	perldata.html	\
@@ -582,14 +633,29 @@ TEX = perl.tex	\
 	perl5321delta.tex	\
 	perl5340delta.tex	\
 	perl5341delta.tex	\
+	perl5342delta.tex	\
+	perl5343delta.tex	\
 	perl5360delta.tex	\
-	perl5370delta.tex	\
-	perl5371delta.tex	\
-	perl5372delta.tex	\
-	perl5373delta.tex	\
-	perl5374delta.tex	\
-	perl5375delta.tex	\
-	perl5376delta.tex	\
+	perl5361delta.tex	\
+	perl5362delta.tex	\
+	perl5363delta.tex	\
+	perl5380delta.tex	\
+	perl5381delta.tex	\
+	perl5382delta.tex	\
+	perl5383delta.tex	\
+	perl5400delta.tex	\
+	perl5401delta.tex	\
+	perl5410delta.tex	\
+	perl54110delta.tex	\
+	perl5411delta.tex	\
+	perl5412delta.tex	\
+	perl5413delta.tex	\
+	perl5414delta.tex	\
+	perl5415delta.tex	\
+	perl5416delta.tex	\
+	perl5417delta.tex	\
+	perl5418delta.tex	\
+	perl5419delta.tex	\
 	perl561delta.tex	\
 	perl56delta.tex	\
 	perl581delta.tex	\
@@ -610,6 +676,8 @@ TEX = perl.tex	\
 	perlbot.tex	\
 	perlcall.tex	\
 	perlcheat.tex	\
+	perlclass.tex	\
+	perlclassguts.tex	\
 	perlclib.tex	\
 	perlcommunity.tex	\
 	perldata.tex	\

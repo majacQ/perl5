@@ -19,6 +19,7 @@ use 5.006;
 use ExtUtils::MakeMaker;
 use File::Spec::Functions qw(devnull);
 use Getopt::Long;
+use Time::Local qw(timelocal_posix);
 
 my ($diffs, $exclude_upstream, $tag_to_compare, $tap);
 unless (GetOptions('diffs' => \$diffs,
@@ -79,6 +80,36 @@ chomp $tag_exists;
 unless ($tag_exists eq $tag_to_compare) {
     die "$0: '$tag_to_compare' is not a known Git tag\n" unless $tap;
     print "1..0 # SKIP: '$tag_to_compare' is not a known Git tag\n";
+    exit 0;
+}
+
+my $commit_epoch = `git log -1 --format="%ct"`;
+chomp($commit_epoch);
+# old git versions dont support taggerdate:unix. so use :iso8601 and then
+# use timelocal_posix() to convert to an epoch.
+my $tag_date = `git for-each-ref --format="%(taggerdate:iso8601)" refs/tags/$tag_to_compare`;
+chomp($tag_date);
+my $tag_epoch= do {
+    my ($Y,$M,$D,$h,$m,$s) = split /[- :]/, $tag_date; # 2023-03-20 22:49:09
+    timelocal_posix($s,$m,$h,$D,$M-1,$Y-1900);
+};
+
+if ($commit_epoch - $tag_epoch > 60 * 24 * 60 * 60) {
+    my $months = sprintf "%.2f", ($commit_epoch - $tag_epoch) / (30 * 24 * 60 * 60);
+    my $message=
+        "Tag '$tag_to_compare' is very old compared to the most recent commit.\n"
+      . "We normally release a new version every month, and this one is $months months\n"
+      . "older than the current commit.  You probably have not synchronized your tags.\n"
+      . "This is common with github clones.  You can try the following:\n"
+      . "\n"
+      . "  git remote add -f upstream git\@github.com:Perl/perl5.git\n"
+      . "\n"
+      . "to fix your checkout.\n";
+    die "$0: $message" unless $tap;
+    $message= "$message";
+    $message=~s/^/# /mg;
+    print STDERR "\n$message";
+    print "1..0 # SKIP: Tag '$tag_to_compare' is $months months old. Update your tags!\n";
     exit 0;
 }
 
@@ -178,6 +209,13 @@ sub pm_file_from_xs {
     die "No idea which .pm file corresponds to '$xs', so aborting";
 }
 
+# .c files that correspond directly to a perl module
+# universal.c is not here, since it powers many different modules,
+# so we can't know which one would need its version bumped
+my %c_mod = (
+    "builtin.c" => "lib/builtin.pm",
+);
+
 # Key is the .pm file from which we check the version.
 # Value is a reference to an array of files to check for differences
 # The trivial case is a pure perl module, where the array holds one element,
@@ -197,6 +235,8 @@ foreach (`git --no-pager diff --name-only $tag_to_compare --diff-filter=ACMRTUXB
         push @{$module_diffs{$_}}, $_;
     } elsif (/\.xs\z/ && !/\bt\b/) {
         push @{$module_diffs{pm_file_from_xs($_)}}, $_;
+    } elsif (my $mod = $c_mod{$_}) {
+        push @{$module_diffs{$mod}}, $_;
     } elsif (!/\bt\b/ && /\.[ch]\z/ && m!^((?:dist|ext|cpan)/[^/]+)/!) {
        push @{ $dist_diffs{$1} }, $_;
     }
@@ -227,6 +267,12 @@ foreach my $pm_file (sort keys %module_diffs) {
     if (!defined $orig_pm_version || $orig_pm_version eq 'undef') { # sigh
         print "ok $count - SKIP Can't parse \$VERSION in $pm_file\n"
           if $tap;
+
+        # Behave like a version bump if the orig version could not be parsed,
+        # but the current file could
+        if (defined $pm_version && $pm_version ne 'undef' && $pm_file =~ m!^((?:dist|ext|cpan)/[^/]+)/!) {
+            $dist_bumped{$1}++;
+        }
     } elsif (!defined $pm_version || $pm_version eq 'undef') {
         my $nok = "not ok $count - in $pm_file version was $orig_pm_version, now unparsable\n";
         print $nok if $tap;

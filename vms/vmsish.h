@@ -48,10 +48,6 @@
 #include <file.h>  /* it's not <sys/file.h>, so don't use I_SYS_FILE */
 #include <unistd.h>
 
-#ifdef NO_PERL_TYPEDEFS /* a2p; we don't want Perl's special routines */
-#  define DONT_MASK_RTL_CALLS
-#endif
-
 #include <namdef.h>
 
 /* Set the maximum filespec size here as it is larger for EFS file
@@ -79,8 +75,6 @@
 #define HAS_GETENV_SV
 #define HAS_GETENV_LEN
 
-
-#ifndef PERL_FOR_X2P
 
 #ifndef DONT_MASK_RTL_CALLS
 #  ifdef getenv
@@ -217,7 +211,6 @@
 #ifndef DONT_MASK_RTL_CALLS
 #  define tmpfile Perl_my_tmpfile
 #endif
-#endif
 
 
 /* BIG_TIME:
@@ -244,15 +237,9 @@
  */
 #define ALTERNATE_SHEBANG "$"
 
-/* Macros to set errno using the VAX thread-safe calls, if present */
-#if (defined(__DECC) || defined(__DECCXX)) && !defined(__ALPHA)
-#  define set_errno(v)      (cma$tis_errno_set_value(v))
-   void cma$tis_errno_set_value(int __value);  /* missing in some errno.h */
-#  define set_vaxc_errno(v) (vaxc$errno = (v))
-#else
-#  define set_errno(v)      (errno = (v))
-#  define set_vaxc_errno(v) (vaxc$errno = (v))
-#endif
+/* Macros to set errno.  */
+#define set_errno(v)      (errno = (v))
+#define set_vaxc_errno(v) (vaxc$errno = (v))
 
 /* Support for 'vmsish' behaviors enabled with C<use vmsish> pragma */
 
@@ -337,7 +324,7 @@ struct interp_intern {
  *	This symbol, if defined, indicates that the ioctl() routine is
  *	available to set I/O characteristics
  */
-#define	HAS_IOCTL		/**/
+#define HAS_IOCTL               /**/
  
 /* HAS_UTIME:
  *	This symbol, if defined, indicates that the routine utime() is
@@ -640,7 +627,6 @@ struct mystat
 #define S_IDOTH (S_IWOTH | S_IXOTH)
 
 
-#ifndef PERL_FOR_X2P
 /* Prototypes for functions unique to vms.c.  Don't include replacements
  * for routines in the mainline source files excluded by #ifndef VMS;
  * their prototypes are already in proto.h.
@@ -790,8 +776,6 @@ long int lroundl(long double __x);
 
 #ifdef __cplusplus
 }
-#endif
-
 #endif
 
 #ifndef VMS_DO_SOCKETS

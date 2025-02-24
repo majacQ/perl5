@@ -29,6 +29,8 @@
  * GSAR 97-03-27
  */
 
+MSVC_DIAG_IGNORE(4324)
+
 struct jmpenv {
     struct jmpenv *	je_prev;
     Sigjmp_buf		je_buf;		/* uninit if je_prev is NULL */
@@ -38,9 +40,11 @@ struct jmpenv {
     SSize_t             je_old_stack_hwm;
 };
 
+MSVC_DIAG_RESTORE
+
 typedef struct jmpenv JMPENV;
 
-#if defined DEBUGGING && !defined DEBUGGING_RE_ONLY
+#if defined PERL_USE_HWM
 #  define JE_OLD_STACK_HWM_zero      PL_start_env.je_old_stack_hwm = 0
 #  define JE_OLD_STACK_HWM_save(je)  \
         (je).je_old_stack_hwm = PL_curstackinfo->si_stack_hwm
@@ -430,6 +434,15 @@ the octets.
 
 #include "mydtrace.h"
 
+/* keep in sync with feature.h (which will complain if this is out of sync)
+ */
+#define COP_FEATURE_SIZE 1
+
+/* make this a struct so we can copy the feature bits with assignment */
+struct cop_feature_t {
+  U32 bits[COP_FEATURE_SIZE];
+};
+
 struct cop {
     BASEOP
     /* On LP64 putting this here takes advantage of the fact that BASEOP isn't
@@ -456,12 +469,11 @@ struct cop {
     /* compile time state of %^H.  See the comment in op.c for how this is
        used to recreate a hash to return from caller.  */
     COPHH *	cop_hints_hash;
-    /* for now just a bitmask stored here.
-       If we get sufficient features this may become a pointer.
+    /*
        How these flags are stored is subject to change without
        notice.  Use the macros to test for features.
     */
-    U32		cop_features;
+    struct cop_feature_t	cop_features;
 };
 
 /*
@@ -484,11 +496,12 @@ doesn't already exist.
 =for apidoc Am|SV *|CopFILESV|const COP * c
 Returns the SV associated with the C<COP> C<c>
 
-=for apidoc Am|void|CopFILE_set|COP * c|const char * pv
-Makes C<pv> the name of the file associated with the C<COP> C<c>
-
-=for apidoc Am|void|CopFILE_setn|COP * c|const char * pv|STRLEN len
-Makes C<pv> the name of the file associated with the C<COP> C<c>
+=for apidoc   Am|void|CopFILE_set|COP * c|const char * pv
+=for apidoc_item|void|CopFILE_setn|COP * c|const char * pv|STRLEN len
+These each make C<pv> the name of the file associated with the C<COP> C<c>.
+In the plain C<CopFILE_set> form, C<pv> is a C language NUL-terminated string.
+In C<CopFILE_setn>, C<len> is the length of C<pv>, which hence may contain
+embedded NUL characters.
 
 =for apidoc Am|void|CopFILE_copy|COP * dst|COP * src
 Efficiently copies the cop file name from one COP to another. Wraps
@@ -529,12 +542,38 @@ string C<p>, creating the package if necessary.
 =for apidoc Am|RCPV *|RCPVx|char *pv
 Returns the RCPV structure (struct rcpv) for a refcounted
 string pv created with C<rcpv_new()>.
+No checks are performed to ensure that C<pv> was actually allocated
+with C<rcpv_new()>, it is the callers responsibility to ensure that
+this is the case.
 
 =for apidoc Am|RCPV *|RCPV_REFCOUNT|char *pv
 Returns the refcount for a pv created with C<rcpv_new()>. 
+No checks are performed to ensure that C<pv> was actually allocated
+with C<rcpv_new()>, it is the callers responsibility to ensure that
+this is the case.
+
+=for apidoc Am|RCPV *|RCPV_REFCNT_inc|char *pv
+Increments the refcount for a C<char *> pointer which was created
+with a call to C<rcpv_new()>. Same as calling rcpv_copy().
+No checks are performed to ensure that C<pv> was actually allocated
+with C<rcpv_new()>, it is the callers responsibility to ensure that
+this is the case.
+
+=for apidoc Am|RCPV *|RCPV_REFCNT_dec|char *pv
+Decrements the refcount for a C<char *> pointer which was created
+with a call to C<rcpv_new()>. Same as calling rcpv_free().
+No checks are performed to ensure that C<pv> was actually allocated
+with C<rcpv_new()>, it is the callers responsibility to ensure that
+this is the case.
 
 =for apidoc Am|RCPV *|RCPV_LEN|char *pv
-Returns the length of a pv created with C<rcpv_new()>. 
+Returns the length of a pv created with C<rcpv_new()>.
+Note that this reflects the length of the string from the callers
+point of view, it does not include the mandatory null which is
+always injected at the end of the string by rcpv_new().
+No checks are performed to ensure that C<pv> was actually allocated
+with C<rcpv_new()>, it is the callers responsibility to ensure that
+this is the case.
 
 =cut
 */
@@ -542,16 +581,21 @@ Returns the length of a pv created with C<rcpv_new()>.
 struct rcpv {
     STRLEN  refcount;  /* UV would mean a 64 refcnt on
                           32 bit builds with -Duse64bitint */
-    STRLEN  len;
+    STRLEN  len;       /* length of string including mandatory
+                          null byte at end */
     char    pv[1];
 };
 typedef struct rcpv RCPV;
 
-#define RCPVf_USE_STRLEN 1
-#define RCPVf_NO_COPY 2
+#define RCPVf_USE_STRLEN    (1 << 0)
+#define RCPVf_NO_COPY       (1 << 1)
+#define RCPVf_ALLOW_EMPTY   (1 << 2)
+
 #define RCPVx(pv_arg)       ((RCPV *)((pv_arg) - STRUCT_OFFSET(struct rcpv, pv)))
 #define RCPV_REFCOUNT(pv)   (RCPVx(pv)->refcount)
-#define RCPV_LEN(pv)        (RCPVx(pv)->len)
+#define RCPV_LEN(pv)        (RCPVx(pv)->len-1) /* len always includes space for a null */
+#define RCPV_REFCNT_inc(pv) rcpv_copy(pv)
+#define RCPV_REFCNT_dec(pv) rcpv_free(pv)
 
 #ifdef USE_ITHREADS
 
@@ -854,12 +898,14 @@ struct block_format {
     } STMT_END
 
 /* junk in @_ spells trouble when cloning CVs and in pp_caller(), so don't
- * leave any (a fast av_clear(ary), basically) */
+ * leave any (a fast av_clear(ary), basically).
+ * New code should probably be using Perl_clear_defarray_simple()
+ * and/or Perl_clear_defarray()
+ */
 #define CLEAR_ARGARRAY(ary) \
     STMT_START {							\
-        AvMAX(ary) += AvARRAY(ary) - AvALLOC(ary);			\
-        AvARRAY(ary) = AvALLOC(ary);					\
         AvFILLp(ary) = -1;						\
+        av_remove_offset(ary);                                          \
     } STMT_END
 
 
@@ -881,7 +927,7 @@ struct block_eval {
 
 /* blk_u16 bit usage for eval contexts: */
 
-#define CxOLD_IN_EVAL(cx)	(((cx)->blk_u16) & 0x3F) /* saved PL in_eval */
+#define CxOLD_IN_EVAL(cx)	(((cx)->blk_u16) & 0x3F) /* saved PL_in_eval */
 #define CxEVAL_TXT_REFCNTED(cx)	(((cx)->blk_u16) & 0x40) /* cur_text rc++ */
 #define CxOLD_OP_TYPE(cx)	(((cx)->blk_u16) >> 7)   /* type of eval op */
 
@@ -899,7 +945,7 @@ struct block_loop {
             IV  ix;   /* index relative to base of array */
         } ary;
         struct { /* CXt_LOOP_LIST, C<for (list)> */
-            I32 basesp; /* first element of list on stack */
+            SSize_t basesp; /* first element of list on stack */
             IV  ix;      /* index relative to basesp */
         } stack;
         struct { /* CXt_LOOP_LAZYIV, C<for (1..9)> */
@@ -908,7 +954,7 @@ struct block_loop {
         } lazyiv;
         struct { /* CXt_LOOP_LAZYSV C<for ('a'..'z')> */
             SV * cur;
-            SV * end; /* maxiumum value (or minimum in reverse) */
+            SV * end; /* maximum value (or minimum in reverse) */
         } lazysv;
     } state_u;
 #ifdef USE_ITHREADS
@@ -958,12 +1004,12 @@ struct block {
     U16		blku_u16;	/* used by block_sub and block_eval (so far) */
     I32		blku_oldsaveix; /* saved PL_savestack_ix */
     /* all the fields above must be aligned with same-sized fields as sbu */
-    I32		blku_oldsp;	/* current sp floor: where nextstate pops to */
-    I32		blku_oldmarksp;	/* mark stack index */
+    SSize_t	blku_oldsp;	/* current sp floor: where nextstate pops to */
     COP *	blku_oldcop;	/* old curcop pointer */
     PMOP *	blku_oldpm;	/* values of pattern match vars */
     SSize_t     blku_old_tmpsfloor;     /* saved PL_tmps_floor */
     I32		blku_oldscopesp;	/* scope stack index */
+    I32		blku_oldmarksp;	/* mark stack index */
 
     union {
         struct block_sub	blku_sub;
@@ -1182,6 +1228,7 @@ struct context {
 #define G_RE_REPARSING  0x800   /* compiling a run-time /(?{..})/ */
 #define G_METHOD_NAMED 0x1000	/* calling named method, eg without :: or ' */
 #define G_RETHROW      0x2000	/* eval_sv(): re-throw any error */
+#define G_USEHINTS     0x4000   /* eval_sv(): use current hints/features */
 
 /* flag bits for PL_in_eval */
 #define EVAL_NULL	0	/* not in an eval */
@@ -1224,7 +1271,16 @@ struct stackinfo {
     I32			si_markoff;	/* offset where markstack begins for us.
                                          * currently used only with DEBUGGING,
                                          * but not #ifdef-ed for bincompat */
-#if defined DEBUGGING && !defined DEBUGGING_RE_ONLY
+
+#ifdef PERL_RC_STACK
+                                        /* index of first entry in the argument
+                                           stack which is not ref-counted. If
+                                           set to 0 (default), all stack
+                                           elements are ref-counted */
+    I32                 si_stack_nonrc_base;
+#endif
+
+#ifdef PERL_USE_HWM
 /* high water mark: for checking if the stack was correctly extended /
  * tested for extension by each pp function */
     SSize_t             si_stack_hwm;
@@ -1245,66 +1301,43 @@ typedef struct stackinfo PERL_SI;
 #define cxstack_max	(PL_curstackinfo->si_cxmax)
 
 #ifdef DEBUGGING
-#  define	SET_MARK_OFFSET \
+#  define SET_MARK_OFFSET \
     PL_curstackinfo->si_markoff = PL_markstack_ptr - PL_markstack
 #else
-#  define	SET_MARK_OFFSET NOOP
+#  define SET_MARK_OFFSET NOOP
 #endif
 
-#if defined DEBUGGING && !defined DEBUGGING_RE_ONLY
+#ifdef PERL_USE_HWM
 #  define PUSHSTACK_INIT_HWM(si) ((si)->si_stack_hwm = 0)
 #else
 #  define PUSHSTACK_INIT_HWM(si) NOOP
 #endif
 
+/* for backcompat; use push_stackinfo() instead */
+
 #define PUSHSTACKi(type) \
-    STMT_START {							\
-        PERL_SI *next = PL_curstackinfo->si_next;			\
-        DEBUG_l({							\
-            int i = 0; PERL_SI *p = PL_curstackinfo;			\
-            while (p) { i++; p = p->si_prev; }				\
-            Perl_deb(aTHX_ "push STACKINFO %d in %s at %s:%d\n",        \
-                         i, SAFE_FUNCTION__, __FILE__, __LINE__);})        \
-        if (!next) {							\
-            next = new_stackinfo(32, 2048/sizeof(PERL_CONTEXT) - 1);	\
-            next->si_prev = PL_curstackinfo;				\
-            PL_curstackinfo->si_next = next;				\
-        }								\
-        next->si_type = type;						\
-        next->si_cxix = -1;						\
-        next->si_cxsubix = -1;						\
-        PUSHSTACK_INIT_HWM(next);                                       \
-        AvFILLp(next->si_stack) = 0;					\
-        SWITCHSTACK(PL_curstack,next->si_stack);			\
-        PL_curstackinfo = next;						\
-        SET_MARK_OFFSET;						\
+    STMT_START {		\
+        PL_stack_sp = sp;       \
+        push_stackinfo(type, 0);\
+        sp = PL_stack_sp ;      \
     } STMT_END
 
 #define PUSHSTACK PUSHSTACKi(PERLSI_UNKNOWN)
 
-/* POPSTACK works with PL_stack_sp, so it may need to be bracketed by
+
+/* for backcompat; use pop_stackinfo() instead.
+ *
+ * POPSTACK works with PL_stack_sp, so it may need to be bracketed by
  * PUTBACK/SPAGAIN to flush/refresh any local SP that may be active */
-#define POPSTACK \
-    STMT_START {							\
-        dSP;								\
-        PERL_SI * const prev = PL_curstackinfo->si_prev;		\
-        DEBUG_l({							\
-            int i = -1; PERL_SI *p = PL_curstackinfo;			\
-            while (p) { i++; p = p->si_prev; }				\
-            Perl_deb(aTHX_ "pop  STACKINFO %d in %s at %s:%d\n",        \
-                         i, SAFE_FUNCTION__, __FILE__, __LINE__);})        \
-        if (!prev) {							\
-            Perl_croak_popstack();					\
-        }								\
-        SWITCHSTACK(PL_curstack,prev->si_stack);			\
-        /* don't free prev here, free them all at the END{} */		\
-        PL_curstackinfo = prev;						\
-    } STMT_END
+
+#define POPSTACK pop_stackinfo()
+
 
 #define POPSTACK_TO(s) \
     STMT_START {							\
         while (PL_curstack != s) {					\
             dounwind(-1);						\
+            rpp_obliterate_stack_to(0);					\
             POPSTACK;							\
         }								\
     } STMT_END

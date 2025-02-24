@@ -30,11 +30,9 @@
 #include "perliol.h" /* For PerlIOUnix_refcnt */
 #endif
 
-#ifndef PERL_MICRO
 #include <signal.h>
 #ifndef SIG_ERR
 # define SIG_ERR ((Sighandler_t) -1)
-#endif
 #endif
 
 #include <math.h>
@@ -123,6 +121,23 @@ S_maybe_protect_ro(pTHX_ struct perl_memory_debug_header *header)
 # endif
 #endif
 
+/* Sanity check: Format strings must not be empty */
+STATIC_ASSERT_DECL(sizeof I32df > 1);
+STATIC_ASSERT_DECL(sizeof U32of > 1);
+STATIC_ASSERT_DECL(sizeof U32uf > 1);
+STATIC_ASSERT_DECL(sizeof U32xf > 1);
+STATIC_ASSERT_DECL(sizeof U32Xf > 1);
+STATIC_ASSERT_DECL(sizeof IVdf > 1);
+STATIC_ASSERT_DECL(sizeof UVuf > 1);
+STATIC_ASSERT_DECL(sizeof UVof > 1);
+STATIC_ASSERT_DECL(sizeof UVxf > 1);
+STATIC_ASSERT_DECL(sizeof UVXf > 1);
+STATIC_ASSERT_DECL(sizeof NVef > 1);
+STATIC_ASSERT_DECL(sizeof NVff > 1);
+STATIC_ASSERT_DECL(sizeof NVgf > 1);
+STATIC_ASSERT_DECL(sizeof Gid_t_f > 1);
+STATIC_ASSERT_DECL(sizeof Uid_t_f > 1);
+
 /*
 =for apidoc_section $memory
 =for apidoc safesysmalloc
@@ -207,7 +222,7 @@ Perl_safesysmalloc(MEM_SIZE size)
             if (PL_nomemok)
                 ptr =  NULL;
             else
-                croak_no_mem();
+                croak_no_mem_ext(STR_WITH_LEN("util:safesysmalloc"));
         }
     }
     return ptr;
@@ -242,6 +257,7 @@ Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
     }
     else {
         dSAVE_ERRNO;
+        PERL_DEB(UV was_where = PTR2UV(where)); /* used in diags below */
 #ifdef USE_MDH
         where = (Malloc_t)((char*)where-PERL_MEMORY_DEBUG_HEADER_SIZE);
         if (size + PERL_MEMORY_DEBUG_HEADER_SIZE < size)
@@ -253,8 +269,8 @@ Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
 
 # ifdef PERL_TRACK_MEMPOOL
             if (header->interpreter != aTHX) {
-                Perl_croak_nocontext("panic: realloc from wrong pool, %p!=%p",
-                                     header->interpreter, aTHX);
+                Perl_croak_nocontext("panic: realloc %p from wrong pool, %p!=%p",
+                                     where, header->interpreter, aTHX);
             }
             assert(header->next->prev == header);
             assert(header->prev->next == header);
@@ -273,7 +289,8 @@ Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
 #endif
 #ifdef DEBUGGING
         if ((SSize_t)size < 0)
-            Perl_croak_nocontext("panic: realloc, size=%" UVuf, (UV)size);
+            Perl_croak_nocontext("panic: realloc %p , size=%" UVuf,
+                                 where, (UV)size);
 #endif
 #ifdef PERL_DEBUG_READONLY_COW
         if ((ptr = mmap(0, size, PROT_READ|PROT_WRITE,
@@ -326,7 +343,7 @@ Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
     /* In particular, must do that fixup above before logging anything via
      *printf(), as it can reallocate memory, which can cause SEGVs.  */
 
-        DEBUG_m(PerlIO_printf(Perl_debug_log, "0x%" UVxf ": (%05ld) rfree\n",PTR2UV(where),(long)PL_an++));
+        DEBUG_m(PerlIO_printf(Perl_debug_log, "0x%" UVxf ": (%05ld) rfree\n",was_where,(long)PL_an++));
         DEBUG_m(PerlIO_printf(Perl_debug_log, "0x%" UVxf ": (%05ld) realloc %ld bytes\n",PTR2UV(ptr),(long)PL_an++,(long)size));
 
         if (ptr == NULL) {
@@ -340,7 +357,7 @@ Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
                 if (PL_nomemok)
                     ptr = NULL;
                 else
-                    croak_no_mem();
+                    croak_no_mem_ext(STR_WITH_LEN("util:safesysrealloc"));
             }
         }
     }
@@ -373,18 +390,19 @@ Perl_safesysfree(Malloc_t where)
 # endif
 # ifdef PERL_TRACK_MEMPOOL
             if (header->interpreter != aTHX) {
-                Perl_croak_nocontext("panic: free from wrong pool, %p!=%p",
-                                     header->interpreter, aTHX);
+                Perl_croak_nocontext("panic: free %p from wrong pool, %p!=%p",
+                                     where, header->interpreter, aTHX);
             }
             if (!header->prev) {
                 Perl_croak_nocontext("panic: duplicate free");
             }
             if (!(header->next))
-                Perl_croak_nocontext("panic: bad free, header->next==NULL");
+                Perl_croak_nocontext("panic: bad free of %p, header->next==NULL",
+                                     where);
             if (header->next->prev != header || header->prev->next != header) {
-                Perl_croak_nocontext("panic: bad free, ->next->prev=%p, "
+                Perl_croak_nocontext("panic: bad free of %p, ->next->prev=%p, "
                                      "header=%p, ->prev->next=%p",
-                                     header->next->prev, header,
+                                     where, header->next->prev, header,
                                      header->prev->next);
             }
             /* Unlink us from the chain.  */
@@ -511,7 +529,7 @@ Perl_safesyscalloc(MEM_SIZE count, MEM_SIZE size)
 #endif
         if (PL_nomemok)
             return NULL;
-        croak_no_mem();
+        croak_no_mem_ext(STR_WITH_LEN("util:safesyscalloc"));
     }
 }
 
@@ -557,7 +575,7 @@ Free_t   Perl_mfree (Malloc_t where)
 /* This is the value stored in *retlen in the two delimcpy routines below when
  * there wasn't enough room in the destination to store everything it was asked
  * to.  The value is deliberately very large so that hopefully if code uses it
- * unquestioninly to access memory, it will likely segfault.  And it is small
+ * unquestioningly to access memory, it will likely segfault.  And it is small
  * enough that if the caller does some arithmetic on it before accessing, it
  * won't overflow into a small legal number. */
 #define DELIMCPY_OUT_OF_BOUNDS_RET  I32_MAX
@@ -1319,85 +1337,6 @@ Perl_cntrl_to_mnemonic(const U8 c)
     return NULL;
 }
 
-/* copy a string to a safe spot */
-
-/*
-=for apidoc_section $string
-=for apidoc savepv
-
-Perl's version of C<strdup()>.  Returns a pointer to a newly allocated
-string which is a duplicate of C<pv>.  The size of the string is
-determined by C<strlen()>, which means it may not contain embedded C<NUL>
-characters and must have a trailing C<NUL>.  To prevent memory leaks, the
-memory allocated for the new string needs to be freed when no longer needed.
-This can be done with the C<L</Safefree>> function, or
-L<C<SAVEFREEPV>|perlguts/SAVEFREEPV(p)>.
-
-On some platforms, Windows for example, all allocated memory owned by a thread
-is deallocated when that thread ends.  So if you need that not to happen, you
-need to use the shared memory functions, such as C<L</savesharedpv>>.
-
-=cut
-*/
-
-char *
-Perl_savepv(pTHX_ const char *pv)
-{
-    PERL_UNUSED_CONTEXT;
-    if (!pv)
-        return NULL;
-    else {
-        char *newaddr;
-        const STRLEN pvlen = strlen(pv)+1;
-        Newx(newaddr, pvlen, char);
-        return (char*)memcpy(newaddr, pv, pvlen);
-    }
-}
-
-/* same thing but with a known length */
-
-/*
-=for apidoc savepvn
-
-Perl's version of what C<strndup()> would be if it existed.  Returns a
-pointer to a newly allocated string which is a duplicate of the first
-C<len> bytes from C<pv>, plus a trailing
-C<NUL> byte.  The memory allocated for
-the new string can be freed with the C<Safefree()> function.
-
-On some platforms, Windows for example, all allocated memory owned by a thread
-is deallocated when that thread ends.  So if you need that not to happen, you
-need to use the shared memory functions, such as C<L</savesharedpvn>>.
-
-=cut
-*/
-
-char *
-Perl_savepvn(pTHX_ const char *pv, Size_t len)
-{
-    char *newaddr;
-    PERL_UNUSED_CONTEXT;
-
-    Newx(newaddr,len+1,char);
-    /* Give a meaning to NULL pointer mainly for the use in sv_magic() */
-    if (pv) {
-        /* might not be null terminated */
-        newaddr[len] = '\0';
-        return (char *) CopyD(pv,newaddr,len,char);
-    }
-    else {
-        return (char *) ZeroD(newaddr,len+1,char);
-    }
-}
-
-/*
-=for apidoc savesharedpv
-
-A version of C<savepv()> which allocates the duplicate string in memory
-which is shared between threads.
-
-=cut
-*/
 char *
 Perl_savesharedpv(pTHX_ const char *pv)
 {
@@ -1412,20 +1351,11 @@ Perl_savesharedpv(pTHX_ const char *pv)
     pvlen = strlen(pv)+1;
     newaddr = (char*)PerlMemShared_malloc(pvlen);
     if (!newaddr) {
-        croak_no_mem();
+        croak_no_mem_ext(STR_WITH_LEN("util:savesharedpv"));
     }
     return (char*)memcpy(newaddr, pv, pvlen);
 }
 
-/*
-=for apidoc savesharedpvn
-
-A version of C<savepvn()> which allocates the duplicate string in memory
-which is shared between threads.  (With the specific difference that a C<NULL>
-pointer is not acceptable)
-
-=cut
-*/
 char *
 Perl_savesharedpvn(pTHX_ const char *const pv, const STRLEN len)
 {
@@ -1435,57 +1365,10 @@ Perl_savesharedpvn(pTHX_ const char *const pv, const STRLEN len)
     /* PERL_ARGS_ASSERT_SAVESHAREDPVN; */
 
     if (!newaddr) {
-        croak_no_mem();
+        croak_no_mem_ext(STR_WITH_LEN("util:savesharedpvn"));
     }
     newaddr[len] = '\0';
     return (char*)memcpy(newaddr, pv, len);
-}
-
-/*
-=for apidoc savesvpv
-
-A version of C<savepv()>/C<savepvn()> which gets the string to duplicate from
-the passed in SV using C<SvPV()>
-
-On some platforms, Windows for example, all allocated memory owned by a thread
-is deallocated when that thread ends.  So if you need that not to happen, you
-need to use the shared memory functions, such as C<L</savesharedsvpv>>.
-
-=cut
-*/
-
-char *
-Perl_savesvpv(pTHX_ SV *sv)
-{
-    STRLEN len;
-    const char * const pv = SvPV_const(sv, len);
-    char *newaddr;
-
-    PERL_ARGS_ASSERT_SAVESVPV;
-
-    ++len;
-    Newx(newaddr,len,char);
-    return (char *) CopyD(pv,newaddr,len,char);
-}
-
-/*
-=for apidoc savesharedsvpv
-
-A version of C<savesharedpv()> which allocates the duplicate string in
-memory which is shared between threads.
-
-=cut
-*/
-
-char *
-Perl_savesharedsvpv(pTHX_ SV *sv)
-{
-    STRLEN len;
-    const char * const pv = SvPV_const(sv, len);
-
-    PERL_ARGS_ASSERT_SAVESHAREDSVPV;
-
-    return savesharedpvn(pv, len);
 }
 
 /* the SV for Perl_form() and mess() is not kept in an arena */
@@ -1532,26 +1415,33 @@ Perl_form_nocontext(const char* pat, ...)
 =for apidoc_section $display
 =for apidoc form
 =for apidoc_item form_nocontext
+=for apidoc_item vform
 
-These take a sprintf-style format pattern and conventional
+These each take a sprintf-style format pattern and conventional
 (non-SV) arguments and return the formatted string.
 
-    (char *) Perl_form(pTHX_ const char* pat, ...)
+    (char *) Perl_form(aTHX_ const char* pat, ...)
 
-can be used any place a string (char *) is required:
+They can be used any place a string (char *) is required:
 
-    char * s = Perl_form("%d.%d",major,minor);
+    char * s = form_nocontext("%d.%d", major, minor);
 
-They use a single (per-thread) private buffer so if you want to format several
-strings you must explicitly copy the earlier strings away (and free the copies
-when you are done).
+They each return a temporary that will be freed "soon", automatically by the
+system, at the same time that SVs operated on by C<L</sv_2mortal>> are freed.
 
-The two forms differ only in that C<form_nocontext> does not take a thread
-context (C<aTHX>) parameter, so is used in situations where the caller doesn't
-already have the thread context.
+Use the result immediately, or copy to a stable place for longer retention.
+This is contrary to the incorrect previous documentation of these that claimed
+that the return was a single per-thread buffer.  That was (and is) actually
+true only when these are called during global destruction.
 
-=for apidoc vform
-Like C<L</form>> but but the arguments are an encapsulated argument list.
+C<form> and C<form_nocontext> differ only in that C<form_nocontext> does
+not take a thread context (C<aTHX>) parameter, so is used in situations where
+the caller doesn't already have the thread context (and can be called without
+the C<Perl_> prefix.
+
+C<vform> is the same as C<form> except the arguments are an encapsulated
+argument list.  It does need a thread context parameter, but that is supplied
+automatically when called without the C<Perl_> prefix.
 
 =cut
 */
@@ -1580,19 +1470,24 @@ Perl_vform(pTHX_ const char *pat, va_list *args)
 /*
 =for apidoc mess
 =for apidoc_item mess_nocontext
+=for apidoc_item vmess
 
-These take a sprintf-style format pattern and argument list, which are used to
-generate a string message.  If the message does not end with a newline, then it
-will be extended with some indication of the current location in the code, as
-described for C<L</mess_sv>>.
+These each take a sprintf-style format pattern and argument list, which are
+used to generate a string message.  If the message does not end with a newline,
+then it will be extended with some indication of the current location in the
+code, as described for C<L</mess_sv>>.
+
+C<mess> and C<mess_nocontext> differ only in that C<mess_nocontext> does
+not take a thread context (C<aTHX>) parameter, so is used in situations where
+the caller doesn't already have the thread context.
+
+C<vmess> is the same as C<mess> except the arguments are an encapsulated
+argument list.  It needs a thread context parameter only when called with the
+C<Perl_> prefix.
 
 Normally, the resulting message is returned in a new mortal SV.
 But during global destruction a single SV may be shared between uses of
 this function.
-
-The two forms differ only in that C<mess_nocontext> does not take a thread
-context (C<aTHX>) parameter, so is used in situations where the caller doesn't
-already have the thread context.
 
 =cut
 */
@@ -1767,23 +1662,6 @@ Perl_mess_sv(pTHX_ SV *basemsg, bool consume)
     return sv;
 }
 
-/*
-=for apidoc vmess
-
-C<pat> and C<args> are a sprintf-style format pattern and encapsulated
-argument list, respectively.  These are used to generate a string message.  If
-the
-message does not end with a newline, then it will be extended with
-some indication of the current location in the code, as described for
-L</mess_sv>.
-
-Normally, the resulting message is returned in a new mortal SV.
-During global destruction a single SV may be shared between uses of
-this function.
-
-=cut
-*/
-
 SV *
 Perl_vmess(pTHX_ const char *pat, va_list *args)
 {
@@ -1834,34 +1712,35 @@ S_with_queued_errors(pTHX_ SV *ex)
     return ex;
 }
 
-STATIC bool
-S_invoke_exception_hook(pTHX_ SV *ex, bool warn)
+bool
+Perl_invoke_exception_hook(pTHX_ SV *ex, bool warn)
 {
     HV *stash;
     GV *gv;
     CV *cv;
-    SV **const hook = warn ? &PL_warnhook : &PL_diehook;
-    /* sv_2cv might call Perl_croak() or Perl_warner() */
-    SV * const oldhook = *hook;
+    SV *const oldhook = warn ? PL_warnhook : PL_diehook;
+    bool *const in_hook = warn ? &PL_in_diehook : &PL_in_warnhook;
 
-    if (!oldhook || oldhook == PERL_WARNHOOK_FATAL)
+    if (!oldhook || oldhook == PERL_WARNHOOK_FATAL || *in_hook)
         return FALSE;
 
     ENTER;
-    SAVESPTR(*hook);
-    *hook = NULL;
+    /* sv_2cv might call Perl_croak() or Perl_warner() */
+    SAVEBOOL(*in_hook);
+    *in_hook = TRUE;
     cv = sv_2cv(oldhook, &stash, &gv, 0);
     LEAVE;
-    if (cv && !CvDEPTH(cv) && (CvROOT(cv) || CvXSUB(cv))) {
+    if (cv && (CvROOT(cv) || CvXSUB(cv))) {
         dSP;
         SV *exarg;
 
         ENTER;
         save_re_context();
-        if (warn) {
-            SAVESPTR(*hook);
-            *hook = NULL;
-        }
+
+        /* call_sv(cv) might call Perl_croak() or Perl_warner() */
+        SAVEBOOL(*in_hook);
+        *in_hook = TRUE;
+
         exarg = newSVsv(ex);
         SvREADONLY_on(exarg);
         SAVEFREESV(exarg);
@@ -2087,18 +1966,33 @@ Perl_croak_no_modify(void)
    This is typically called when malloc returns NULL.
 */
 void
-Perl_croak_no_mem(void)
+Perl_croak_no_mem_ext(const char *context, STRLEN len)
 {
     dTHX;
+
+    PERL_ARGS_ASSERT_CROAK_NO_MEM_EXT;
 
     int fd = PerlIO_fileno(Perl_error_log);
     if (fd < 0)
         SETERRNO(EBADF,RMS_IFI);
     else {
         /* Can't use PerlIO to write as it allocates memory */
-        PERL_UNUSED_RESULT(PerlLIO_write(fd, PL_no_mem, sizeof(PL_no_mem)-1));
+        static const char oomp[] = "Out of memory in perl:";
+        if (
+            PerlLIO_write(fd, oomp, sizeof oomp - 1) >= 0
+            && PerlLIO_write(fd, context, len) >= 0
+            && PerlLIO_write(fd, "\n", 1) >= 0
+        ) {
+            /* nop */
+        }
     }
     my_exit(1);
+}
+
+void
+Perl_croak_no_mem(void)
+{
+    croak_no_mem_ext(STR_WITH_LEN("???"));
 }
 
 /* does not return, used only in POPSTACK */
@@ -2252,6 +2146,27 @@ any of the categories are by default enabled.
 =for apidoc vwarner
 This is like C<L</warner>>, but C<args> are an encapsulated argument list.
 
+=for apidoc fatal_warner
+
+Like L</warner> except that it acts as if fatal warnings are enabled
+for the warning.
+
+If called when there are pending compilation errors this function may
+return.
+
+This is currently used to generate "used only once" fatal warnings
+since the COP where the name being reported is no longer the current
+COP when the warning is generated and may be useful for similar cases.
+
+C<err> must be one of the C<L</packWARN>>, C<packWARN2>, C<packWARN3>,
+C<packWARN4> macros populated with the appropriate number of warning
+categories.
+
+=for apidoc vfatal_warner
+
+This is like C<L</fatal_warner>> but C<args> are an encapsulated
+argument list.
+
 =cut
 */
 
@@ -2312,18 +2227,39 @@ Perl_vwarner(pTHX_ U32  err, const char* pat, va_list* args)
         (PL_warnhook == PERL_WARNHOOK_FATAL || ckDEAD(err)) &&
         !(PL_in_eval & EVAL_KEEPERR)
     ) {
-        SV * const msv = vmess(pat, args);
-
-        if (PL_parser && PL_parser->error_count) {
-            qerror(msv);
-        }
-        else {
-            invoke_exception_hook(msv, FALSE);
-            die_unwind(msv);
-        }
+        vfatal_warner(err, pat, args);
     }
     else {
         Perl_vwarn(aTHX_ pat, args);
+    }
+}
+
+void
+Perl_fatal_warner(pTHX_ U32 err, const char *pat, ...)
+{
+    PERL_ARGS_ASSERT_FATAL_WARNER;
+
+    va_list args;
+    va_start(args, pat);
+    vfatal_warner(err, pat, &args);
+    va_end(args);
+}
+
+void
+Perl_vfatal_warner(pTHX_ U32 err, const char *pat, va_list *args)
+{
+    PERL_ARGS_ASSERT_VFATAL_WARNER;
+
+    PERL_UNUSED_ARG(err);
+
+    SV * const msv = vmess(pat, args);
+
+    if (PL_parser && PL_parser->error_count) {
+        qerror(msv);
+    }
+    else {
+        invoke_exception_hook(msv, FALSE);
+        die_unwind(msv);
     }
 }
 
@@ -2389,7 +2325,9 @@ Perl_new_warnings_bitfield(pTHX_ char *buffer, const char *const bits,
     PERL_UNUSED_CONTEXT;
     PERL_ARGS_ASSERT_NEW_WARNINGS_BITFIELD;
 
-    buffer = rcpv_new(buffer, len_wanted, RCPVf_NO_COPY);
+    /* pass in null as the source string as we will do the
+     * copy ourselves. */
+    buffer = rcpv_new(NULL, len_wanted, RCPVf_NO_COPY);
     Copy(bits, buffer, size, char);
     if (size < WARNsize)
         Zero(buffer + size, WARNsize - size, char);
@@ -2456,30 +2394,36 @@ void
 Perl_my_setenv(pTHX_ const char *nam, const char *val)
 {
 #  if defined(USE_ITHREADS) && !defined(WIN32)
-    /* only parent thread can modify process environment, so no need to use a
-     * mutex */
+    /* only parent thread can modify process environment */
     if (PL_curinterp != aTHX)
         return;
 #  endif
 
 #  if defined(HAS_SETENV) && defined(HAS_UNSETENV)
+        ENV_LOCK;
         if (val == NULL) {
             unsetenv(nam);
         } else {
             setenv(nam, val, 1);
         }
+        ENV_UNLOCK;
 
 #  elif defined(HAS_UNSETENV)
 
         if (val == NULL) {
-            if (environ) /* old glibc can crash with null environ */
+            if (environ) {  /* old glibc can crash with null environ */
+                ENV_LOCK;
                 unsetenv(nam);
+                ENV_UNLOCK;
+            }
         } else {
             const Size_t nlen = strlen(nam);
             const Size_t vlen = strlen(val);
             char * const new_env = S_env_alloc(NULL, nlen, vlen, 2, 1);
             my_setenv_format(new_env, nam, nlen, val, vlen);
+            ENV_LOCK;
             putenv(new_env);
+            ENV_UNLOCK;
         }
 
 #  else /* ! HAS_UNSETENV */
@@ -2493,7 +2437,9 @@ Perl_my_setenv(pTHX_ const char *nam, const char *val)
         /* all that work just for this */
         my_setenv_format(new_env, nam, nlen, val, vlen);
 #    ifndef WIN32
+        ENV_LOCK;
         putenv(new_env);
+        ENV_UNLOCK;
 #    else
         PerlEnv_putenv(new_env);
         safesysfree(new_env);
@@ -2996,7 +2942,6 @@ dup2(int oldfd, int newfd)
 }
 #endif
 
-#ifndef PERL_MICRO
 #ifdef HAS_SIGACTION
 
 /*
@@ -3164,7 +3109,6 @@ Perl_rsignal_restore(pTHX_ int signo, Sigsave_t *save)
 }
 
 #endif /* !HAS_SIGACTION */
-#endif /* !PERL_MICRO */
 
     /* VMS' my_pclose() is in VMS.c */
 
@@ -3371,7 +3315,7 @@ all.
 
 #define PERL_REPEATCPY_LINEAR 4
 void
-Perl_repeatcpy(char *to, const char *from, I32 len, IV count)
+Perl_repeatcpy(char *to, const char *from, SSize_t len, IV count)
 {
     PERL_ARGS_ASSERT_REPEATCPY;
 
@@ -3677,35 +3621,6 @@ Perl_find_script(pTHX_ const char *scriptname, bool dosearch,
 
 /*
 =for apidoc_section $embedding
-=for apidoc get_context
-
-Implements L<perlapi/C<PERL_GET_CONTEXT>>, which you should use instead.
-
-=cut
-*/
-
-void *
-Perl_get_context(void)
-{
-#if defined(USE_ITHREADS)
-#  ifdef OLD_PTHREADS_API
-    pthread_addr_t t;
-    int error = pthread_getspecific(PL_thr_key, &t);
-    if (error)
-        Perl_croak_nocontext("panic: pthread_getspecific, error=%d", error);
-    return (void*)t;
-#  elif defined(I_MACH_CTHREADS)
-    return (void*)cthread_data(cthread_self());
-#  else
-    return (void*)PTHREAD_GETSPECIFIC(PL_thr_key);
-#  endif
-#else
-    return (void*)NULL;
-#endif
-}
-
-/*
-=for apidoc_section $embedding
 =for apidoc set_context
 
 Implements L<perlapi/C<PERL_SET_CONTEXT>>, which you should use instead.
@@ -3725,7 +3640,7 @@ Perl_set_context(void *t)
     cthread_set_data(cthread_self(), t);
 #  else
     /* We set thread-specific value always, as C++ code has to read it with
-     * pthreads, beacuse the declaration syntax for thread local storage for C11
+     * pthreads, because the declaration syntax for thread local storage for C11
      * is incompatible with C++, meaning that we can't expose the thread local
      * variable to C++ code. */
     {
@@ -3735,7 +3650,7 @@ Perl_set_context(void *t)
     }
 #  endif
 
-    PERL_SET_NON_tTHX_CONTEXT(t);
+    PERL_SET_NON_tTHX_CONTEXT((PerlInterpreter *) t);
 
 #else
     PERL_UNUSED_ARG(t);
@@ -3811,16 +3726,6 @@ Perl_getenv_len(pTHX_ const char *env_elem, unsigned long *len)
     return env_trans;
 }
 #endif
-
-
-MGVTBL*
-Perl_get_vtbl(pTHX_ int vtbl_id)
-{
-    PERL_UNUSED_CONTEXT;
-
-    return (vtbl_id < 0 || vtbl_id >= magic_vtable_max)
-        ? NULL : (MGVTBL*)PL_magic_vtables + vtbl_id;
-}
 
 /*
 =for apidoc_section $io
@@ -4003,19 +3908,19 @@ Perl_mini_mktime(struct tm *ptm)
 
     PERL_ARGS_ASSERT_MINI_MKTIME;
 
-#define	DAYS_PER_YEAR	365
-#define	DAYS_PER_QYEAR	(4*DAYS_PER_YEAR+1)
-#define	DAYS_PER_CENT	(25*DAYS_PER_QYEAR-1)
-#define	DAYS_PER_QCENT	(4*DAYS_PER_CENT+1)
-#define	SECS_PER_HOUR	(60*60)
-#define	SECS_PER_DAY	(24*SECS_PER_HOUR)
+#define DAYS_PER_YEAR   365
+#define DAYS_PER_QYEAR  (4*DAYS_PER_YEAR+1)
+#define DAYS_PER_CENT   (25*DAYS_PER_QYEAR-1)
+#define DAYS_PER_QCENT  (4*DAYS_PER_CENT+1)
+#define SECS_PER_HOUR   (60*60)
+#define SECS_PER_DAY    (24*SECS_PER_HOUR)
 /* parentheses deliberately absent on these two, otherwise they don't work */
-#define	MONTH_TO_DAYS	153/5
-#define	DAYS_TO_MONTH	5/153
+#define MONTH_TO_DAYS   153/5
+#define DAYS_TO_MONTH   5/153
 /* offset to bias by March (month 4) 1st between month/mday & year finding */
-#define	YEAR_ADJUST	(4*MONTH_TO_DAYS+1)
+#define YEAR_ADJUST     (4*MONTH_TO_DAYS+1)
 /* as used here, the algorithm leaves Sunday as day 1 unless we adjust it */
-#define	WEEKDAY_BIAS	6	/* (1+6)%7 makes Sunday 0 again */
+#define WEEKDAY_BIAS    6       /* (1+6)%7 makes Sunday 0 again */
 
 /*
  * Year/day algorithm notes:
@@ -4180,141 +4085,6 @@ Perl_mini_mktime(struct tm *ptm)
     ptm->tm_wday = (jday + WEEKDAY_BIAS) % 7;
 }
 
-char *
-Perl_my_strftime(pTHX_ const char *fmt, int sec, int min, int hour, int mday, int mon, int year, int wday, int yday, int isdst)
-{
-#ifdef HAS_STRFTIME
-
-/*
-=for apidoc_section $time
-=for apidoc      my_strftime
-=for apidoc_item my_strftime8
-
-strftime(), but with a different API so that the return value is a pointer
-to the formatted result (which MUST be arranged to be FREED BY THE
-CALLER).  This allows these functions to increase the buffer size as needed,
-so that the caller doesn't have to worry about that.
-
-C<my_strftime8> is the same as plain C<my_strftime>, but has an extra
-parameter, a pointer to a variable declared as L</C<utf8ness_t>>.
-Upon return, its variable will be set to indicate how the resultant string
-should be treated with regards to its UTF-8ness.
-
-Note that yday and wday effectively are ignored by these functions, as
-mini_mktime() overwrites them
-
-Also note that they are always executed in the underlying locale of the program,
-giving localized results.
-
-=cut
- */
-
-  char *buf;
-  int buflen;
-  struct tm mytm;
-  int len;
-
-  PERL_ARGS_ASSERT_MY_STRFTIME;
-
-  init_tm(&mytm);	/* XXX workaround - see init_tm() above */
-  mytm.tm_sec = sec;
-  mytm.tm_min = min;
-  mytm.tm_hour = hour;
-  mytm.tm_mday = mday;
-  mytm.tm_mon = mon;
-  mytm.tm_year = year;
-  mytm.tm_wday = wday;
-  mytm.tm_yday = yday;
-  mytm.tm_isdst = isdst;
-  mini_mktime(&mytm);
-  /* use libc to get the values for tm_gmtoff and tm_zone [perl #18238] */
-#if defined(HAS_MKTIME) && (defined(HAS_TM_TM_GMTOFF) || defined(HAS_TM_TM_ZONE))
-  STMT_START {
-    struct tm mytm2;
-    mytm2 = mytm;
-    MKTIME_LOCK;
-    mktime(&mytm2);
-    MKTIME_UNLOCK;
-#ifdef HAS_TM_TM_GMTOFF
-    mytm.tm_gmtoff = mytm2.tm_gmtoff;
-#endif
-#ifdef HAS_TM_TM_ZONE
-    mytm.tm_zone = mytm2.tm_zone;
-#endif
-  } STMT_END;
-#endif
-  buflen = 64;
-  Newx(buf, buflen, char);
-
-  GCC_DIAG_IGNORE_STMT(-Wformat-nonliteral); /* fmt checked by caller */
-
-  STRFTIME_LOCK;
-  len = strftime(buf, buflen, fmt, &mytm);
-  STRFTIME_UNLOCK;
-
-  GCC_DIAG_RESTORE_STMT;
-
-  /*
-  ** The following is needed to handle the situation where
-  ** tmpbuf overflows.  Basically we want to allocate a buffer
-  ** and try repeatedly, until it's large enough.  The reason why it is so
-  ** complicated ** is that getting a return value of 0 from strftime can
-  ** indicate one of the following:
-  ** 1. buffer overflowed,
-  ** 2. illegal conversion specifier, or
-  ** 3. the format string specifies nothing to be returned (which isn't an
-  **    an error).  This could be because the format is an empty string
-  **    or it specifies %p which yields an empty string in some locales.
-  ** If there is a better way to make it portable, go ahead by
-  ** all means.
-  */
-  if (inRANGE(len, 1, buflen - 1) || (len == 0 && *fmt == '\0'))
-    return buf;
-  else {
-    /* Possibly buf overflowed - try again with a bigger buf */
-    const int fmtlen = strlen(fmt);
-    int bufsize = fmtlen + buflen;
-
-    Renew(buf, bufsize, char);
-    while (buf) {
-
-      GCC_DIAG_IGNORE_STMT(-Wformat-nonliteral); /* fmt checked by caller */
-      STRFTIME_LOCK;
-      buflen = strftime(buf, bufsize, fmt, &mytm);
-      STRFTIME_UNLOCK;
-      GCC_DIAG_RESTORE_STMT;
-
-      if (inRANGE(buflen, 1, bufsize - 1))
-        break;
-      /* heuristic to prevent out-of-memory errors */
-      if (bufsize > 100*fmtlen) {
-
-        /* "%p" can legally return nothing, assume that was the case if we
-         * can't make the buffer large enough to get a non-zero return.  For
-         * any other formats, assume it is an error (probably it is an illegal
-         * conversion specifier.) */
-        if (strEQ(fmt, "%p")) {
-            Renew(buf, 1, char);
-            *buf = '\0';
-        }
-        else {
-            Safefree(buf);
-            buf = NULL;
-        }
-        break;
-      }
-      bufsize *= 2;
-      Renew(buf, bufsize, char);
-    }
-    return buf;
-  }
-#else
-  Perl_croak(aTHX_ "panic: no strftime");
-  return NULL;
-#endif
-}
-
-
 #define SV_CWD_RETURN_UNDEF \
     sv_set_undef(sv); \
     return FALSE
@@ -4344,7 +4114,6 @@ Fill C<sv> with current working directory
 int
 Perl_getcwd_sv(pTHX_ SV *sv)
 {
-#ifndef PERL_MICRO
     SvTAINTED_on(sv);
 
     PERL_ARGS_ASSERT_GETCWD_SV;
@@ -4481,9 +4250,6 @@ Perl_getcwd_sv(pTHX_ SV *sv)
     return TRUE;
 #endif
 
-#else
-    return FALSE;
-#endif
 }
 
 #include "vutil.c"
@@ -4513,7 +4279,7 @@ S_socketpair_udp (int fd[2]) {
 
         addresses[i].sin_family = AF_INET;
         addresses[i].sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        addresses[i].sin_port = 0;	/* kernel choses port.  */
+        addresses[i].sin_port = 0;	/* kernel chooses port.  */
         if (PerlSock_bind(sockets[i], (struct sockaddr *) &addresses[i],
                 sizeof(struct sockaddr_in)) == -1)
             goto tidy_up_and_fail;
@@ -4685,7 +4451,7 @@ Perl_my_socketpair (int family, int type, int protocol, int fd[2]) {
     memset(&listen_addr, 0, sizeof(listen_addr));
     listen_addr.sin_family = AF_INET;
     listen_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    listen_addr.sin_port = 0;	/* kernel choses port.  */
+    listen_addr.sin_port = 0;	/* kernel chooses port.  */
     if (PerlSock_bind(listener, (struct sockaddr *) &listen_addr,
             sizeof(listen_addr)) == -1)
         goto tidy_up_and_fail;
@@ -4881,6 +4647,38 @@ Perl_parse_unicode_opts(pTHX_ const char **popt)
 #  include <starlet.h>
 #endif
 
+/* hash a pointer and return a U32 */
+
+PERL_STATIC_INLINE U32 S_ptr_hash(PTRV u) {
+/* 64 bit input */
+#if PTRSIZE == 8
+    /*
+     * This is one of Thomas Wang's hash functions for 64-bit integers from:
+     * https://gist.github.com/scottchiefbaker/9e21877a0c6041fbf54bd583cd1c52b4
+     */
+    u = (~u) + (u << 18);
+    u = u ^ (u >> 31);
+    u = u * 21;
+    u = u ^ (u >> 11);
+    u = u + (u << 6);
+    u = u ^ (u >> 22);
+/* 32 bit input */
+#else
+    /*
+     * This is one of Bob Jenkins' hash functions for 32-bit integers
+     * from: https://burtleburtle.net/bob/hash/integer.html
+     */
+    u = (u + 0x7ed55d16) + (u << 12);
+    u = (u ^ 0xc761c23c) ^ (u >> 19);
+    u = (u + 0x165667b1) + (u << 5);
+    u = (u + 0xd3a2646c) ^ (u << 9);
+    u = (u + 0xfd7046c5) + (u << 3);
+    u = (u ^ 0xb55a4f09) ^ (u >> 16);
+#endif
+    return (U32)u;
+}
+
+
 U32
 Perl_seed(pTHX)
 {
@@ -4949,7 +4747,8 @@ Perl_seed(pTHX)
     u += SEED_C3 * (U32)PerlProc_getpid();
     u += SEED_C4 * (U32)PTR2UV(PL_stack_sp);
 #ifndef PLAN9           /* XXX Plan9 assembler chokes on this; fix needed  */
-    u += SEED_C5 * (U32)PTR2UV(&when);
+    UV ptruv = PTR2UV(&when);
+    u += SEED_C5 * ptr_hash(ptruv);
 #endif
     return u;
 }
@@ -5444,11 +5243,14 @@ getting C<vsnprintf>.
 
 =cut
 */
+
 int
 Perl_my_snprintf(char *buffer, const Size_t len, const char *format, ...)
 {
     int retval = -1;
     va_list ap;
+    dTHX;
+
     PERL_ARGS_ASSERT_MY_SNPRINTF;
 #ifndef HAS_VSNPRINTF
     PERL_UNUSED_VAR(len);
@@ -5457,9 +5259,12 @@ Perl_my_snprintf(char *buffer, const Size_t len, const char *format, ...)
 #ifdef USE_QUADMATH
     {
         bool quadmath_valid = FALSE;
+
         if (quadmath_format_valid(format)) {
             /* If the format looked promising, use it as quadmath. */
-            retval = quadmath_snprintf(buffer, len, format, va_arg(ap, NV));
+            WITH_LC_NUMERIC_SET_TO_NEEDED(
+                retval = quadmath_snprintf(buffer, len, format, va_arg(ap, NV));
+            );
             if (retval == -1) {
                 Perl_croak_nocontext("panic: quadmath_snprintf failed, format \"%s\"", format);
             }
@@ -5491,12 +5296,20 @@ Perl_my_snprintf(char *buffer, const Size_t len, const char *format, ...)
 
     }
 #endif
-    if (retval == -1)
+    if (retval == -1) {
+
 #ifdef HAS_VSNPRINTF
-        retval = vsnprintf(buffer, len, format, ap);
+        WITH_LC_NUMERIC_SET_TO_NEEDED(
+            retval = vsnprintf(buffer, len, format, ap);
+        );
 #else
-        retval = vsprintf(buffer, format, ap);
+        WITH_LC_NUMERIC_SET_TO_NEEDED(
+            retval = vsprintf(buffer, format, ap);
+        );
 #endif
+
+    }
+
     va_end(ap);
     /* vsprintf() shows failure with < 0 */
     if (retval < 0
@@ -5521,6 +5334,7 @@ C<sv_vcatpvf> instead, or getting C<vsnprintf>.
 
 =cut
 */
+
 int
 Perl_my_vsnprintf(char *buffer, const Size_t len, const char *format, va_list ap)
 {
@@ -5534,35 +5348,49 @@ Perl_my_vsnprintf(char *buffer, const Size_t len, const char *format, va_list ap
     return 0;
 #else
     int retval;
-#ifdef NEED_VA_COPY
+    dTHX;
+
+#  ifdef NEED_VA_COPY
     va_list apc;
 
     PERL_ARGS_ASSERT_MY_VSNPRINTF;
     Perl_va_copy(ap, apc);
-# ifdef HAS_VSNPRINTF
-    retval = vsnprintf(buffer, len, format, apc);
-# else
+#    ifdef HAS_VSNPRINTF
+
+    WITH_LC_NUMERIC_SET_TO_NEEDED(
+        retval = vsnprintf(buffer, len, format, apc);
+    );
+#    else
     PERL_UNUSED_ARG(len);
-    retval = vsprintf(buffer, format, apc);
-# endif
+    WITH_LC_NUMERIC_SET_TO_NEEDED(
+        retval = vsprintf(buffer, format, apc);
+    );
+#    endif
+
     va_end(apc);
-#else
-# ifdef HAS_VSNPRINTF
-    retval = vsnprintf(buffer, len, format, ap);
-# else
+#  else
+#    ifdef HAS_VSNPRINTF
+    WITH_LC_NUMERIC_SET_TO_NEEDED(
+        retval = vsnprintf(buffer, len, format, ap);
+    );
+#    else
     PERL_UNUSED_ARG(len);
-    retval = vsprintf(buffer, format, ap);
-# endif
-#endif /* #ifdef NEED_VA_COPY */
+    WITH_LC_NUMERIC_SET_TO_NEEDED(
+        retval = vsprintf(buffer, format, ap);
+    );
+#    endif
+#  endif /* #ifdef NEED_VA_COPY */
+
     /* vsprintf() shows failure with < 0 */
     if (retval < 0
-#ifdef HAS_VSNPRINTF
+#  ifdef HAS_VSNPRINTF
     /* vsnprintf() shows failure with >= len */
         ||
         (len > 0 && (Size_t)retval >= len)
-#endif
+#  endif
     )
         Perl_croak_nocontext("panic: my_vsnprintf buffer overflow");
+
     return retval;
 #endif
 }
@@ -5570,22 +5398,23 @@ Perl_my_vsnprintf(char *buffer, const Size_t len, const char *format, va_list ap
 void
 Perl_my_clearenv(pTHX)
 {
-#if ! defined(PERL_MICRO)
 #  if defined(PERL_IMPLICIT_SYS) || defined(WIN32)
     PerlEnv_clearenv();
 #  else /* ! (PERL_IMPLICIT_SYS || WIN32) */
 #    if defined(USE_ENVIRON_ARRAY)
 #      if defined(USE_ITHREADS)
-    /* only the parent thread can clobber the process environment, so no need
-     * to use a mutex */
+    /* only the parent thread can clobber the process environment */
     if (PL_curinterp != aTHX)
         return;
 #      endif /* USE_ITHREADS */
 #      if defined(HAS_CLEARENV)
+    ENV_LOCK;
     clearenv();
+    ENV_UNLOCK;
 #      elif defined(HAS_UNSETENV)
     int bsiz = 80; /* Most envvar names will be shorter than this. */
     char *buf = (char*)safesysmalloc(bsiz);
+    ENV_LOCK;
     while (*environ != NULL) {
         char *e = strchr(*environ, '=');
         int l = e ? e - *environ : (int)strlen(*environ);
@@ -5598,6 +5427,7 @@ Perl_my_clearenv(pTHX)
         buf[l] = '\0';
         unsetenv(buf);
     }
+    ENV_UNLOCK;
     safesysfree(buf);
 #      else /* ! HAS_CLEARENV && ! HAS_UNSETENV */
     /* Just null environ and accept the leakage. */
@@ -5605,7 +5435,6 @@ Perl_my_clearenv(pTHX)
 #      endif /* HAS_CLEARENV || HAS_UNSETENV */
 #    endif /* USE_ENVIRON_ARRAY */
 #  endif /* PERL_IMPLICIT_SYS || WIN32 */
-#endif /* PERL_MICRO */
 }
 
 #ifdef MULTIPLICITY
@@ -5708,11 +5537,12 @@ Perl_my_cxt_init(pTHX_ int *indexp, size_t size)
    'file' is the source filename of the caller.
 */
 
-I32
+Stack_off_t
 Perl_xs_handshake(const U32 key, void * v_my_perl, const char * file, ...)
 {
     va_list args;
-    U32 items, ax;
+    Stack_off_t items;
+    Stack_off_t ax;
     void * got;
     void * need;
     const char *stage = "first";
@@ -5774,13 +5604,15 @@ Perl_xs_handshake(const U32 key, void * v_my_perl, const char * file, ...)
         ax = POPMARK;
         {   SV **mark = PL_stack_base + ax++;
             {   dSP;
-                items = (I32)(SP - MARK);
+                items = (Stack_off_t)(SP - MARK);
             }
         }
     } else {
-        items = va_arg(args, U32);
-        ax = va_arg(args, U32);
+        items = va_arg(args, Stack_off_t);
+        ax = va_arg(args, Stack_off_t);
     }
+    assert(ax >= 0);
+    assert(items >= 0);
     {
         U32 apiverlen;
         assert(HS_GETAPIVERLEN(key) <= UCHAR_MAX);
@@ -5795,9 +5627,9 @@ Perl_xs_handshake(const U32 key, void * v_my_perl, const char * file, ...)
         }
     }
     {
-        U32 xsverlen;
-        assert(HS_GETXSVERLEN(key) <= UCHAR_MAX && HS_GETXSVERLEN(key) <= HS_APIVERLEN_MAX);
-        if((xsverlen = HS_GETXSVERLEN(key)))
+        U32 xsverlen = HS_GETXSVERLEN(key);
+        assert(xsverlen <= UCHAR_MAX && xsverlen <= HS_APIVERLEN_MAX);
+        if(xsverlen)
             S_xs_version_bootcheck(aTHX_
                 items, ax, va_arg(args, char*), xsverlen);
     }
@@ -5807,7 +5639,7 @@ Perl_xs_handshake(const U32 key, void * v_my_perl, const char * file, ...)
 
 
 STATIC void
-S_xs_version_bootcheck(pTHX_ U32 items, U32 ax, const char *xs_p,
+S_xs_version_bootcheck(pTHX_ SSize_t items, SSize_t ax, const char *xs_p,
                           STRLEN xs_len)
 {
     SV *sv;
@@ -5853,80 +5685,6 @@ S_xs_version_bootcheck(pTHX_ U32 items, U32 ax, const char *xs_p,
         }
     }
 }
-
-/*
-=for apidoc my_strlcat
-
-The C library C<strlcat> if available, or a Perl implementation of it.
-This operates on C C<NUL>-terminated strings.
-
-C<my_strlcat()> appends string C<src> to the end of C<dst>.  It will append at
-most S<C<size - strlen(dst) - 1>> characters.  It will then C<NUL>-terminate,
-unless C<size> is 0 or the original C<dst> string was longer than C<size> (in
-practice this should not happen as it means that either C<size> is incorrect or
-that C<dst> is not a proper C<NUL>-terminated string).
-
-Note that C<size> is the full size of the destination buffer and
-the result is guaranteed to be C<NUL>-terminated if there is room.  Note that
-room for the C<NUL> should be included in C<size>.
-
-The return value is the total length that C<dst> would have if C<size> is
-sufficiently large.  Thus it is the initial length of C<dst> plus the length of
-C<src>.  If C<size> is smaller than the return, the excess was not appended.
-
-=cut
-
-Description stolen from http://man.openbsd.org/strlcat.3
-*/
-#ifndef HAS_STRLCAT
-Size_t
-Perl_my_strlcat(char *dst, const char *src, Size_t size)
-{
-    Size_t used, length, copy;
-
-    used = strlen(dst);
-    length = strlen(src);
-    if (size > 0 && used < size - 1) {
-        copy = (length >= size - used) ? size - used - 1 : length;
-        memcpy(dst + used, src, copy);
-        dst[used + copy] = '\0';
-    }
-    return used + length;
-}
-#endif
-
-
-/*
-=for apidoc my_strlcpy
-
-The C library C<strlcpy> if available, or a Perl implementation of it.
-This operates on C C<NUL>-terminated strings.
-
-C<my_strlcpy()> copies up to S<C<size - 1>> characters from the string C<src>
-to C<dst>, C<NUL>-terminating the result if C<size> is not 0.
-
-The return value is the total length C<src> would be if the copy completely
-succeeded.  If it is larger than C<size>, the excess was not copied.
-
-=cut
-
-Description stolen from http://man.openbsd.org/strlcpy.3
-*/
-#ifndef HAS_STRLCPY
-Size_t
-Perl_my_strlcpy(char *dst, const char *src, Size_t size)
-{
-    Size_t length, copy;
-
-    length = strlen(src);
-    if (size > 0) {
-        copy = (length >= size) ? size - 1 : length;
-        memcpy(dst, src, copy);
-        dst[copy] = '\0';
-    }
-    return length;
-}
-#endif
 
 PERL_STATIC_INLINE bool
 S_gv_has_usable_name(pTHX_ GV *gv)
@@ -6230,7 +5988,7 @@ typedef struct {
     bfd* abfd;
     /* bfd_syms is the BFD symbol table. */
     asymbol** bfd_syms;
-    /* bfd_text is handle to the the ".text" section of the object file. */
+    /* bfd_text is handle to the ".text" section of the object file. */
     asection* bfd_text;
     /* Since opening the executable and scanning its symbols is quite
      * heavy operation, we remember the filename we used the last time,
@@ -6479,8 +6237,13 @@ static void atos_symbolize(atos_context* ctx,
             return;
         }
     }
-    cnt = snprintf(cmd, sizeof(cmd), ctx->format,
-                   ctx->fname, ctx->object_base_addr, raw_frame);
+
+    dTHX;
+    WITH_LC_NUMERIC_SET_TO_NEEDED(
+        cnt = snprintf(cmd, sizeof(cmd), ctx->format,
+                       ctx->fname, ctx->object_base_addr, raw_frame);
+    );
+
     if (cnt < sizeof(cmd)) {
         /* Undo nostdio.h #defines that disable stdio.
          * This is somewhat naughty, but is used elsewhere

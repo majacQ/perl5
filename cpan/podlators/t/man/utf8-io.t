@@ -2,7 +2,7 @@
 #
 # Test Pod::Man UTF-8 handling, with and without PerlIO.
 #
-# Copyright 2002, 2004, 2006, 2008-2010, 2012, 2014-2015, 2018-2020
+# Copyright 2002, 2004, 2006, 2008-2010, 2012, 2014-2015, 2018-2020, 2022, 2024
 #     Russ Allbery <rra@cpan.org>
 #
 # This program is free software; you may redistribute it and/or modify it
@@ -10,13 +10,12 @@
 #
 # SPDX-License-Identifier: GPL-1.0-or-later OR Artistic-1.0-Perl
 
-use 5.008;
-use strict;
+use 5.012;
 use warnings;
 
 use lib 't/lib';
 
-use Test::More tests => 13;
+use Test::More tests => 17;
 use Test::Podlators qw(test_snippet_with_io);
 
 # Load the module.

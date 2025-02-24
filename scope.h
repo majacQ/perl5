@@ -27,8 +27,8 @@
  * macros */
 #define SS_MAXPUSH 4
 
-#define SSCHECK(need) if (UNLIKELY(PL_savestack_ix + (I32)(need) > PL_savestack_max)) savestack_grow()
 #define SSGROW(need) if (UNLIKELY(PL_savestack_ix + (I32)(need) > PL_savestack_max)) savestack_grow_cnt(need)
+#define SSCHECK(need) SSGROW(need) /* legacy */
 #define SSPUSHINT(i) (PL_savestack[PL_savestack_ix++].any_i32 = (I32)(i))
 #define SSPUSHLONG(i) (PL_savestack[PL_savestack_ix++].any_long = (long)(i))
 #define SSPUSHBOOL(p) (PL_savestack[PL_savestack_ix++].any_bool = (p))
@@ -47,7 +47,7 @@
  * like save_pushptrptr() to half its former size.
  * Of course, doing the size check *after* pushing means we must always
  * ensure there are SS_MAXPUSH free slots on the savestack. This is ensured by
- * savestack_grow() and savestack_grow_cnt always allocating SS_MAXPUSH slots
+ * savestack_grow_cnt always allocating SS_MAXPUSH slots
  * more than asked for, or that it sets PL_savestack_max to
  *
  * These are for internal core use only and are subject to change */
@@ -61,7 +61,7 @@
     ix += (need);                                               \
     PL_savestack_ix = ix;                                       \
     assert(ix <= PL_savestack_max + SS_MAXPUSH);                \
-    if (UNLIKELY(ix > PL_savestack_max)) savestack_grow();      \
+    if (UNLIKELY(ix > PL_savestack_max)) savestack_grow_cnt(ix - PL_savestack_max);      \
     assert(PL_savestack_ix <= PL_savestack_max);
 
 #define SS_ADD_INT(i)   ((ssp++)->any_i32 = (I32)(i))
@@ -177,7 +177,8 @@ scope has the given name. C<name> must be a literal string.
 #define SAVECLEARSV(sv)             save_clearsv((SV**)&(sv))
 #define SAVEGENERICSV(s)            save_generic_svref((SV**)&(s))
 #define SAVEGENERICPV(s)            save_generic_pvref((char**)&(s))
-#define SAVERCPVFREE(s)             save_rcpv_free((char**)&(s))
+#define SAVERCPV(s)                 save_rcpv((char**)&(s))
+#define SAVEFREERCPV(s)             save_freercpv(s)
 #define SAVESHAREDPV(s)             save_shared_pvref((char**)&(s))
 #define SAVESETSVFLAGS(sv,mask,val) save_set_svflags(sv,mask,val)
 #define SAVEFREECOPHH(h)            save_pushptr((void *)(h), SAVEt_FREECOPHH)
@@ -193,6 +194,12 @@ scope has the given name. C<name> must be a literal string.
 
 #define SAVEDESTRUCTOR_X(f,p) \
           save_destructor_x((DESTRUCTORFUNC_t)(f), (void*)(p))
+
+#define MORTALSVFUNC_X(f,sv) \
+          mortal_svfunc_x((SVFUNC_t)(f), sv)
+
+#define MORTALDESTRUCTOR_SV(coderef,args) \
+          mortal_destructor_sv(coderef,args)
 
 #define SAVESTACK_POS() \
     STMT_START {				   \
@@ -231,7 +238,7 @@ scope has the given name. C<name> must be a literal string.
         SAVECOPFILE_x(c);               \
         CopFILE_debug((c),"SAVECOPFILE",0);   \
     } STMT_END
-#  define SAVECOPFILE_FREE_x(c) SAVERCPVFREE((c)->cop_file)
+#  define SAVECOPFILE_FREE_x(c) SAVERCPV((c)->cop_file)
 #  define SAVECOPFILE_FREE(c)           \
     STMT_START {                        \
         SAVECOPFILE_FREE_x(c);          \
@@ -249,13 +256,14 @@ scope has the given name. C<name> must be a literal string.
 /*
 =for apidoc_section $stack
 =for apidoc    Am|SSize_t|SSNEW  |Size_t size
-=for apidoc_item |       |SSNEWa |Size_t_size|Size_t align
-=for apidoc_item |       |SSNEWat|Size_t_size|type|Size_t align
+=for apidoc_item |       |SSNEWa |Size_t size|Size_t align
+=for apidoc_item |       |SSNEWat|Size_t size|type|Size_t align
 =for apidoc_item |       |SSNEWt |Size_t size|type
 
-These temporarily allocates data on the savestack, returning an SSize_t index into
-the savestack, because a pointer would get broken if the savestack is moved on
-reallocation.  Use L</C<SSPTR>> to convert the returned index into a pointer.
+These each temporarily allocate data on the savestack, returning an SSize_t
+index into the savestack, because a pointer would get broken if the savestack
+is moved on reallocation.  Use L</C<SSPTR>> to convert the returned index into
+a pointer.
 
 The forms differ in that plain C<SSNEW> allocates C<size> bytes;
 C<SSNEWt> and C<SSNEWat> allocate C<size> objects, each of which is type
@@ -286,17 +294,20 @@ casts it to a pointer of that C<type>.
 #define SSPTR(off,type)         (assert(sizeof(off) >= sizeof(SSize_t)), (type)  ((char*)PL_savestack + off))
 #define SSPTRt(off,type)        (assert(sizeof(off) >= sizeof(SSize_t)), (type*) ((char*)PL_savestack + off))
 
-#define save_freesv(op)		save_pushptr((void *)(op), SAVEt_FREESV)
-#define save_mortalizesv(op)	save_pushptr((void *)(op), SAVEt_MORTALIZESV)
+#define Perl_save_freesv(mTHX, op)                                          \
+        Perl_save_pushptr(aTHX_ (void *)(op), SAVEt_FREESV)
+#define Perl_save_mortalizesv(mTHX, op)                                     \
+        Perl_save_pushptr(aTHX_ (void *)(op), SAVEt_MORTALIZESV)
 
-# define save_freeop(op)                    \
-STMT_START {                                 \
-      OP * const _o = (OP *)(op);             \
-      assert(!_o->op_savefree);               \
-      _o->op_savefree = 1;                     \
-      save_pushptr((void *)(_o), SAVEt_FREEOP); \
+# define Perl_save_freeop(mTHX, op)                                         \
+STMT_START {                                                                \
+      OP * const _o = (OP *)(op);                                           \
+      assert(!_o->op_savefree);                                             \
+      _o->op_savefree = 1;                                                  \
+      Perl_save_pushptr(aTHX_ (void *)(_o), SAVEt_FREEOP);                  \
     } STMT_END
-#define save_freepv(pv)		save_pushptr((void *)(pv), SAVEt_FREEPV)
+#define Perl_save_freepv(mTHX, pv)                          \
+        Perl_save_pushptr(aTHX_ (void *)(pv), SAVEt_FREEPV)
 
 /*
 =for apidoc_section $callback
@@ -307,7 +318,7 @@ Implements C<SAVEOP>.
 =cut
  */
 
-#define save_op()		save_pushptr((void *)(PL_op), SAVEt_OP)
+#define Perl_save_op(mTHX)  Perl_save_pushptr(aTHX_ (void *)(PL_op), SAVEt_OP)
 
 /*
  * ex: set ts=8 sts=4 sw=4 et:

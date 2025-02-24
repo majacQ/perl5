@@ -81,7 +81,7 @@ __EOD__
         $ccflags .= ' -DPERL_NO_INLINE_FUNCTIONS';
 
         if ($^O eq 'VMS') {
-            $cccmd = "$Config{'cc'} /include=($COREincdir) $tmp.c";
+            $cccmd = "$Config{'cc'} $Config{'ccflags'} /include=($COREincdir) $tmp.c";
         }
 
         if ($args{silent} || !$VERBOSE) {
@@ -867,8 +867,6 @@ EOM
 
 sub doMakefile {
     my @makefileopts = ();
-
-    DEFINE('USE_PPPORT_H') unless $ENV{PERL_CORE};
 
     push (@makefileopts,
         'NAME'  => 'Time::HiRes',

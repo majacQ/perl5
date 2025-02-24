@@ -17,19 +17,11 @@
 # Modules and declarations
 ##############################################################################
 
-package Pod::Text::Overstrike;
+package Pod::Text::Overstrike v6.0.2;
 
-use 5.008;
-use strict;
+use 5.012;
+use parent qw(Pod::Text);
 use warnings;
-
-use vars qw(@ISA $VERSION);
-
-use Pod::Text ();
-
-@ISA = qw(Pod::Text);
-
-$VERSION = '4.14';
 
 ##############################################################################
 # Overrides
@@ -117,7 +109,7 @@ sub wrap {
         # backspace, and a character).  Use [^\n] rather than . to protect
         # against odd settings of $*.
         my $char = '(?:[^\n][\b])?[^\n]';
-        if (s/^((?>$char){0,$width})(?:\Z|\s+)//) {
+        if (s/^((?>$char){0,$width})(?:\Z|[ \t\n]+)//) {
             $output .= $spaces . $1 . "\n";
         } else {
             last;
@@ -176,6 +168,27 @@ Currently, the outermost formatting instruction wins, so for example
 underlined text inside a region of bold text is displayed as simply bold.
 There may be some better approach possible.
 
+=head1 COMPATIBILITY
+
+Pod::Text::Overstrike 1.01 (based on L<Pod::Parser>) was the first version of
+this module included with Perl, in Perl 5.6.1.
+
+The current API based on L<Pod::Simple> was added in Pod::Text::Overstrike
+2.00, included in Perl 5.9.3.
+
+Several problems with wrapping and line length were fixed as recently as
+Pod::Text::Overstrike 6.0.0.
+
+This module inherits its API and most behavior from Pod::Text, so the details
+in L<Pod::Text/COMPATIBILITY> also apply.  Pod::Text and Pod::Text::Overstrike
+have had the same module version since 4.00, included in Perl 5.23.7.  (They
+unfortunately diverge in confusing ways prior to that.)
+
+=head1 CAVEATS
+
+Line wrapping is done only at ASCII spaces and tabs, rather than using a
+correct Unicode-aware line wrapping algorithm.
+
 =head1 AUTHOR
 
 Originally written by Joe Smith <Joe.Smith@inwap.com>, using the framework
@@ -183,9 +196,10 @@ created by Russ Allbery <rra@cpan.org>.  Subsequently updated by Russ Allbery.
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright 2000 by Joe Smith <Joe.Smith@inwap.com>
+Copyright 2000 Joe Smith <Joe.Smith@inwap.com>
 
-Copyright 2001, 2004, 2008, 2014, 2018-2019 by Russ Allbery <rra@cpan.org>
+Copyright 2001, 2004, 2008, 2014, 2018-2019, 2022, 2024 Russ Allbery
+<rra@cpan.org>
 
 This program is free software; you may redistribute it and/or modify it
 under the same terms as Perl itself.

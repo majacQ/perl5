@@ -16,7 +16,6 @@ $bar = 4;
     $blurfl = 5;
     $main'a = $'b;
 }
-
 $ABC'dyick = 6;
 
 $xyz = 2;
@@ -29,7 +28,7 @@ if ('a' lt 'A') {
     print $xyz eq 'bar:main:new:xyz:ABC' ? "ok 1\n" : "not ok 1 '$xyz'\n";
 } else {
     print $xyz eq 'ABC:bar:main:new:xyz' ? "ok 1\n" : "not ok 1 '$xyz'\n";
-}    
+}
 print $ABC eq 'blurfl:dyick' ? "ok 2\n" : "not ok 2 '$ABC'\n";
 print $main'blurfl == 123 ? "ok 3\n" : "not ok 3\n";
 

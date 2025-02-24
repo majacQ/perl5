@@ -240,7 +240,7 @@ csh_glob(pTHX_ AV *entries, const char *pat, STRLEN len, bool is_utf8)
 			else sv_catpvn(word, piece, s-piece);
 		    }
 		    if (!word) break;
-		    if (!patav) patav = (AV *)sv_2mortal((SV *)newAV());
+		    if (!patav) patav = newAV_mortal();
 		    av_push(patav, word);
 		    word = NULL;
 		    piece = NULL;
@@ -451,11 +451,13 @@ BOOT:
     {
 	dMY_CXT;
 	MY_CXT.x_GLOB_ENTRIES = NULL;
-	MY_CXT.x_GLOB_OLD_OPHOOK = PL_opfreehook;
 #ifdef USE_ITHREADS
         MY_CXT.interp = aTHX;
 #endif
-	PL_opfreehook = glob_ophook;
+	if(!MY_CXT.x_GLOB_OLD_OPHOOK) {
+	    MY_CXT.x_GLOB_OLD_OPHOOK = PL_opfreehook;
+	    PL_opfreehook = glob_ophook;
+	}
     }  
 }
 

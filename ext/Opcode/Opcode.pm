@@ -1,4 +1,4 @@
-package Opcode 1.62;
+package Opcode 1.69;
 
 use strict;
 
@@ -322,7 +322,8 @@ invert_opset function.
     slt sgt sle sge seq sne scmp
     isa
 
-    substr vec stringify study pos length index rindex ord chr
+    substr substr_left vec stringify study pos length index
+    rindex ord chr
 
     ucfirst lcfirst uc lc fc quotemeta trans transr chop schop
     chomp schomp
@@ -332,6 +333,7 @@ invert_opset function.
     list lslice splice push pop shift unshift reverse
 
     cond_expr flip flop andassign orassign dorassign and or dor xor
+    helemexistsor
 
     warn die lineseq nextstate scope enter leave
 
@@ -349,6 +351,8 @@ invert_opset function.
 
     leaveeval -- needed for Safe to operate, is safe
 		 without entereval
+
+    methstart initfield
 
 =item :base_mem
 
@@ -374,6 +378,7 @@ used to implement a resource attack (e.g., consume all available CPU time).
 
     grepstart grepwhile
     mapstart mapwhile
+    anystart allstart anywhile
     enteriter iter
     enterloop leaveloop unstack
     last next redo
@@ -564,7 +569,7 @@ This tag holds opcodes related to loading modules and getting information
 about calling environment and args.
 
     require dofile 
-    caller runcv
+    caller runcv classname
 
 =item :still_to_be_decided
 

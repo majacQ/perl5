@@ -383,8 +383,8 @@ C<"LATIN CAPITAL LETTER E WITH ACUTE"> is called a "pre-composed"
 character, and its equivalence with the "E" and the "COMBINING ACCENT"
 sequence is called canonical equivalence.  All pre-composed characters
 are said to have a decomposition (into the equivalent sequence), and the
-decomposition type is also called canonical.  A string may be comprised
-as much as possible of precomposed characters, or it may be comprised of
+decomposition type is also called canonical.  A string may consist
+as much as possible of precomposed characters, or it may consist of
 entirely decomposed characters.  Unicode calls these respectively,
 "Normalization Form Composed" (NFC) and "Normalization Form Decomposed".
 The C<L<Unicode::Normalize>> module contains functions that convert
@@ -636,7 +636,7 @@ scripts, Katakana and Hiragana, but nowhere else.  The C<Script>
 property places all characters that are used in multiple scripts in the
 C<Common> script, while the C<Script_Extensions> property places those
 that are used in only a few scripts into each of those scripts; while
-still using C<Common> for those used in many scripts.  Thus both these
+still using C<Common> for those used in many scripts.  Thus both of these
 match:
 
  "0" =~ /\p{sc=Common}/     # Matches

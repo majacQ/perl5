@@ -5,11 +5,10 @@ use warnings;
 
 use Config;
 use Exporter;
-use vars qw($VERSION @ISA @EXPORT_OK %EXPORT_TAGS);
-$VERSION     = "0.34";
-@ISA         = qw( Exporter );
-@EXPORT_OK   = qw( plv2hash summary myconfig signature );
-%EXPORT_TAGS = (
+our $VERSION     = "0.38";
+our @ISA         = qw( Exporter );
+our @EXPORT_OK   = qw( plv2hash summary myconfig signature );
+our %EXPORT_TAGS = (
     'all' => [ @EXPORT_OK  ],
     'sig' => [ "signature" ],
     );
@@ -27,6 +26,8 @@ $VERSION     = "0.34";
 my %BTD = map {( $_ => 0 )} qw(
 
     DEBUGGING
+    HAS_LONG_DOUBLE
+    HAS_STRTOLD
     NO_HASH_SEED
     NO_MATHOMS
     NO_PERL_INTERNAL_RAND_SEED
@@ -59,6 +60,7 @@ my %BTD = map {( $_ => 0 )} qw(
     PERL_PERTURB_KEYS_DISABLED
     PERL_PERTURB_KEYS_RANDOM
     PERL_PRESERVE_IVUV
+    PERL_RC_STACK
     PERL_RELOCATABLE_INCPUSH
     PERL_USE_DEVEL
     PERL_USE_SAFE_PUTENV
@@ -269,7 +271,10 @@ sub plv2hash {
 	$config{$k} = $v;
 	}
 
-    if (my %kv = ($pv =~ m{\b
+    my %kv;
+    if ($pv =~ m{\S,? (?:osvers|archname)=}) { # attr is not the first on the line
+	# up to and including 5.24, a line could have multiple kv pairs
+	%kv = ($pv =~ m{\b
 	    (\w+)		# key
 	    \s*=		# assign
 	    ( '\s*[^']*?\s*'	# quoted value
@@ -277,17 +282,27 @@ sub plv2hash {
 	    | \S+		# unquoted value
 	    | \s*\n		# empty
 	    )
-	    (?:,?\s+|\s*\n)?	# separator (5.8.x reports did not have a ','
-	    }gx)) {		# between every kv pair
+	    (?:,?\s+|\s*\n)?	# optional separator (5.8.x reports did
+	    }gx);		# not have a ',' between every kv pair)
+	}
+    else {
+	# as of 5.25, each kv pair is listed on its own line
+	%kv = ($pv =~ m{^
+	    \s+
+	    (\w+)		# key
+	    \s*=\s*		# assign
+	    (.*?)		# value
+	    \s*,?\s*$
+	    }gmx);
+	}
 
-	while (my ($k, $v) = each %kv) {
-	    $k =~ s{\s+$}	{};
-	    $v =~ s{\s*\n\z}	{};
-	    $v =~ s{,$}		{};
-	    $v =~ m{^'(.*)'$} and $v = $1;
-	    $v =~ s{\s+$}	{};
-	    $config{$k} = $v;
-	    }
+    while (my ($k, $v) = each %kv) {
+	$k =~ s{\s+$}		{};
+	$v =~ s{\s*\n\z}	{};
+	$v =~ s{,$}		{};
+	$v =~ m{^'(.*)'$} and $v = $1;
+	$v =~ s{\s+$}	{};
+	$config{$k} = $v;
 	}
 
     my $build = { %empty_build };
@@ -560,7 +575,7 @@ H.Merijn Brand <h.m.brand@xs4all.nl>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2009-2022 H.Merijn Brand
+Copyright (C) 2009-2025 H.Merijn Brand
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

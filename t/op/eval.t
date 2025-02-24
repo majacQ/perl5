@@ -6,7 +6,7 @@ BEGIN {
     set_up_inc('../lib');
 }
 
-plan(tests => 162);
+plan(tests => 172);
 
 eval 'pass();';
 
@@ -377,6 +377,70 @@ our $x = 1;
     is(DB::db4(),  3);
     is(DB::db5(),  3);
     is(db6(),      4);
+
+    # [GH #19370]
+    local $TODO = "outside not available when needed";
+    my sub d6 {
+        DB::db3();
+    }
+    is(d6(), 3);
+    my $y;
+    my $d7 = sub {
+        $y;
+        DB::db3();
+    };
+    is($d7->(), 3);
+}
+
+{
+    # github 22547
+    # these produce the expected results with 5.40.0
+    local $TODO = "eval from DB outside chain is broken";
+    fresh_perl_is(<<'CODE', "1.1\n1.2\n2\n", {}, "lexical lookup from DB::");
+use builtin qw(ceil);
+use strict;
+
+package DB {
+  sub do_eval { eval shift or $@; }
+}
+
+{
+  my $xx = 1.2;
+  my sub f {
+    print DB::do_eval(shift), "\n";
+  }
+  f('1.1');
+  f('$xx');
+  f('ceil(1.1)');
+}
+CODE
+
+    # subtley different, one of the suggested solutions was to make
+    # CvOUTSIDE a weak reference, but in the case below $f exits before
+    # the eval is called, so the outside link from the closure it returns
+    # would break for a weak reference.
+    fresh_perl_is(<<'CODE', "1.1\n1.2\n2\n", {}, "lexical lookup from DB::");
+use strict;
+
+package DB {
+  sub do_eval { eval shift or $@; }
+}
+
+sub g {
+  my $yy;
+  my $f = sub {
+    $yy; # closure
+    use builtin qw(ceil);
+    our $xx = 1.2;
+    my $yy = shift;
+    return sub { print DB::do_eval($yy) || $@, "\n" };
+  };
+  return $f->(shift);
+}
+g('1.1')->();
+g('$xx')->();
+g('ceil(1.1)')->();
+CODE
 }
 
 # [perl #19022] used to end up with shared hash warnings
@@ -625,6 +689,7 @@ for("{;", "{") {
     eval $_; is $@ =~ s/eval \d+/eval 1/rag, <<'EOE',
 Missing right curly or square bracket at (eval 1) line 1, at end of line
 syntax error at (eval 1) line 1, at EOF
+Execution of (eval 1) aborted due to compilation errors.
 EOE
 	qq'Right line number for eval "$_"';
 }
@@ -737,4 +802,38 @@ pass("eval in freed package does not crash");
         fresh_perl_is($sort_line . ' print "ok";', "A-ok", {},
             "No segfault inside sort: $sort_line");
     }
+}
+{
+    # test that all of these cases behave the same
+    for my $fragment ('bar', '1+;', '1+;' x 11, 's/', ']') {
+        fresh_perl_is(
+            # code:
+            'use strict; use warnings; $SIG{__DIE__} = sub { die "X" }; ' .
+            'eval { eval "'.$fragment.'"; print "after eval $@"; };' .
+            'if ($@) { print "outer eval $@" }',
+            # wanted:
+            "after eval X at - line 1.",
+            # opts:
+            {},
+            # name:
+            "test that nested eval '$fragment' calls sig die as expected"
+        );
+    }
+}
+
+# The first inner eval finds the $v and adds a fake entry to the
+# outer eval's pad. The second inner eval finds the fake $c entry,
+# but was incorrectly concluding that the outer eval was in fact a
+# non-live anon prototype and issuing the warning
+# 'Variable "$v" is not available'/
+
+{
+    use warnings;
+    my $w = 0;
+    local $SIG{__WARN__} = sub { $w++ };
+    sub {
+        my $v;
+        eval q( eval '$v'; eval '$v';);
+    }->();
+    is($w, 0, "nested eval and closure");
 }

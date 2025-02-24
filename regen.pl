@@ -22,12 +22,15 @@ foreach my $pl (map {chomp; "regen/$_"} <DATA>) {
 }
 
 __END__
+embed.pl
+feature.pl
 mg_vtable.pl
+miniperlmain.pl
 opcode.pl
 overload.pl
 reentr.pl
 regcomp.pl
-warnings.pl
-embed.pl
-feature.pl
 scope_types.pl
+tidy_embed.pl
+warnings.pl
+locale.pl

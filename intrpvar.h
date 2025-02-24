@@ -49,16 +49,19 @@ PERLVARI(I, tmps_ix,	SSize_t,	-1)
 PERLVARI(I, tmps_floor,	SSize_t,	-1)
 PERLVAR(I, tmps_max,	SSize_t)        /* first unalloced slot in tmps stack */
 
-PERLVAR(I, markstack,	I32 *)		/* stack_sp locations we're
+PERLVAR(I, markstack,	Stack_off_t *)	/* stack_sp locations we're
                                            remembering */
-PERLVAR(I, markstack_ptr, I32 *)
-PERLVAR(I, markstack_max, I32 *)
+PERLVAR(I, markstack_ptr, Stack_off_t *)
+PERLVAR(I, markstack_max, Stack_off_t *)
 
 PERLVARI(I, sub_generation, U32, 1)	/* incr to invalidate method cache */
 
 #ifdef PERL_HASH_RANDOMIZE_KEYS
 #ifdef USE_PERL_PERTURB_KEYS
-PERLVARI(I, hash_rand_bits_enabled, U8, 1) /* used to randomize hash stuff 0 == no-random, 1 == random, 2 == determinsitic */
+PERLVARI(I, hash_rand_bits_enabled, U8, 1) /* used to randomize hash stuff
+                                              0. no-random
+                                              1. random
+                                              2. deterministic */
 #endif
 PERLVARI(I, hash_rand_bits, UV, 0)      /* used to randomize hash stuff */
 #endif
@@ -127,7 +130,8 @@ thread's copy.
 =cut
 */
 
-PERLVAR(I, localizing,	U8)		/* are we processing a local() list? */
+PERLVAR(I, localizing,  U8)             /* are we processing a local() list?
+                                           0 = no, 1 = localizing, 2 = delocalizing */
 PERLVAR(I, in_eval,	U8)		/* trap "fatal" errors? */
 PERLVAR(I, defgv,	GV *)           /* the *_ glob */
 
@@ -391,8 +395,8 @@ PERLVARI(I, locale_mutex_depth, int, 0)     /* Emulate general semaphore */
 
 #ifdef USE_LOCALE_CTYPE
 PERLVAR(I, warn_locale, SV *)
-PERLVAR(I, in_utf8_CTYPE_locale, bool)
-PERLVAR(I, in_utf8_turkic_locale, bool)
+PERLVARI(I, in_utf8_CTYPE_locale, bool, false)
+PERLVARI(I, in_utf8_turkic_locale, bool, false)
 #endif
 
 PERLVARA(I, colors,6,	char *)		/* values from PERL_RE_COLORS env var */
@@ -492,6 +496,9 @@ PERLVAR(I, origfilename, char *)
 PERLVARI(I, xsubfilename, const char *, NULL)
 PERLVAR(I, diehook,	SV *)
 PERLVAR(I, warnhook,	SV *)
+/* keyword hooks*/
+PERLVARI(I, hook__require__before, SV *,NULL)
+PERLVARI(I, hook__require__after, SV *,NULL)
 
 /* switches */
 PERLVAR(I, patchlevel,	SV *)
@@ -739,23 +746,25 @@ PERLVAR(I, constpadix,	PADOFFSET)	/* lowest unused for constants */
 PERLVAR(I, padix_floor,	PADOFFSET)	/* how low may inner block reset padix */
 
 #if defined(USE_POSIX_2008_LOCALE) && defined(MULTIPLICITY)
-PERLVARI(I, cur_locale_obj, locale_t, NULL)
+PERLVARI(I, cur_locale_obj, locale_t, LC_GLOBAL_LOCALE)
 #endif
 #ifdef USE_PL_CURLOCALES
 
-/* This is the most number of categories we've encountered so far on any
- * platform, doesn't include LC_ALL */
-PERLVARA(I, curlocales, 11, const char *)
+/* Some configurations do not allow perl to query libc to find out what the
+ * locale for a given category is.  On such platforms this array contains that
+ * information, indexed by the perl-defined category index.
+ * Note that this array keeps the actual locale for each category.  LC_NUMERIC
+ * is almost always toggled into the C locale, and the locale it nominally is
+ * is stored as PL_numeric_name. */
+PERLVARA(I, curlocales, LOCALE_CATEGORIES_COUNT_ + 1, const char *)
 
 #endif
 #ifdef USE_PL_CUR_LC_ALL
-
 PERLVARI(I, cur_LC_ALL, const char *, NULL)
-
 #endif
 #ifdef USE_LOCALE_COLLATE
 
-/* The emory needed to store the collxfrm transformation of a string with
+/* The memory needed to store the collxfrm transformation of a string with
  * length 'x' is predicted by the linear equation mx+b; m=mult, b=base */
 PERLVARI(I, collxfrm_mult,Size_t, 0)	/* Expansion factor in *xfrm();
                                            0 => unknown or bad, depending on
@@ -765,7 +774,7 @@ PERLVAR(I, collxfrm_base, Size_t)	/* Basic overhead in *xfrm();
                                            mult == 0, base != 0 => ill-formed;
                                          */
 PERLVAR(I, collation_name, char *)	/* Name of current collation */
-PERLVARI(I, collation_ix, U32,	0)	/* Collation generation index */
+PERLVARI(I, collation_ix, PERL_UINTMAX_T, 0)	/* Collation generation index */
 PERLVARI(I, strxfrm_NUL_replacement, U8, 0)  /* Code point to replace NULs */
 PERLVARI(I, strxfrm_is_behaved, bool, TRUE)
                             /* Assume until proven otherwise that it works */
@@ -775,12 +784,15 @@ PERLVARI(I, collation_standard, bool, TRUE)
 PERLVAR(I, in_utf8_COLLATE_locale, bool)
 #endif /* USE_LOCALE_COLLATE */
 
-PERLVARI(I, langinfo_buf, const char *, NULL)
-PERLVARI(I, langinfo_bufsize, Size_t, 0)
-PERLVARI(I, setlocale_buf, const char *, NULL)
+PERLVARI(I, langinfo_sv, SV *, NULL)         /* For Perl_langinfo8? */
+PERLVARI(I, scratch_langinfo, SV *, NULL)     /* For internal use */
+PERLVARI(I, setlocale_buf, char *, NULL)
 PERLVARI(I, setlocale_bufsize, Size_t, 0)
-PERLVARI(I, stdize_locale_buf, const char *, NULL)
-PERLVARI(I, stdize_locale_bufsize, Size_t, 0)
+
+#if   defined(USE_LOCALE_THREADS) && ! defined(USE_THREAD_SAFE_LOCALE)
+PERLVARI(I, less_dicey_locale_buf, char *, NULL)
+PERLVARI(I, less_dicey_locale_bufsize, Size_t, 0)
+#endif
 
 #ifdef PERL_SAWAMPERSAND
 PERLVAR(I, sawampersand, U8)		/* must save all match strings */
@@ -843,11 +855,6 @@ PERLVAR(I, numeric_name, char *)     /* Name of current numeric locale */
 PERLVAR(I, numeric_radix_sv, SV *)	/* The radix separator */
 PERLVAR(I, underlying_radix_sv, SV *)	/* The radix in the program's current underlying locale */
 
-#if defined(USE_LOCALE_NUMERIC) && defined(USE_POSIX_2008_LOCALE)
-
-PERLVARI(I, underlying_numeric_obj, locale_t, NULL)
-
-#endif
 #ifdef USE_POSIX_2008_LOCALE
 PERLVARI(I, scratch_locale_obj, locale_t, 0)
 #endif
@@ -895,6 +902,7 @@ PERLVAR(I, regex_padav,   AV *)		/* All regex objects, indexed via the
 PERLVAR(I, stashpad,    HV **)		/* for CopSTASH */
 PERLVARI(I, stashpadmax, PADOFFSET, 64)
 PERLVARI(I, stashpadix, PADOFFSET, 0)
+PERLVARI(I, env_mutex_depth, int, 0)     /* Emulate general semaphore */
 #endif
 
 #ifdef USE_REENTRANT_API
@@ -920,7 +928,12 @@ PERLVARI(I, clocktick,	long,	0)	/* this many times() ticks in a second */
 PERLVARI(I, sharehook,	share_proc_t, Perl_sv_nosharing)
 PERLVARI(I, lockhook,	share_proc_t, Perl_sv_nosharing)
 
+#if defined(__HP_cc) || defined(__HP_aCC)
+#pragma diag_suppress 3215
+#endif
 GCC_DIAG_IGNORE(-Wdeprecated-declarations)
+MSVC_DIAG_IGNORE(4996)
+
 #ifdef NO_MATHOMS
 #  define PERL_UNLOCK_HOOK Perl_sv_nosharing
 #else
@@ -929,16 +942,18 @@ GCC_DIAG_IGNORE(-Wdeprecated-declarations)
 #endif
 PERLVARI(I, unlockhook,	share_proc_t, PERL_UNLOCK_HOOK)
 
+MSVC_DIAG_RESTORE
 GCC_DIAG_RESTORE
+#if defined(__HP_cc) || defined(__HP_aCC)
+#pragma diag_default 3215
+#endif
 
 PERLVARI(I, threadhook,	thrhook_proc_t,	Perl_nothreadhook)
 
 /* Can shared object be destroyed */
 PERLVARI(I, destroyhook, destroyable_proc_t, Perl_sv_destroyable)
 
-#ifndef PERL_MICRO
 PERLVARI(I, signalhook,	despatch_signals_proc_t, Perl_despatch_signals)
-#endif
 
 PERLVARI(I, isarev, HV *, NULL)		/* Reverse map of @ISA dependencies */
 
@@ -952,8 +967,6 @@ PERLVAR(I, registered_mros, HV *)
 PERLVAR(I, blockhooks,	AV *)
 
 PERLVAR(I, custom_ops,	HV *)		/* custom op registrations */
-
-PERLVAR(I, Xpv,		XPV *)		/* (unused) held temporary value */
 
 /* name of the scopes we've ENTERed. Only used with -DDEBUGGING, but needs to be
    present always, as -DDEBUGGING must be binary compatible with non.  */
@@ -998,12 +1011,11 @@ PERLVARI(I, sv_serial,	U32,	0)	/* SV serial number, used in sv.c */
 PERLVARA(I, sv_consts, SV_CONSTS_COUNT, SV*)	/* constant SVs with precomputed hash value */
 
 #ifdef PERL_TRACE_OPS
-PERLVARA(I, op_exec_cnt, OP_max+2, UV)	/* Counts of executed OPs of the given type.
+PERLVARA(I, op_exec_cnt, OP_max+2, UV)  /* Counts of executed OPs of the given type.
                                            If PERL_TRACE_OPS is enabled, we'll dump
                                            a summary count of all ops executed in the
-                                           program at perl_destruct time. For
-                                           profiling/debugging only. Works only if
-                                           DEBUGGING is enabled, too. */
+                                           program at perl_destruct time. Used only
+                                           for profiling in DEBUGGING mode. */
 #endif
 
 PERLVAR(I, random_state, PL_RANDOM_STATE_TYPE)
@@ -1083,6 +1095,9 @@ PERLVARA(I, mem_log, PERL_MEM_LOG_ARYLEN,  char)
  * version object so we can fit the U16 into the uv of a SAVEHINTS and not
  * have to worry about SV refcounts during scope enter/exit. */
 PERLVAR(I, prevailing_version, U16)
+
+PERLVARI(I, in_diehook, bool, FALSE)
+PERLVARI(I, in_warnhook, bool, FALSE)
 
 /* If you are adding a U8 or U16, check to see if there are 'Space' comments
  * above on where there are gaps which currently will be structure padding.  */

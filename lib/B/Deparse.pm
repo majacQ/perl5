@@ -7,7 +7,7 @@
 # This is based on the module of the same name by Malcolm Beattie,
 # but essentially none of his code remains.
 
-package B::Deparse 1.71;
+package B::Deparse 1.83;
 use strict;
 use Carp;
 use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
@@ -15,6 +15,8 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
 	 OPf_KIDS OPf_REF OPf_STACKED OPf_SPECIAL OPf_MOD OPf_PARENS
 	 OPpLVAL_INTRO OPpOUR_INTRO OPpENTERSUB_AMPER OPpSLICE OPpKVSLICE
          OPpCONST_BARE OPpEMPTYAVHV_IS_HV
+         OPpCONST_TOKEN_MASK
+         OPpCONST_TOKEN_LINE OPpCONST_TOKEN_FILE OPpCONST_TOKEN_PACKAGE
 	 OPpTRANS_SQUASH OPpTRANS_DELETE OPpTRANS_COMPLEMENT OPpTARGET_MY
 	 OPpEXISTS_SUB OPpSORT_NUMERIC OPpSORT_INTEGER OPpREPEAT_DOLIST
 	 OPpSORT_REVERSE OPpMULTIDEREF_EXISTS OPpMULTIDEREF_DELETE
@@ -23,9 +25,10 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
          OPpCONCAT_NESTED
          OPpMULTICONCAT_APPEND OPpMULTICONCAT_STRINGIFY OPpMULTICONCAT_FAKE
          OPpTRUEBOOL OPpINDEX_BOOLNEG OPpDEFER_FINALLY
+         OPpARG_IF_UNDEF OPpARG_IF_FALSE
 	 SVf_IOK SVf_NOK SVf_ROK SVf_POK SVf_FAKE SVs_RMG SVs_SMG
 	 SVs_PADTMP
-         CVf_NOWARN_AMBIGUOUS CVf_LVALUE
+         CVf_NOWARN_AMBIGUOUS CVf_LVALUE CVf_IsMETHOD
 	 PMf_KEEP PMf_GLOBAL PMf_CONTINUE PMf_EVAL PMf_ONCE
 	 PMf_MULTILINE PMf_SINGLELINE PMf_FOLD PMf_EXTENDED PMf_EXTENDED_MORE
 	 PADNAMEf_OUTER PADNAMEf_OUR PADNAMEf_TYPED
@@ -63,7 +66,8 @@ BEGIN {
     # List version-specific constants here.
     # Easiest way to keep this code portable between version looks to
     # be to fake up a dummy constant that will never actually be true.
-    foreach (qw(OPpSORT_INPLACE OPpSORT_DESCEND OPpITER_REVERSED OPpCONST_NOVER
+    foreach (qw(OPpSORT_INPLACE OPpSORT_DESCEND OPpITER_INDEXED
+		OPpITER_REVERSED OPpCONST_NOVER
 		OPpPAD_STATE PMf_SKIPWHITE RXf_SKIPWHITE
 		PMf_CHARSET PMf_KEEPCOPY PMf_NOCAPTURE CVf_ANONCONST
 		CVf_LOCKED OPpREVERSE_INPLACE OPpSUBSTR_REPL_FIRST
@@ -463,7 +467,7 @@ sub next_todo {
             my $globname;
             my $gv = $cv->GV;
             if (
-                   $gv
+                   $gv && $gv->isa('B::GV')
                 && defined (($globname = $gv->object_2svref))
                 && $$globname =~ /^\*builtin::/
             ) {
@@ -476,7 +480,8 @@ sub next_todo {
 	# XXX We would do $self->keyword("sub"), but ‘my CORE::sub’
 	#     doesn’t work and ‘my sub’ ignores a &sub in scope.  I.e.,
 	#     we have a core bug here.
-	push @text, "sub " . substr $name->PVX, 1;
+	my $kw = $cv ? $self->kw_sub_or_method($cv) : "sub";
+	push @text, "$kw " . substr $name->PVX, 1;
 	if ($cv) {
 	    # my sub foo { }
 	    push @text,  " " . $self->deparse_sub($cv);
@@ -550,7 +555,7 @@ sub next_todo {
         } elsif (defined $stash) {
             $name =~ s/^\Q$stash\E::(?!\z|.*::)//;
         }
-	my $ret = "$pragmata${p}${l}" . $self->keyword("sub") . " $name "
+	my $ret = "$pragmata${p}${l}" . $self->keyword($self->kw_sub_or_method($cv)) . " $name "
 	      . $self->deparse_sub($cv);
 	$self->{'subs_declared'}{$name} = 1;
 	return $ret;
@@ -1261,7 +1266,10 @@ sub deparse_argops {
                 return unless $$kid and $kid->name eq 'argdefelem';
                 my $def = $self->deparse($kid->first, 7);
                 $def = "($def)" if $kid->first->flags & OPf_PARENS;
-                $var .= " = $def";
+                my $assign = "=";
+                $assign = "//=" if $kid->private & OPpARG_IF_UNDEF;
+                $assign = "||=" if $kid->private & OPpARG_IF_FALSE;
+                $var .= " $assign $def";
             }
             push @sig, $var;
         }
@@ -1297,6 +1305,12 @@ sub deparse_argops {
 }
 
 
+sub kw_sub_or_method {
+    my $self = shift;
+    my $cv = shift;
+    return ($cv->CvFLAGS & CVf_IsMETHOD) ? "method" : "sub";
+}
+
 # Deparse a sub. Returns everything except the 'sub foo',
 # e.g.  ($$) : method { ...; }
 # or    : prototype($$) lvalue ($a, $b) { ...; };
@@ -1312,7 +1326,7 @@ Carp::confess("NULL in deparse_sub") if !defined($cv) || $cv->isa("B::NULL");
 Carp::confess("SPECIAL in deparse_sub") if $cv->isa("B::SPECIAL");
     local $self->{'curcop'} = $self->{'curcop'};
 
-    my $has_sig = $self->{hinthash}{feature_signatures};
+    my $has_sig = $self->feature_enabled('signatures');
     if ($cv->FLAGS & SVf_POK) {
 	my $myproto = $cv->PV;
 	if ($has_sig) {
@@ -1322,10 +1336,13 @@ Carp::confess("SPECIAL in deparse_sub") if $cv->isa("B::SPECIAL");
             $proto = $myproto;
         }
     }
-    if ($cv->CvFLAGS & (CVf_NOWARN_AMBIGUOUS|CVf_LOCKED|CVf_LVALUE|CVf_ANONCONST)) {
-        push @attrs, "lvalue" if $cv->CvFLAGS & CVf_LVALUE;
-        push @attrs, "method" if $cv->CvFLAGS & CVf_NOWARN_AMBIGUOUS;
-        push @attrs, "const"  if $cv->CvFLAGS & CVf_ANONCONST;
+    my $cv_flags = $cv->CvFLAGS;
+    my $is_method = $cv_flags & CVf_IsMETHOD;
+
+    if ($cv_flags & (CVf_NOWARN_AMBIGUOUS|CVf_LOCKED|CVf_LVALUE|CVf_ANONCONST)) {
+        push @attrs, "lvalue" if $cv_flags & CVf_LVALUE;
+        push @attrs, "method" if $cv_flags & CVf_NOWARN_AMBIGUOUS and !$is_method;
+        push @attrs, "const"  if $cv_flags & CVf_ANONCONST;
     }
 
     local($self->{'curcv'}) = $cv;
@@ -1343,6 +1360,10 @@ Carp::confess("SPECIAL in deparse_sub") if $cv->isa("B::SPECIAL");
         # stub sub may have single op rather than list of ops
         my $is_list = ($lineseq->name eq "lineseq");
         my $firstop = $is_list ? $lineseq->first : $lineseq;
+
+        if ($is_method and $firstop->name eq "methstart") {
+            $firstop = $firstop->sibling;
+        }
 
         # Try to deparse first subtree as a signature if possible.
         # Top of signature subtree has an ex-argcheck as a placeholder
@@ -1550,7 +1571,7 @@ sub maybe_parens_func {
     if ($prec <= $cx or substr($text, 0, 1) eq "(" or $self->{'parens'}) {
 	return "$func($text)";
     } else {
-	return "$func $text";
+        return $func . (length($text) ? " $text" : "");
     }
 }
 
@@ -2330,6 +2351,9 @@ my %feature_keywords = (
    catch    => 'try',
    finally  => 'try',
    defer    => 'defer',
+   signatures => 'signatures',
+   any      => 'any',
+   all      => 'all',
 );
 
 # keywords that are strong and also have a prototype
@@ -2836,8 +2860,9 @@ sub pp_refgen {
 
 sub e_anoncode {
     my ($self, $info) = @_;
-    my $text = $self->deparse_sub($info->{code});
-    return $self->keyword("sub") . " $text";
+    my $cv = $info->{code};
+    my $text = $self->deparse_sub($cv);
+    return $self->keyword($self->kw_sub_or_method($cv)) . " $text";
 }
 
 sub pp_anoncode {
@@ -3059,6 +3084,25 @@ sub deparse_binop_right {
     }
 }
 
+my %can_warn_about_lhs_not;
+BEGIN {
+    %can_warn_about_lhs_not = map +($_ => 1), qw(
+        ==
+        !=
+        <
+        <=
+        >
+        >=
+        eq
+        ne
+        lt
+        le
+        gt
+        ge
+        isa
+    );
+}
+
 sub binop {
     my $self = shift;
     my ($op, $cx, $opname, $prec, $flags) = (@_, 0);
@@ -3074,15 +3118,21 @@ sub binop {
     }
     my $leftop = $left;
     $left = $self->deparse_binop_left($op, $left, $prec);
-    $left = "($left)" if $flags & LIST_CONTEXT
-		     and    $left !~ /^(my|our|local|state|)\s*[\@%\(]/
-			 || do {
-				# Parenthesize if the left argument is a
-				# lone repeat op.
-				my $left = $leftop->first->sibling;
-				$left->name eq 'repeat'
-				    && null($left->sibling);
-			    };
+    $left = "($left)"
+        if $flags & LIST_CONTEXT
+            and $left !~ /^(my|our|local|state|)\s*[\@%\(]/
+                || do {
+                    # Parenthesize if the left argument is a
+                    # lone repeat op.
+                    my $left = $leftop->first->sibling;
+                    $left->name eq 'repeat'
+                    && null($left->sibling);
+                }
+        or
+            $can_warn_about_lhs_not{$opname}
+            and $leftop->name eq 'not'
+            and $leftop->flags & OPf_PARENS
+            and $left !~ /\(/;
     $right = $self->deparse_binop_right($op, $right, $prec);
     return $self->maybe_parens("$left $opname$eq $right", $cx, $prec);
 }
@@ -3270,7 +3320,7 @@ sub pp_dor { logop(@_, "//", 10) }
 
 # xor is syntactically a logop, but it's really a binop (contrary to
 # old versions of opcode.pl). Syntax is what matters here.
-sub pp_xor { logop(@_, "xor", 2, "",   0,  "") }
+sub pp_xor { logop(@_, "xor", 2, "^^", 10, "") }
 
 sub logassignop {
     my $self = shift;
@@ -3426,6 +3476,25 @@ sub pp_substr {
 	 . $self->deparse($op->first->sibling, 7);
     }
     maybe_local(@_, listop(@_, "substr"))
+}
+
+sub pp_substr_left {
+    my ($self,$op,$cx) = @_;
+
+   my $lex  = ($op->private & OPpTARGET_MY);
+
+   my $val = 'substr(' . $self->deparse($op->first->sibling, $cx)
+             . ', 0, ' . $self->deparse($op->first->sibling->sibling->sibling, $cx)
+             . ( (($op->private & 7) == 3) ? '' : ", '')" );
+
+    if ($lex) {
+        my $targ = $op->targ;
+        my $var = $self->maybe_my($op, $cx, $self->padname($op->targ),
+            $self->padname_sv($targ),
+            0);
+        $val = $self->maybe_parens("$var = $val", $cx, 7);
+    }
+    $val;
 }
 
 sub pp_index {
@@ -3646,9 +3715,10 @@ sub pp_sort { indirop(@_, "sort") }
 
 sub mapop {
     my $self = shift;
-    my($op, $cx, $name) = @_;
+    my($op, $cx) = @_;
     my($expr, @exprs);
-    my $kid = $op->first; # this is the (map|grep)start
+    my $kid = $op->first; # this is the (map|grep|any|all)start
+    my ( $name ) = $kid->name =~ m/(.*)start/; # anystart and allstart share anywhile
     $kid = $kid->first->sibling; # skip a pushmark
     my $code = $kid->first; # skip a null
     if (is_scope $code) {
@@ -3666,8 +3736,9 @@ sub mapop {
 				    $code . join(", ", @exprs), $cx, 5);
 }
 
-sub pp_mapwhile { mapop(@_, "map") }
-sub pp_grepwhile { mapop(@_, "grep") }
+sub pp_mapwhile { mapop(@_) }
+sub pp_grepwhile { mapop(@_) }
+sub pp_anywhile { mapop(@_) }
 sub pp_mapstart { baseop(@_, "map") }
 sub pp_grepstart { baseop(@_, "grep") }
 
@@ -3874,6 +3945,9 @@ sub pp_list {
 	    if ($padname->FLAGS & PADNAMEf_TYPED) {
 		$newtype = $padname->SvSTASH->NAME;
 	    }
+	} elsif ($lopname eq 'padsv_store') {
+            # don't interpret as my (list) if it has an implicit assign
+            $local = "";
 	} elsif ($lopname =~ /^(?:gv|rv2)([ash])v$/
 			&& $loppriv & OPpOUR_INTRO
 		or $lopname eq "null" && class($lop) eq 'UNOP'
@@ -4025,6 +4099,7 @@ sub loop_common {
     } elsif ($enter->name eq "enteriter") { # foreach
 	my $ary = $enter->first->sibling; # first was pushmark
 	my $var = $ary->sibling;
+	my $iter = $kid->first->first;
 	if ($ary->name eq 'null' and $enter->private & OPpITER_REVERSED) {
 	    # "reverse" was optimised away
 	    $ary = listop($self, $ary->first->sibling, 1, 'reverse');
@@ -4035,6 +4110,10 @@ sub loop_common {
 	      $self->deparse($ary->first->sibling->sibling, 9);
 	} else {
 	    $ary = $self->deparse($ary, 1);
+	}
+
+	if ($iter->private & OPpITER_INDEXED) {
+	    $ary = "builtin::indexed $ary";
 	}
 
         if ($enter->flags & OPf_PARENS) {
@@ -4064,7 +4143,7 @@ sub loop_common {
 	} else {
 	    $var = $self->deparse($var, 1);
 	}
-	$body = $kid->first->first->sibling; # skip OP_AND and OP_ITER
+	$body = $iter->sibling;
 	if (!is_state $body->first and $body->first->name !~ /^(?:stub|leave|scope)$/) {
 	    confess unless $var eq '$_';
 	    $body = $body->first;
@@ -4246,7 +4325,12 @@ sub pp_null {
     } elsif (!null($op->first->sibling) and
 	     $op->first->sibling->name =~ /^transr?\z/ and
 	     $op->first->sibling->flags & OPf_STACKED) {
-	return $self->maybe_parens($self->deparse($op->first, 20) . " =~ "
+        my $lhs = $self->deparse($op->first, 20);
+        $lhs = "($lhs)"
+            if $op->first->name eq 'not'
+                and $op->first->flags & OPf_PARENS
+                and $lhs !~ /\(/;
+        return $self->maybe_parens( "$lhs =~ "
 				   . $self->deparse($op->first->sibling, 20),
 				   $cx, 20);
     } elsif ($op->flags & OPf_SPECIAL && $cx < 1 && !$op->targ) {
@@ -5046,78 +5130,92 @@ sub e_method {
 sub check_proto {
     my $self = shift;
     return "&" if $self->{'noproto'};
-    my($proto, @args) = @_;
-    my($arg, $real);
+    my ($proto, @args) = @_;
     my $doneok = 0;
     my @reals;
-    # An unbackslashed @ or % gobbles up the rest of the args
-    1 while $proto =~ s/(?<!\\)([@%])[^\]]+$/$1/;
-    $proto =~ s/^\s*//;
-    while ($proto) {
-	$proto =~ s/^(\\?[\$\@&%*_]|\\\[[\$\@&%*]+\]|;|)\s*//;
+    $proto =~ s/^\s+//;
+    while (length $proto) {
+        $proto =~ s/^(\\?[\$\@&%*]|\\\[[\$\@&%*]+\]|[_+;])\s*//
+            or return "&";  # malformed prototype
 	my $chr = $1;
-	if ($chr eq "") {
-	    return "&" if @args;
-	} elsif ($chr eq ";") {
+        if ($chr eq ";") {
 	    $doneok = 1;
-	} elsif ($chr eq "@" or $chr eq "%") {
+        } elsif ($chr eq '@' or $chr eq '%') {
+            # An unbackslashed @ or % gobbles up the rest of the args
 	    push @reals, map($self->deparse($_, 6), @args);
 	    @args = ();
+            $proto = '';
+        } elsif (!@args) {
+            last if $doneok;
+            return "&"; # too few args and no ';'
 	} else {
-	    $arg = shift @args;
-	    last unless $arg;
-	    if ($chr eq "\$" || $chr eq "_") {
+            my $arg = shift @args;
+            if ($chr eq '$' || $chr eq '_') {
 		if (want_scalar $arg) {
 		    push @reals, $self->deparse($arg, 6);
 		} else {
 		    return "&";
 		}
 	    } elsif ($chr eq "&") {
-		if ($arg->name =~ /^(s?refgen|undef)$/) {
+                if ($arg->name =~ /^(?:s?refgen|undef)\z/) {
 		    push @reals, $self->deparse($arg, 6);
 		} else {
 		    return "&";
 		}
 	    } elsif ($chr eq "*") {
-		if ($arg->name =~ /^s?refgen$/
+                if ($arg->name =~ /^s?refgen\z/
 		    and $arg->first->first->name eq "rv2gv")
-		  {
-		      $real = $arg->first->first; # skip refgen, null
-		      if ($real->first->name eq "gv") {
-			  push @reals, $self->deparse($real, 6);
-		      } else {
-			  push @reals, $self->deparse($real->first, 6);
-		      }
-		  } else {
-		      return "&";
-		  }
+                {
+                    my $real = $arg->first->first; # skip refgen, null
+                    if ($real->first->name eq "gv") {
+                        push @reals, $self->deparse($real, 6);
+                    } else {
+                        push @reals, $self->deparse($real->first, 6);
+                    }
+                } else {
+                    return "&";
+                }
+            } elsif ($chr eq "+") {
+                my $real;
+                if ($arg->name =~ /^s?refgen\z/ and
+                    !null($real = $arg->first) and
+                    !null($real->first) and
+                    $real->first->name =~ /^(?:rv2|pad)[ah]v\z/)
+                {
+                    push @reals, $self->deparse($real, 6);
+                } elsif (want_scalar $arg) {
+                    push @reals, $self->deparse($arg, 6);
+                } else {
+                    return "&";
+                }
 	    } elsif (substr($chr, 0, 1) eq "\\") {
 		$chr =~ tr/\\[]//d;
-		if ($arg->name =~ /^s?refgen$/ and
+                my $real;
+                if ($arg->name =~ /^s?refgen\z/ and
 		    !null($real = $arg->first) and
 		    ($chr =~ /\$/ && is_scalar($real->first)
 		     or ($chr =~ /@/
-			 && class($real->first->sibling) ne 'NULL'
-			 && $real->first->sibling->name
-			 =~ /^(rv2|pad)av$/)
+                         && !null($real->first)
+                         && $real->first->name =~ /^(?:rv2|pad)av\z/)
 		     or ($chr =~ /%/
-			 && class($real->first->sibling) ne 'NULL'
-			 && $real->first->sibling->name
-			 =~ /^(rv2|pad)hv$/)
+                         && !null($real->first)
+                         && $real->first->name =~ /^(?:rv2|pad)hv\z/)
 		     #or ($chr =~ /&/ # This doesn't work
 		     #   && $real->first->name eq "rv2cv")
 		     or ($chr =~ /\*/
 			 && $real->first->name eq "rv2gv")))
-		  {
-		      push @reals, $self->deparse($real, 6);
-		  } else {
-		      return "&";
-		  }
-	    }
-       }
+                {
+                    push @reals, $self->deparse($real, 6);
+                } else {
+                    return "&";
+                }
+            } else {
+                # should not happen
+                return "&";
+            }
+        }
     }
-    return "&" if $proto and !$doneok; # too few args and no ';'
-    return "&" if @args;               # too many args
+    return "&" if @args; # too many args
     return ("", join ", ", @reals);
 }
 
@@ -5297,19 +5395,23 @@ sub pp_entersub {
 	# it back.
 	$kid =~ s/^CORE::GLOBAL:://;
 
-	my $dproto = defined($proto) ? $proto : "undefined";
-	my $scalar_proto = $dproto =~ /^;*(?:[\$*_+]|\\.|\\\[[^]]\])\z/;
         if (!$declared) {
 	    return "$kid(" . $args . ")";
-	} elsif ($dproto =~ /^\s*\z/) {
+        }
+
+        my $dproto = defined($proto) ? $proto : "undefined";
+        if ($dproto =~ /^\s*\z/) {
 	    return $kid;
-	} elsif ($scalar_proto and is_scalar($exprs[0])) {
+        }
+
+        my $scalar_proto = $dproto =~ /^ \s* (?: ;\s* )* (?: [\$*_+] |\\ \s* (?: [\$\@%&*] | \[ [^\]]+ \] ) ) \s* \z/x;
+        if ($scalar_proto and !@exprs || is_scalar($exprs[0])) {
 	    # is_scalar is an excessively conservative test here:
 	    # really, we should be comparing to the precedence of the
 	    # top operator of $exprs[0] (ala unop()), but that would
 	    # take some major code restructuring to do right.
 	    return $self->maybe_parens_func($kid, $args, $cx, 16);
-	} elsif (not $scalar_proto and defined($proto) || $simple) { #'
+        } elsif (not $scalar_proto and defined($proto) || $simple) {
 	    return $self->maybe_parens_func($kid, $args, $cx, 5);
 	} else {
 	    return "$kid(" . $args . ")";
@@ -5623,7 +5725,7 @@ sub const {
 		 $self->{curcv}->object_2svref == $ref->object_2svref) {
 		return $self->keyword("__SUB__");
 	    }
-	    return "sub " . $self->deparse_sub($ref);
+	    return $self->kw_sub_or_method($ref) . " " . $self->deparse_sub($ref);
 	}
 	if ($class ne 'SPECIAL' and $ref->FLAGS & SVs_SMG) {
 	    for (my $mg = $ref->MAGIC; $mg; $mg = $mg->MOREMAGIC) {
@@ -5695,6 +5797,20 @@ sub pp_const {
 #	return $self->const_sv($op)->PV;
 #    }
     my $sv = $self->const_sv($op);
+
+    my $token = ($op->private & OPpCONST_TOKEN_MASK);
+    if ($token) { # handle __LINE__ etc
+        if ($token == OPpCONST_TOKEN_LINE) {
+            return "__LINE__";
+        }
+        elsif ($token == OPpCONST_TOKEN_FILE) {
+            return "__FILE__";
+        }
+        elsif ($token == OPpCONST_TOKEN_PACKAGE) {
+            return "__PACKAGE__";
+        }
+    }
+
     return $self->const($sv, $cx);
 }
 
@@ -6240,7 +6356,7 @@ sub code_list {
 	local(@$self{qw'curstash warnings hints hinthash curcop'})
 	    = @$self{qw'curstash warnings hints hinthash curcop'};
 
-    my $re;
+    my $re = "";
     for ($op = $op->first->sibling; !null($op); $op = $op->sibling) {
 	if ($op->name eq 'null' and $op->flags & OPf_SPECIAL) {
 	    my $scope = $op->first;
@@ -6362,6 +6478,10 @@ sub matchop {
     if ($op->name ne 'split' && $op->flags & OPf_STACKED) {
 	$binop = 1;
 	$var = $self->deparse($kid, 20);
+        $var = "($var)"
+            if $kid->name eq 'not'
+                and $kid->flags & OPf_PARENS
+                and $var !~ /\(/;
 	$kid = $kid->sibling;
     }
            # not $name; $name will be 'm' for both match and split
@@ -6523,6 +6643,10 @@ sub pp_subst {
     if ($op->flags & OPf_STACKED) {
 	$binop = 1;
 	$var = $self->deparse($kid, 20);
+        $var = "($var)"
+            if $kid->name eq 'not'
+                and $kid->flags & OPf_PARENS
+                and $var !~ /\(/;
 	$kid = $kid->sibling;
     }
     elsif (my $targ = $op->targ) {
@@ -6720,7 +6844,7 @@ sub pp_pushdefer {
 sub builtin1 {
     my $self = shift;
     my ($op, $cx, $name) = @_;
-    my $arg = $self->deparse($op->first);
+    my $arg = $self->deparse($op->first, 6);
     # TODO: work out if lexical alias is present somehow...
     return "builtin::$name($arg)";
 }

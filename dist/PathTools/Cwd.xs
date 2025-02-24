@@ -7,13 +7,11 @@
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
-#ifndef NO_PPPORT_H
-#  define NEED_croak_xs_usage
-#  define NEED_sv_2pv_flags
-#  define NEED_my_strlcpy
-#  define NEED_my_strlcat
-#  include "ppport.h"
-#endif
+#define NEED_croak_xs_usage
+#define NEED_sv_2pv_flags
+#define NEED_my_strlcpy
+#define NEED_my_strlcat
+#include "ppport.h"
 
 #if defined(HAS_READLINK) && !defined(PerlLIO_readlink)
 #define PerlLIO_readlink readlink
@@ -294,7 +292,6 @@ return FALSE
 #define getcwd_sv(a) Perl_getcwd_sv(aTHX_ a)
 int Perl_getcwd_sv(pTHX_ SV *sv)
 {
-#ifndef PERL_MICRO
 
     SvTAINTED_on(sv);
 
@@ -432,9 +429,6 @@ int Perl_getcwd_sv(pTHX_ SV *sv)
   }
 #endif
 
-#else
-    return FALSE;
-#endif
 }
 
 #endif

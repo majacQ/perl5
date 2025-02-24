@@ -22,6 +22,7 @@ my @OPTSPEC= qw(
     man
     authors_file=s
     mailmap_file=s
+    source_dir=s
 
     validate|tap
     verbose+
@@ -80,9 +81,8 @@ sub main {
         \%opts,
         map {
             # support hyphens as well as underbars,
-            # underbars must be first. Only handles two
-            # part words right now.
-            ref $_ ? $_ : s/\b([a-z]+)_([a-z]+)\b/${1}_${2}|${1}-${2}/gr
+            # underbars must be first.
+            ref $_ ? $_ : s{\b([a-z]+(?:_[a-z]+)+)\b}{"$1|".($1 =~ tr/_/-/r)}egr
         } @OPTSPEC,
     ) or pod2usage(2);
     $opts{commit_range}= join " ", @ARGV;
@@ -285,8 +285,8 @@ sub error_advice_for_uncommitted_changes {
     else {
         $extra .=
               "\nYou do not have any git user config set up, consider using\n\n"
-            . "    git config --set user.name 'Your Name'\n"
-            . "    git config --set user.email 'your\@email.com'\n\n";
+            . "    git config user.name 'Your Name'\n"
+            . "    git config user.email 'your\@email.com'\n\n";
     }
 
     my $props= "";
@@ -362,19 +362,19 @@ To resolve this you can perform one or more of these steps:
        Make sure the conributor is ok with the decisions you make before
        you merge.
 
-    3. You are already an author but your git config is broken or
+    4. You are already an author but your git config is broken or
        different from what you expect, or you are a new author but you
        havent configured your git details properly, in which case you
        can use something like the following commands:
 
-            git config --set user.name "Some Name"
-            git config --set user.email "somewhere\@provider"
+            git config user.name "Some Name"
+            git config user.email "somewhere\@provider"
 
        If you are known to the project already this is all you need to
        do. If you are not then you should perform option 2 or 4 as well
        afterwards.
 
-    4. You do not want to be listed in AUTHORS: commit the changes,
+    5. You do not want to be listed in AUTHORS: commit the changes,
        including any untracked unignored files, and then run
 
             Porting/updateAUTHORS.pl --exclude
@@ -648,7 +648,7 @@ run from the root directory of a git repo of perl.
 In simple, execute the script and it will either die with a helpful
 message or it will update the files as necessary, possibly not at all
 if there is no need to do so. If the C<--validate> option is provided
-the the content will not be updated and instead the tool will act as a
+the content will not be updated and instead the tool will act as a
 test script validating that the F<AUTHORS> and F<.mailmap> files are
 up to date.
 

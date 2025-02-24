@@ -51,6 +51,13 @@ my %feature_kw = (
     catch     => 'try',
     finally   => 'try',
     defer     => 'defer',
+    class     => 'class',
+    field     => 'class',
+    method    => 'class',
+    ADJUST    => 'class',
+    __CLASS__ => 'class',
+    any       => 'any',
+    all       => 'all',
 );
 
 my %pos = map { ($_ => 1) } @{$by_strength{'+'}};
@@ -116,9 +123,11 @@ __END__
 -__FILE__
 -__LINE__
 -__PACKAGE__
+-__CLASS__
 +__DATA__
 +__END__
 -__SUB__
++ADJUST
 +AUTOLOAD
 +BEGIN
 +UNITCHECK
@@ -129,7 +138,9 @@ __END__
 -abs
 -accept
 -alarm
+-all
 -and
+-any
 -atan2
 -bind
 -binmode
@@ -144,6 +155,7 @@ __END__
 -chown
 -chr
 -chroot
+-class
 -close
 -closedir
 -cmp
@@ -179,6 +191,7 @@ __END__
 -exp
 -fc
 -fcntl
+-field
 -fileno
 +finally
 -flock
@@ -244,6 +257,7 @@ __END__
 -lt
 +m
 +map
+-method
 -mkdir
 -msgctl
 -msgget

@@ -28,6 +28,7 @@ Also see L<perlmroapi>.
 
 #include "EXTERN.h"
 #define PERL_IN_MRO_C
+#define PERL_IN_MRO_CORE_C
 #include "perl.h"
 
 static const struct mro_alg dfs_alg =
@@ -215,7 +216,8 @@ Perl_mro_meta_dup(pTHX_ struct mro_meta* smeta, CLONE_PARAMS* param)
 =for apidoc mro_get_linear_isa_dfs
 
 Returns the Depth-First Search linearization of C<@ISA>
-the given stash.  The return value is a read-only AV*.
+the given stash.  The return value is a read-only AV*
+whose elements are string SVs giving class names.
 C<level> should be 0 (it is used internally in this
 function's recursion).
 
@@ -264,7 +266,7 @@ S_mro_get_linear_isa_dfs(pTHX_ HV *stash, U32 level)
 
     /* not in cache, make a new one */
 
-    retval = MUTABLE_AV(newSV_type_mortal(SVt_PVAV));
+    retval = newAV_mortal();
     /* We use this later in this function, but don't need a reference to it
        beyond the end of this function, so reference count is fine.  */
     our_name = newSVhek(stashhek);
@@ -398,7 +400,7 @@ S_mro_get_linear_isa_dfs(pTHX_ HV *stash, U32 level)
 Returns the mro linearisation for the given stash.  By default, this
 will be whatever C<mro_get_linear_isa_dfs> returns unless some
 other MRO is in effect for the stash.  The return value is a
-read-only AV*.
+read-only AV* whose values are string SVs giving class names.
 
 You are responsible for C<SvREFCNT_inc()> on the
 return value if you plan to store it anywhere
@@ -1190,7 +1192,7 @@ S_mro_gather_and_rename(pTHX_ HV * const stashes, HV * const seen_stashes,
                             }
                         }
                         else {
-                            subname = sv_2mortal(newSVsv(namesv));
+                            subname = sv_mortalcopy_flags(namesv, SV_GMAGIC|SV_NOSTEAL);
                             if (len == 1) sv_catpvs(subname, ":");
                             else {
                                 sv_catpvs(subname, "::");
@@ -1273,7 +1275,7 @@ S_mro_gather_and_rename(pTHX_ HV * const stashes, HV * const seen_stashes,
                             }
                         }
                         else {
-                            subname = sv_2mortal(newSVsv(namesv));
+                            subname = sv_mortalcopy_flags(namesv, SV_GMAGIC|SV_NOSTEAL);
                             if (len == 1) sv_catpvs(subname, ":");
                             else {
                                 sv_catpvs(subname, "::");

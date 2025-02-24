@@ -162,6 +162,10 @@ Deprecated.  Use C<GIMME_V> instead.
                                 /*  On OP_UNSTACK, in a C-style for loop */
                                 /*  On OP_READLINE, it's for <<>>, not <> */
                                 /*  On OP_RETURN, module_true is in effect */
+                                /*  On OP_NEXT/OP_LAST/OP_REDO, there is no
+                                 *  loop label */
+                                /*  On OP_OPEN, create a temporary file if the
+                                 *  filename argument is &PL_sv_undef */
 /* There is no room in op_flags for this one, so it has its own bit-
    field member (op_folded) instead.  The flag is only used to tell
    op_convert_list to set op_folded.  */
@@ -525,29 +529,29 @@ typedef enum {
 
 
 #ifdef USE_ITHREADS
-#  define	cGVOPx_gv(o)	((GV*)PAD_SVl(cPADOPx(o)->op_padix))
+#  define cGVOPx_gv(o)  ((GV*)PAD_SVl(cPADOPx(o)->op_padix))
 #  ifndef PERL_CORE
-#    define	IS_PADGV(v)	(v && isGV(v))
-#    define	IS_PADCONST(v) \
+#    define IS_PADGV(v) (v && isGV(v))
+#    define IS_PADCONST(v) \
         (v && (SvREADONLY(v) || (SvIsCOW(v) && !SvLEN(v))))
 #  endif
-#  define	cSVOPx_sv(v)	(cSVOPx(v)->op_sv \
+#  define cSVOPx_sv(v)  (cSVOPx(v)->op_sv \
                                  ? cSVOPx(v)->op_sv : PAD_SVl((v)->op_targ))
-#  define	cSVOPx_svp(v)	(cSVOPx(v)->op_sv \
+#  define cSVOPx_svp(v) (cSVOPx(v)->op_sv \
                                  ? &cSVOPx(v)->op_sv : &PAD_SVl((v)->op_targ))
 #  define       cMETHOPx_meth(v) (cMETHOPx(v)->op_u.op_meth_sv \
                                   ? cMETHOPx(v)->op_u.op_meth_sv : PAD_SVl((v)->op_targ))
-#  define	cMETHOPx_rclass(v) PAD_SVl(cMETHOPx(v)->op_rclass_targ)
+#  define cMETHOPx_rclass(v) PAD_SVl(cMETHOPx(v)->op_rclass_targ)
 #else
-#  define	cGVOPx_gv(o)	((GV*)cSVOPx(o)->op_sv)
+#  define cGVOPx_gv(o)  ((GV*)cSVOPx(o)->op_sv)
 #  ifndef PERL_CORE
-#    define	IS_PADGV(v)	FALSE
-#    define	IS_PADCONST(v)	FALSE
+#    define IS_PADGV(v) FALSE
+#    define IS_PADCONST(v)      FALSE
 #  endif
-#  define	cSVOPx_sv(v)	(cSVOPx(v)->op_sv)
-#  define	cSVOPx_svp(v)	(&cSVOPx(v)->op_sv)
+#  define cSVOPx_sv(v)  (cSVOPx(v)->op_sv)
+#  define cSVOPx_svp(v) (&cSVOPx(v)->op_sv)
 #  define       cMETHOPx_meth(v)   (cMETHOPx(v)->op_u.op_meth_sv)
-#  define	cMETHOPx_rclass(v) (cMETHOPx(v)->op_rclass_sv)
+#  define cMETHOPx_rclass(v) (cMETHOPx(v)->op_rclass_sv)
 #endif
 
 #define cMETHOP_meth            cMETHOPx_meth(PL_op)
@@ -556,9 +560,9 @@ typedef enum {
 #define cMETHOPo_meth           cMETHOPx_meth(o)
 #define cMETHOPo_rclass         cMETHOPx_rclass(o)
 
-#define	cGVOP_gv		cGVOPx_gv(PL_op)
-#define	cGVOPo_gv		cGVOPx_gv(o)
-#define	kGVOP_gv		cGVOPx_gv(kid)
+#define cGVOP_gv                cGVOPx_gv(PL_op)
+#define cGVOPo_gv               cGVOPx_gv(o)
+#define kGVOP_gv                cGVOPx_gv(kid)
 #define cSVOP_sv		cSVOPx_sv(PL_op)
 #define cSVOPo_sv		cSVOPx_sv(o)
 #define kSVOP_sv		cSVOPx_sv(kid)
@@ -657,7 +661,7 @@ typedef enum {
                                                    list of SVs */
 
 #if defined(PERL_IN_PERLY_C) || defined(PERL_IN_OP_C) || defined(PERL_IN_TOKE_C)
-#define ref(o, type) doref(o, type, TRUE)
+#define Perl_ref(mTHX, o, type)  Perl_doref(aTHX_ o, type, TRUE)
 #endif
 
 
@@ -919,6 +923,7 @@ struct custom_op {
     const char	   *xop_desc;
     U32		    xop_class;
     void	  (*xop_peep)(pTHX_ OP *o, OP *oldop);
+    void          (*xop_dump)(pTHX_ const OP *o, struct Perl_OpDumpContext *ctx);
 };
 
 /* return value of Perl_custom_op_get_field, similar to void * then casting but
@@ -929,6 +934,7 @@ typedef union {
     const char	   *xop_desc;
     U32		    xop_class;
     void	  (*xop_peep)(pTHX_ OP *o, OP *oldop);
+    void	  (*xop_dump)(pTHX_ const OP *o, struct Perl_OpDumpContext *ctx);
     XOP            *xop_ptr;
 } XOPRETANY;
 
@@ -938,6 +944,7 @@ typedef union {
 #define XOPf_xop_desc	0x02
 #define XOPf_xop_class	0x04
 #define XOPf_xop_peep	0x08
+#define XOPf_xop_dump	0x10
 
 /* used by Perl_custom_op_get_field for option checking */
 typedef enum {
@@ -945,13 +952,15 @@ typedef enum {
     XOPe_xop_name = XOPf_xop_name,
     XOPe_xop_desc = XOPf_xop_desc,
     XOPe_xop_class = XOPf_xop_class,
-    XOPe_xop_peep = XOPf_xop_peep
+    XOPe_xop_peep = XOPf_xop_peep,
+    XOPe_xop_dump = XOPf_xop_dump,
 } xop_flags_enum;
 
 #define XOPd_xop_name	PL_op_name[OP_CUSTOM]
 #define XOPd_xop_desc	PL_op_desc[OP_CUSTOM]
 #define XOPd_xop_class	OA_BASEOP
 #define XOPd_xop_peep	((Perl_cpeep_t)0)
+#define XOPd_xop_dump   NULL
 
 #define XopENTRY_set(xop, which, to) \
     STMT_START { \
@@ -1071,6 +1080,9 @@ C<sib> is non-null. For a higher-level interface, see C<L</op_sibling_splice>>.
 #define OP_TYPE_ISNT_AND_WASNT(o, type) \
     ( (o) && OP_TYPE_ISNT_AND_WASNT_NN(o, type) )
 
+#define OP_TYPE_IS_COP_NN(o) \
+    (OP_TYPE_IS_NN(o, OP_NEXTSTATE) || OP_TYPE_IS_NN(o, OP_DBSTATE))
+
 /* should match anything that uses ck_ftst in regen/opcodes */
 #define OP_IS_STAT(op) (OP_IS_FILETEST(op) || (op) == OP_LSTAT || (op) == OP_STAT)
 
@@ -1087,8 +1099,10 @@ C<sib> is non-null. For a higher-level interface, see C<L</op_sibling_splice>>.
 #  define OP_SIBLING(o)		OpSIBLING(o)
 #endif
 
-#define newATTRSUB(f, o, p, a, b) Perl_newATTRSUB_x(aTHX_  f, o, p, a, b, FALSE)
-#define newSUB(f, o, p, b)	newATTRSUB((f), (o), (p), NULL, (b))
+#define Perl_newATTRSUB(mTHX, f, o, p, a, b)                            \
+        Perl_newATTRSUB_x(aTHX_  f, o, p, a, b, FALSE)
+#define Perl_newSUB(mTHX, f, o, p, b)	                                \
+        Perl_newATTRSUB(aTHX, (f), (o), (p), NULL, (b))
 
 #ifdef USE_ITHREADS
 #  define OP_CHECK_MUTEX_INIT		MUTEX_INIT(&PL_check_mutex)

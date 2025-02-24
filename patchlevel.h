@@ -38,8 +38,8 @@ Instead use one of the version comparison macros.  See C<L</PERL_VERSION_EQ>>.
  * exactly on the third column */
 
 #define PERL_REVISION	5		/* age */
-#define PERL_VERSION	37		/* epoch */
-#define PERL_SUBVERSION	6		/* generation */
+#define PERL_VERSION	41		/* epoch */
+#define PERL_SUBVERSION	10		/* generation */
 
 /* The following numbers describe the earliest compatible version of
    Perl ("compatibility" here being defined as sufficient binary/API
@@ -59,8 +59,8 @@ Instead use one of the version comparison macros.  See C<L</PERL_VERSION_EQ>>.
    changing them should not be necessary.
 */
 #define PERL_API_REVISION	5
-#define PERL_API_VERSION	37
-#define PERL_API_SUBVERSION	6
+#define PERL_API_VERSION	41
+#define PERL_API_SUBVERSION	10
 /*
    XXX Note:  The selection of non-default Configure options, such
    as -Duselonglong may invalidate these settings.  Currently, Configure
@@ -150,9 +150,6 @@ hunk.
 #  if defined(PERL_IS_MINIPERL)
 #    define PERL_PATCHNUM "UNKNOWN-miniperl"
 #    define PERL_GIT_UNPUSHED_COMMITS /*leave-this-comment*/
-#  elif defined(PERL_MICRO)
-#    define PERL_PATCHNUM "UNKNOWN-microperl"
-#    define PERL_GIT_UNPUSHED_COMMITS /*leave-this-comment*/
 #  else
 #    include "git_version.h"
 #  endif
@@ -168,7 +165,7 @@ static const char * const local_patches[] = {
 
 
 /* Initial space prevents this variable from being inserted in config.sh  */
-#  define	LOCAL_PATCH_COUNT	\
+#  define LOCAL_PATCH_COUNT     \
         ((int)(C_ARRAY_LENGTH(local_patches)-2))
 
 /* the old terms of reference, add them only when explicitly included */

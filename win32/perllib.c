@@ -34,7 +34,7 @@ EXTERN_C void boot_DynaLoader (pTHX_ CV* cv);
 static void
 xs_init(pTHX)
 {
-    char *file = __FILE__;
+    const char *file = __FILE__;
     dXSUB_SYS;
     newXS("DynaLoader::boot_DynaLoader", boot_DynaLoader, file);
     /* other similar records will be included from "perllibst.h" */
@@ -248,7 +248,7 @@ DllMain(HINSTANCE hModule,	/* DLL module handle */
          * process termination or call to FreeLibrary.
          */
     case DLL_PROCESS_DETACH:
-        /* As long as we use TerminateProcess()/TerminateThread() etc. for mimicing kill()
+        /* As long as we use TerminateProcess()/TerminateThread() etc. for mimicking kill()
            anything here had better be harmless if:
             A. Not called at all.
             B. Called after memory allocation for Heap has been forcibly removed by OS.

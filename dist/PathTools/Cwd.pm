@@ -3,7 +3,7 @@ use strict;
 use Exporter;
 
 
-our $VERSION = '3.86';
+our $VERSION = '3.92';
 my $xs_version = $VERSION;
 $VERSION =~ tr/_//d;
 
@@ -199,7 +199,7 @@ sub _backtick_pwd {
     # executable, but it will blow up anyway under taint. We could set it to
     # anything absolute. Perhaps "/" would be better.
     local $ENV{PATH}= "/usr/bin"
-        if $^O ne "vms" and $^O ne "amigaos";
+        if $^O ne "amigaos";
     
     my $cwd = `$pwd_cmd`;
     # Belt-and-suspenders in case someone said "undef $/".

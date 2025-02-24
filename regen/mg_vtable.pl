@@ -168,10 +168,17 @@ my %mg =
                      desc => 'Tied scalar or handle' },
      qr => { char => 'r', vtable => 'regexp', value_magic => 1, 
              readonly_acceptable => 1, desc => 'Precompiled qr// regex' },
+
+     hook => { char => 'Z',
+         vtable => 'hook', desc => '%{^HOOK} hash' },
+     hookelem => { char => 'z',
+         vtable => 'hookelem', desc => '%{^HOOK} hash element' },
+
      sig => { char => 'S', vtable => 'sig',
 		      desc => '%SIG hash' },
      sigelem => { char => 's', vtable => 'sigelem',
                   desc => '%SIG hash element' },
+
      taint => { char => 't', vtable => 'taint', value_magic => 1,
                 desc => 'Taintedness' },
      uvar => { char => 'U', vtable => 'uvar',
@@ -212,13 +219,18 @@ my %mg =
                    vtable => 'debugvar' },
      lvref => { char => '\\', vtable => 'lvref',
                   desc => "Lvalue reference constructor" },
+     destruct => {
+        char        => "X",
+        vtable      => 'destruct',
+        desc        => "destruct callback",
+        value_magic => 1,
+     },
 );
 
 
-# %sig
+# %vtable_conf
 #
 # This hash is mainly concerned with populating the vtable.
-# (despite the name it has nothing to do with signals!)
 #
 # These have a subtly different "namespace" from the magic types.
 #
@@ -247,16 +259,19 @@ my %mg =
 #    dup
 #    local
 #       For each specified method, add a vtable function pointer
-#       of the form "Perl_magic_$sig{foo}{get}" etc
+#       of the form "Perl_magic_$vtable_conf{foo}{get}" etc
 
-my %sig =
+my %vtable_conf =
     (
      'sv' => {get => 'get', set => 'set'},
      'env' => {set => 'set_all_env', clear => 'clear_all_env'},
      'envelem' => {set => 'setenv', clear => 'clearenv'},
      'sig' => { set => 'setsigall' },
-     'sigelem' => {get => 'getsig', set => 'setsig', clear => 'clearsig',
-                   cond => '#ifndef PERL_MICRO'},
+     'sigelem' => {get => 'getsig', set => 'setsig', clear => 'clearsig'},
+
+     'hook' => { set => 'sethookall', clear => 'clearhookall' },
+     'hookelem' => {set => 'sethook', clear => 'clearhook'},
+
      'pack' => {len => 'sizepack', clear => 'wipepack'},
      'packelem' => {get => 'getpack', set => 'setpack', clear => 'clearpack'},
      'dbline' => {set => 'setdbline'},
@@ -289,6 +304,7 @@ my %sig =
      'checkcall' => {copy => 'copycallchecker'},
      'debugvar' => { set => 'setdebugvar', get => 'getdebugvar' },
      'lvref' => {set => 'setlvref'},
+     'destruct' => {free => 'freedestruct'},
 );
 
 
@@ -429,6 +445,7 @@ EOH
                     ($desc, @cont) = $desc =~ /(.{1,$desc_wrap})(?: |\z)/g
                 }
             }
+            s/\s+\z// for $desc, @cont;
             printf $format, $type, $vtbl, $desc;
             printf $format, '', '', $_ foreach @cont;
         }
@@ -455,9 +472,9 @@ EOH
 }
 
 
-# Process %sig - everything goes to mg_vtable.h
+# Process %vtable_conf - everything goes to mg_vtable.h
 
-my @names = sort keys %sig;
+my @names = sort keys %vtable_conf;
 {
     my $want = join ",\n    ", (map {"want_vtbl_$_"} @names), 'magic_vtable_max';
     my $names = join qq{",\n    "}, @names;
@@ -505,7 +522,7 @@ my @vtable_names;
 my @aliases;
 
 while (my $name = shift @names) {
-    my $data = $sig{$name};
+    my $data = $vtable_conf{$name};
     push @vtable_names, $name;
     my @funcs = map {
         $data->{$_} ? "Perl_magic_$data->{$_}" : 0;
